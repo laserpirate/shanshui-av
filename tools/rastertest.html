@@ -19,7 +19,7 @@ const ready = new Promise(res => {
   };
 });
 gen.postMessage({ type: 'init', seed: SEED });
-const tileFrom = msg => new Promise(res => { ras.onmessage = e => res(e.data); ras.postMessage(msg); });
+const tileFrom = msg => new Promise(res => { ras.onmessage = e => { if (e.data.type === 'tile') res(e.data); }; ras.postMessage(msg); });
 function px(img, w, h) { const c = new OffscreenCanvas(w, h), x = c.getContext('2d'); x.drawImage(img, 0, 0); return x.getImageData(0, 0, w, h).data; }
 (async () => {
   await ready;

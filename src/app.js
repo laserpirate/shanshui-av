@@ -139,7 +139,7 @@ function toggleStar() {
 function stop() {
   const w = scene.peek(cur.key);
   const culled = w && w.culledBelow > -2000;   // the start of the seed was dropped by the memory cap
-  if (Math.abs(pb.x) > CULL * 0.9 || culled) { pb.pause(); setSeed(cur.seed, { history: false, why: 'stop, restart from 0' }); }
+  if (Math.abs(pb.x) > CULL * 0.9 || culled) { pb.pause(); pb.k = 0; setSeed(cur.seed, { history: false, why: 'stop, restart from 0' }); }
   else pb.goTo(0);
   renderPlay();
 }

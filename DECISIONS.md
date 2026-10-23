@@ -39,3 +39,49 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 
 - Elements more than 20,000 world px behind the view are dropped (worker and main thread), with the planner memory for that range. Only forward travel matches upstream. Travel back past the cap draws new landscape (upstream's own leftward chunk loader, from the cull line).
 - Starred seeds, history entries and Stop beyond the cap restart the seed from x = 0 in a fresh worker, so they always reproduce the original landscape.
+
+## Rendering
+
+- One fragment shader colours every tile: ink amount = 1 - grey, then ink weight (multiply) and contrast (linear around 0.3, bare paper stays bare), then a 256 x 64 palette table (x = ink, y = drift position). Two tables are bound at once for palette crossfades (1.2 s). Palette changes never touch tiles or elements; the e2e test checks element order and tile keys are identical across palettes.
+- The handoff asked for a CSS-filter path for live slider drags. Not needed: contrast, ink weight, paper and vignette are shader uniforms, so a drag costs nothing extra per frame. No CSS filter is used.
+- Original = grey ramp times the upstream paper texture (RGB multiply), which is exactly upstream's `mix-blend-mode: multiply` over its texture. Other palettes use the texture as grain (luminance only).
+- The paper texture is upstream's own, per seed (the worker paints it with the same PRNG draws), tiled every 448 world px (512 screen px at upstream scale), moving with the landscape.
+- Non-raw palettes read ink through `inkRange` 0.75 (`palettes.json`), because upstream's darkest composited ink rarely passes 75 %; Original and Grayscale use the raw value.
+- Tiles are 512 world px wide (one upstream chunk), uploaded as single channel R8 textures: 3.4 MB each at 4K. A tile is drawn once the generator is 2000 world px past its right edge; an element that lands later on a drawn tile marks it for redraw (extents come back from the raster worker).
+- DPR is capped at 1. Quality Auto starts at full resolution and steps to 0.75, then 0.5 after 5 s under 45 fps (per session). While an output window is connected the controller preview draws at half resolution.
+- Reseed: the new world generates and rasters behind the old one; the crossfade (default 2.5 s, Show panel) starts when the new world covers the view, or after 4 s.
+- Speed is px/s on a 1080 px tall screen at zoom 1 (world speed = speed x 700.5 / 1080), so the look is the same on any output size. Slider range 0 to 2000 px/s, square-root scale. `-` and `=` step by 1.25x.
+- Play and pause ease over about 0.6 s (exponential); Stop is a cosine ease back to x = 0 (0.8 to 3 s by distance).
+
+## Show
+
+- Esc held 1 s = panic: shows the last good frame (a 960 x 540 copy taken every 2 s while the watchdog sees a non-blank frame), pauses playback and freezes the timers. Esc tap or Space leaves panic.
+- In full screen the app asks Chrome's Keyboard Lock for Esc, so the panic key works there; Chrome then needs Esc held 2 s to leave full screen.
+- Blackout is a DOM overlay with a 1 s fade, handled first in the key handler and independent of WebGL, so it works while rendering throws (tested). It is not persisted: reloads start visible and paused.
+- Hold (G) freezes the auto reseed and auto palette countdowns; play and pause stay separate.
+- Auto reseed by distance counts reference px (same unit as speed) in thousands.
+- Starred seeds in show mode play in star order, each from x = 0.
+- Watchdog: a 160 x 90 copy of the frame each second; flat (under 4 levels of range) for 3 s while tiles exist = redraw all tiles; 15 s = the output window reloads itself (the controller keeps state). Blackout and panic pause the check.
+- Output window keys: F and double-click for full screen; B, Space, R, p, P, G, T, Home, [ and ] are sent to the controller; Esc held 1 s there also triggers panic. The output never writes storage (tested).
+- The output extrapolates the controller's position for up to 1 s between messages, then holds.
+- Web MIDI: not in v0.1.0 (preflight answer).
+
+## Export
+
+- Scope added mid-run (chat message, 2026-10-23; the handoff file on disk still had the old two-line Export section when read): SVG, PNG and PDF, current view or Arch D 36 x 24 in (portrait toggle), frame overlay, margin 0.5 in default, border and label toggles off by default, PNG 150 or 300 dpi.
+- Arch D frame math uses only the page, margin, Fit and Vertical: pt per world px = print height x 72 / 700.5 x Fit. View zoom is not an input (tested). Fit above 1 crops the height, below 1 shows more scroll with ground colour above and below. Never stretched: one scale for both axes.
+- The frame is placed on the scroll in world px (drag it, or Frame to view). Exporting a frame ahead of the view generates up to it first; a frame behind the memory cap is refused with a message.
+- SVG and PDF: upstream element strings with each fill and stroke mapped through the palette (grey level -> palette colour at that element's x and the current drift time, alpha times ink weight; opaque paper-coloured occluders stay opaque). Exact for two-stop palettes; multi-stop palettes are an approximation of the screen, because the screen maps the composited grey. PNG uses the screen pipeline (worker raster + the same shader), so PNG matches the screen.
+- Vector exports use a flat ground colour; for Original that is the average of the seed's paper texture. No vignette in exports.
+- PDF: jsPDF 4.2.1 + svg2pdf.js 2.8.1, vendored in `vendor/`, loaded only when PDF is pressed. Page size in pt from the SVG (2592 x 1728 for Arch D landscape).
+- Units: Arch D SVG has width/height in inches and a viewBox in points. View exports are in screen px (PNG at 2x, PDF at 0.75 pt per px).
+- PNG pages are rastered in blocks of at most 4096 px and assembled; pages over 16384 px a side or 180 Mpx would be written as several tile files (Arch D at 300 dpi, 10800 x 7200, is one file).
+- File names: `shanshui_<seed>_<palette>_<x>.<ext>` for the view; Arch D adds `_archD-landscape` or `_archD-portrait` before the extension. `<x>` is the frame's left edge in world px.
+- Label (off by default): seed, palette, date, credit line, 9 pt, right-aligned in the bottom margin.
+
+## UI
+
+- Font IBM Plex Sans Condensed 400/500/600 (OFL), vendored woff2. Colours after the Kodama Landforms control bar: ground #07090e, border #4d4d4f, accent #c4daf1; warn Kodama coral #E8845A. On states are filled (inverted), so they read without hue.
+- 48 px buttons and 18 px labels; Big targets: 64 px and 23 px, brighter borders.
+- Key map in `src/ui/keys.js`, one table, duplicate-checked by the e2e suite. Case matters: s stars the seed, S (Shift) stars the palette; p next palette, P previous.
+- The panels sit above the bar on the right; one open at a time.

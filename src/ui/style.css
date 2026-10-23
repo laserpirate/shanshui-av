@@ -27,7 +27,7 @@ button, input, select, a.btn { font: inherit; }
 
 #frame { position: absolute; top: 0; border: 2px solid var(--acc); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45); cursor: ew-resize; pointer-events: auto; }
 #frame::after { content: ''; position: absolute; inset: 0; border: 1px dashed rgba(255, 255, 255, .6); }
-#frame-tag { position: absolute; left: 0; top: -2px; transform: translateY(-100%); background: var(--acc); color: var(--bg); padding: 2px 8px; font-size: 16px; white-space: nowrap; }
+#frame-tag { position: absolute; left: 0; top: 0; background: var(--acc); color: var(--bg); padding: 2px 8px; font-size: 16px; white-space: nowrap; }
 
 .ui { transition: opacity .4s; }
 body.hide .ui { opacity: 0 !important; pointer-events: none !important; }
