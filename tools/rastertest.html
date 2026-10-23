@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>raster test</title></head>
+<body style="margin:0;background:#fff">
+<script>
+// Raster worker vs the browser's own SVG renderer, same elements, same paint order, same scale.
+// ?seed=1&tiles=6&scale=1.54   -> window.RESULT = [{x0, meanDiff, over16, over48}]
+const Q = new URLSearchParams(location.search);
+const SEED = Q.get('seed') || '1', TILES = +(Q.get('tiles') || 6), SCALE = +(Q.get('scale') || 1.5418);
+const TW = 512, WH = 800 / 1.142;
+const gen = new Worker('../src/workers/gen-worker.js');
+const ras = new Worker('../src/workers/raster-worker.js');
+const chunks = new Map(); let order = [];
+const need = TILES * TW + 2500;
+const ready = new Promise(res => {
+  gen.onmessage = e => {
+    const m = e.data; if (m.type !== 'chunks') return;
+    for (const a of m.added) chunks.set(a.id, a); order = m.order;
+    if (m.xmax < need) gen.postMessage({ type: 'right' }); else res();
+  };
+});
+gen.postMessage({ type: 'init', seed: SEED });
+const tileFrom = msg => new Promise(res => { ras.onmessage = e => res(e.data); ras.postMessage(msg); });
+function px(img, w, h) { const c = new OffscreenCanvas(w, h), x = c.getContext('2d'); x.drawImage(img, 0, 0); return x.getImageData(0, 0, w, h).data; }
+(async () => {
+  await ready;
+  ras.postMessage({ type: 'add', items: [...chunks.values()].map(c => ({ id: c.id, canv: c.canv })) });
+  const out = [];
+  for (let k = 0; k < TILES; k++) {
+    const x0 = k * TW;
+    const r = await tileFrom({ type: 'tile', key: k, x0, w: TW, h: WH, scale: SCALE, order });
+    const W = r.bitmap.width, H = r.bitmap.height;
+    const a = px(r.bitmap, W, H);
+    let body = '';
+    for (const id of order) { const c = chunks.get(id); body += c.canv; }
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='${x0} 0 ${TW} ${WH}' preserveAspectRatio='none'><rect x='${x0 - 10}' y='-10' width='${TW + 20}' height='${WH + 20}' fill='white'/>${body}</svg>`;
+    const img = new Image(); img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); await img.decode();
+    const b = px(img, W, H);
+    let sum = 0, o16 = 0, o48 = 0, n = W * H;
+    for (let i = 0; i < a.length; i += 4) {
+      const d = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
+      sum += d; if (d > 16) o16++; if (d > 48) o48++;
+    }
+    out.push({ x0, W, H, prims: r.prims, meanDiff: +(sum / n).toFixed(3), over16pct: +(100 * o16 / n).toFixed(3), over48pct: +(100 * o48 / n).toFixed(3) });
+  }
+  window.RESULT = out;
+})().catch(e => window.RESULT = { error: String(e) });
+</script></body></html>

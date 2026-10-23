@@ -1,0 +1,123 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>bench</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#f2efe6}#stage{position:fixed;inset:0;overflow:hidden}
+#strip{position:absolute;left:0;top:0;will-change:transform}canvas{display:block;width:100%;height:100%}</style></head>
+<body><div id="stage"></div>
+<script>
+// Phase 0 render benchmark. ?mode=a|b|c&speed=300&secs=15&seed=1
+//   a  upstream: rebuild the visible SVG through innerHTML every frame (upstream update())
+//   b  one SVG strip with every chunk, moved with a CSS transform
+//   c  chunks rastered to tiles in a worker (OffscreenCanvas), drawn per frame with WebGL
+const Q = new URLSearchParams(location.search);
+const MODE = Q.get('mode') || 'c', SPEED = +(Q.get('speed') || 300), SECS = +(Q.get('secs') || 15), SEED = Q.get('seed') || '1';
+const WORLD_H = 800 / 1.142;
+const stage = document.getElementById('stage');
+const W = innerWidth, H = innerHeight, S = H / WORLD_H;
+const gen = new Worker('../src/workers/gen-worker.js');
+const chunks = new Map(); let order = []; let xmax = 0;
+const result = { mode: MODE, W, H, speed: SPEED, secs: SECS };
+let resolveReady; const ready = new Promise(r => resolveReady = r);
+const NEED = (SPEED * SECS) / S + W / S + 3000;
+gen.onmessage = e => {
+  const m = e.data;
+  if (m.type === 'chunks') {
+    for (const a of m.added) chunks.set(a.id, a);
+    order = m.order; xmax = m.xmax;
+    if (xmax < NEED) gen.postMessage({ type: 'right' }); else resolveReady();
+  }
+};
+gen.postMessage({ type: 'init', seed: SEED });
+
+function visibleCanv(x0, x1) {
+  let s = '';
+  for (const id of order) { const c = chunks.get(id); if (x0 - 512 < c.x && c.x < x1 + 512) s += c.canv; }
+  return s;
+}
+
+const frames = [];
+function measure(step) {
+  return new Promise(done => {
+    let t0 = null, last = null;
+    function f(t) {
+      if (t0 === null) { t0 = t; last = t; }
+      const dt = t - last; last = t;
+      if (t !== t0) frames.push(dt);
+      step((t - t0) / 1000);
+      if (t - t0 < SECS * 1000) requestAnimationFrame(f); else done();
+    }
+    requestAnimationFrame(f);
+  });
+}
+
+async function run() {
+  await ready;
+  result.chunks = chunks.size; result.xmax = xmax;
+  if (MODE === 'a') {
+    const bg = document.createElement('div'); stage.appendChild(bg);
+    await measure(t => {
+      const cx = (SPEED * t) / S, vw = W / S;
+      bg.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg' width='" + W + "' height='" + H + "' viewBox='" + cx + " 0 " + vw + " " + WORLD_H + "'>" + visibleCanv(cx, cx + vw) + '</svg>';
+    });
+  } else if (MODE === 'b') {
+    const x1 = xmax;
+    const strip = document.createElement('div'); strip.id = 'strip'; stage.appendChild(strip);
+    strip.innerHTML = "<svg xmlns='http://www.w3.org/2000/svg' width='" + (x1 * S) + "' height='" + H + "' viewBox='0 0 " + x1 + " " + WORLD_H + "'>" + visibleCanv(0, x1) + '</svg>';
+    await new Promise(r => setTimeout(r, 500));
+    await measure(t => { strip.style.transform = 'translate3d(' + (-SPEED * t) + 'px,0,0)'; });
+  } else {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; stage.appendChild(cv);
+    const gl = cv.getContext('webgl2', { antialias: false, alpha: false });
+    const vs = `#version 300 es
+in vec2 p; uniform vec4 r; out vec2 uv; void main(){ uv=p; vec2 q=r.xy+p*r.zw; gl_Position=vec4(q.x*2.-1.,1.-q.y*2.,0,1);} `;
+    const fs = `#version 300 es
+precision mediump float; in vec2 uv; uniform sampler2D t; out vec4 o; void main(){ float l=texture(t,uv).r; o=vec4(vec3(l)*vec3(0.95,0.93,0.86),1);} `;
+    const sh = (ty, src) => { const s = gl.createShader(ty); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr); gl.useProgram(pr);
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    const ur = gl.getUniformLocation(pr, 'r');
+    const ras = new Worker('../src/workers/raster-worker.js');
+    ras.postMessage({ type: 'add', items: [...chunks.values()].map(c => ({ id: c.id, canv: c.canv })) });
+    const TW = 512, tiles = new Map(), pending = new Set(); const rms = [];
+    ras.onmessage = e => {
+      const m = e.data; if (m.type !== 'tile') return;
+      pending.delete(m.key); rms.push(m.ms);
+      const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, m.bitmap); m.bitmap.close();
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      tiles.set(m.key, tex);
+    };
+    const want = (cx) => {
+      const vw = W / S;
+      for (let k = Math.floor(cx / TW) - 1; k <= Math.floor((cx + vw) / TW) + 2; k++) {
+        if (!tiles.has(k) && !pending.has(k) && pending.size < 3) { pending.add(k); ras.postMessage({ type: 'tile', key: k, x0: k * TW, w: TW, h: WORLD_H, scale: S, order }); }
+      }
+      for (const [k, tex] of tiles) if (k < Math.floor(cx / TW) - 2) { gl.deleteTexture(tex); tiles.delete(k); }
+    };
+    // warm the first screen
+    want(0); await new Promise(r => { const iv = setInterval(() => { if (pending.size === 0) { clearInterval(iv); r(); } else want(0); }, 50); });
+    let missing = 0;
+    await measure(t => {
+      const cx = (SPEED * t) / S; want(cx);
+      gl.viewport(0, 0, W, H); gl.clearColor(0.95, 0.93, 0.86, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+      const vw = W / S;
+      for (let k = Math.floor(cx / TW); k <= Math.floor((cx + vw) / TW); k++) {
+        const tex = tiles.get(k); if (!tex) { missing++; continue; }
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.uniform4f(ur, (k * TW - cx) / vw, 0, TW / vw, 1);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+    });
+    rms.sort((x, y) => x - y);
+    result.rasterMsMedian = +rms[rms.length >> 1].toFixed(1); result.rasterMsMax = +rms[rms.length - 1].toFixed(1); result.missingTileFrames = missing;
+  }
+  frames.sort((x, y) => x - y);
+  const avg = frames.reduce((a, b) => a + b, 0) / frames.length;
+  result.frames = frames.length; result.fps = +(1000 / avg).toFixed(1);
+  result.p95ms = +frames[Math.floor(frames.length * 0.95)].toFixed(1); result.maxms = +frames[frames.length - 1].toFixed(1);
+  result.over25ms = frames.filter(f => f > 25).length;
+  window.BENCH = result;
+}
+run().catch(e => { window.BENCH = { error: String(e) }; });
+</script></body></html>

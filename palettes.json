@@ -1,0 +1,1391 @@
+{
+ "version": 1,
+ "inkRange": 0.75,
+ "note": "Edit by hand. Fields are described at the top of tools/build-palettes.mjs.",
+ "palettes": [
+  {
+   "id": "original",
+   "name": "Original",
+   "group": "Core",
+   "cycle": true,
+   "type": "ramp",
+   "raw": true,
+   "ground": "#ffffff",
+   "paper": "tint",
+   "stops": [
+    [
+     0,
+     "#ffffff"
+    ],
+    [
+     1,
+     "#000000"
+    ]
+   ],
+   "source": "upstream {Shan, Shui}* paper and ink"
+  },
+  {
+   "id": "dark",
+   "name": "Dark",
+   "group": "Core",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#090E08",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#090E08"
+    ],
+    [
+     1,
+     "#ECEAE0"
+    ]
+   ],
+   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): soil #090E08, cream #ECEAE0"
+  },
+  {
+   "id": "grayscale",
+   "name": "Grayscale",
+   "group": "Core",
+   "cycle": true,
+   "type": "ramp",
+   "raw": true,
+   "ground": "#ffffff",
+   "paper": "none",
+   "stops": [
+    [
+     0,
+     "#ffffff"
+    ],
+    [
+     1,
+     "#000000"
+    ]
+   ],
+   "source": "neutral"
+  },
+  {
+   "id": "gradient",
+   "name": "Gradient",
+   "group": "Core",
+   "cycle": true,
+   "type": "gradient",
+   "ground": "#f4f1ea",
+   "paper": "grain",
+   "ramp": [
+    [
+     0,
+     "#1E6BC0"
+    ],
+    [
+     0.33,
+     "#3E9E6A"
+    ],
+    [
+     0.66,
+     "#C9A86A"
+    ],
+    [
+     1,
+     "#1E6BC0"
+    ]
+   ],
+   "drift": "x",
+   "period": 6000,
+   "rate": 0.02,
+   "editable": true,
+   "source": "default stops from phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support) (deep, summer, gold); edit in the Palette panel"
+  },
+  {
+   "id": "kodama-core",
+   "name": "Core Brand",
+   "group": "Kodama Topos",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#090E08",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#090E08"
+    ],
+    [
+     0.35,
+     "#74D6AE"
+    ],
+    [
+     0.7,
+     "#C9A86A"
+    ],
+    [
+     1,
+     "#ECEAE0"
+    ]
+   ],
+   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Core brand (soil, teal, gold, cream)"
+  },
+  {
+   "id": "kodama-lunar",
+   "name": "Lunar Monochrome",
+   "group": "Kodama Topos",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#05070C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#05070C"
+    ],
+    [
+     0.3,
+     "#8A96A2"
+    ],
+    [
+     0.6,
+     "#AEC2D6"
+    ],
+    [
+     0.85,
+     "#D8DEE6"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Lunar monochrome (moon-lo, pale, silver, moon) on studies ink #05070C"
+  },
+  {
+   "id": "kodama-water",
+   "name": "Water",
+   "group": "Kodama Topos",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#05070C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#05070C"
+    ],
+    [
+     0.35,
+     "#1E6BC0"
+    ],
+    [
+     0.7,
+     "#2E8BE0"
+    ],
+    [
+     1,
+     "#7FF0D8"
+    ]
+   ],
+   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Water (deep, flow, glow) on studies ink #05070C"
+  },
+  {
+   "id": "kodama-spectrum",
+   "name": "Spectrum",
+   "group": "Kodama Topos",
+   "cycle": true,
+   "type": "gradient",
+   "ground": "#05070C",
+   "paper": "grain",
+   "ramp": [
+    [
+     0,
+     "#3FA9F0"
+    ],
+    [
+     0.2,
+     "#9A6CE8"
+    ],
+    [
+     0.4,
+     "#C94FD6"
+    ],
+    [
+     0.6,
+     "#F07AB8"
+    ],
+    [
+     0.8,
+     "#E8845A"
+    ],
+    [
+     1,
+     "#3FA9F0"
+    ]
+   ],
+   "drift": "time",
+   "period": 6000,
+   "rate": 0.01,
+   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Spectrum colour-breath (blue, violet, magenta, rose, coral), drifting over time"
+  },
+  {
+   "id": "kodama-seasons",
+   "name": "Seasons",
+   "group": "Kodama Topos",
+   "cycle": true,
+   "type": "gradient",
+   "ground": "#090E08",
+   "paper": "grain",
+   "ramp": [
+    [
+     0,
+     "#CFE0EA"
+    ],
+    [
+     0.25,
+     "#A6DE86"
+    ],
+    [
+     0.5,
+     "#3E9E6A"
+    ],
+    [
+     0.75,
+     "#E07A42"
+    ],
+    [
+     1,
+     "#CFE0EA"
+    ]
+   ],
+   "drift": "x",
+   "period": 20000,
+   "rate": 0.01,
+   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Seasons (winter, spring, summer, autumn), drifting with distance"
+  },
+  {
+   "id": "kl4-look",
+   "name": "KL-4 Look",
+   "group": "Kodama Landforms",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#07090e",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#07090e"
+    ],
+    [
+     0.15,
+     "#141a2e"
+    ],
+    [
+     0.35,
+     "#2a3040"
+    ],
+    [
+     0.6,
+     "#4f5a48"
+    ],
+    [
+     0.85,
+     "#8c8a70"
+    ],
+    [
+     1,
+     "#9fc8f0"
+    ]
+   ],
+   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): kl-4 Look (bg, bed, low, mid, high, stream)"
+  },
+  {
+   "id": "kl4-flat",
+   "name": "KL-4 Flat",
+   "group": "Kodama Landforms",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0a0814",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0a0814"
+    ],
+    [
+     0.12,
+     "#241e3a"
+    ],
+    [
+     1,
+     "#e6deff"
+    ]
+   ],
+   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): kl-4 Flat (bg, ground, mono ramp to #e6deff)"
+  },
+  {
+   "id": "kl-kit",
+   "name": "Kit Gradient",
+   "group": "Kodama Landforms",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#231f20",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#231f20"
+    ],
+    [
+     0.15,
+     "#262a45"
+    ],
+    [
+     0.35,
+     "#3a4166"
+    ],
+    [
+     0.55,
+     "#555b7e"
+    ],
+    [
+     0.8,
+     "#8a8ea6"
+    ],
+    [
+     1,
+     "#c4daf1"
+    ]
+   ],
+   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): Kit Gradient (K100, bed, low, mid, high, LB)"
+  },
+  {
+   "id": "kl-grey",
+   "name": "KL Greyscale",
+   "group": "Kodama Landforms",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#212121",
+   "paper": "none",
+   "stops": [
+    [
+     0,
+     "#212121"
+    ],
+    [
+     0.2,
+     "#4d4d4d"
+    ],
+    [
+     0.45,
+     "#828282"
+    ],
+    [
+     0.7,
+     "#c8c8c8"
+    ],
+    [
+     1,
+     "#f2f2f2"
+    ]
+   ],
+   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): Greyscale K ramp (K100, K85, K60, K25, K05 from the file's KTAB)"
+  },
+  {
+   "id": "topo-01",
+   "name": "01 Cartography Empire",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#060B10",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#060B10"
+    ],
+    [
+     0.167,
+     "#53433A"
+    ],
+    [
+     0.333,
+     "#836A56"
+    ],
+    [
+     0.5,
+     "#E8845A"
+    ],
+    [
+     0.667,
+     "#6FC6F0"
+    ],
+    [
+     0.833,
+     "#C7D97A"
+    ],
+    [
+     1,
+     "#CFF0FF"
+    ]
+   ],
+   "source": "phylla-kodama-topo-01-cartography-empire.html PAL (bg as ground; mudL, mudM, coral, waterHi, marshHi, foam by luminance)"
+  },
+  {
+   "id": "topo-02",
+   "name": "02 Amorphous Androgynous",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#04101F",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#04101F"
+    ],
+    [
+     0.167,
+     "#0A2E5C"
+    ],
+    [
+     0.333,
+     "#1E6E6A"
+    ],
+    [
+     0.5,
+     "#FF6FA8"
+    ],
+    [
+     0.667,
+     "#FF8F6A"
+    ],
+    [
+     0.833,
+     "#F6C544"
+    ],
+    [
+     1,
+     "#F7F3D8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-02-amorphous-androgynous.html PAL (bg as ground; deep, kelpM, hot, coral, gold, moon by luminance)"
+  },
+  {
+   "id": "topo-03",
+   "name": "03 Mono No Aware",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#090E08",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#090E08"
+    ],
+    [
+     0.167,
+     "#6E5347"
+    ],
+    [
+     0.333,
+     "#A9836B"
+    ],
+    [
+     0.5,
+     "#E8845A"
+    ],
+    [
+     0.667,
+     "#C9A86A"
+    ],
+    [
+     0.833,
+     "#74D6AE"
+    ],
+    [
+     1,
+     "#ECEAE0"
+    ]
+   ],
+   "source": "phylla-kodama-topo-03-mono-no-aware.html PAL (bg as ground; soilLow, soilMid, coral, gold, teal, cream by luminance)"
+  },
+  {
+   "id": "topo-04",
+   "name": "04 Hertzian Stream",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#070C0A",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#070C0A"
+    ],
+    [
+     0.167,
+     "#54413A"
+    ],
+    [
+     0.333,
+     "#2E8BE0"
+    ],
+    [
+     0.5,
+     "#E8845A"
+    ],
+    [
+     0.667,
+     "#C9A86A"
+    ],
+    [
+     0.833,
+     "#BFE07A"
+    ],
+    [
+     1,
+     "#ECEAE0"
+    ]
+   ],
+   "source": "phylla-kodama-topo-04-hertzian-stream.html PAL (bg as ground; soilL, water, coral, gold, leafHi, cream by luminance)"
+  },
+  {
+   "id": "topo-05",
+   "name": "05 Selective Memories",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#060B0C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#060B0C"
+    ],
+    [
+     0.167,
+     "#1E2630"
+    ],
+    [
+     0.333,
+     "#7A4E58"
+    ],
+    [
+     0.5,
+     "#8A96A2"
+    ],
+    [
+     0.667,
+     "#E8B8C0"
+    ],
+    [
+     0.833,
+     "#A8E0C8"
+    ],
+    [
+     1,
+     "#DFFFF0"
+    ]
+   ],
+   "source": "phylla-kodama-topo-05-selective-memories.html PAL (bg as ground; strata, mushLo, moonLo, mush, myco, pulse by luminance)"
+  },
+  {
+   "id": "topo-06",
+   "name": "06 Cenote",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#05080C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#05080C"
+    ],
+    [
+     0.167,
+     "#1E2430"
+    ],
+    [
+     0.333,
+     "#3A4F9E"
+    ],
+    [
+     0.5,
+     "#1FB9A6"
+    ],
+    [
+     0.667,
+     "#FF8FC0"
+    ],
+    [
+     0.833,
+     "#7FF0D8"
+    ],
+    [
+     1,
+     "#FFF3C8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-06-cenote.html PAL (bg as ground; rockShadow, indigo, water, pink, waterHi, sun by luminance)"
+  },
+  {
+   "id": "topo-07",
+   "name": "07 Oaxacan Resonance",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#06060A",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#06060A"
+    ],
+    [
+     0.167,
+     "#1C222A"
+    ],
+    [
+     0.333,
+     "#2E3A26"
+    ],
+    [
+     0.5,
+     "#B7C2CE"
+    ],
+    [
+     0.667,
+     "#D8DEE6"
+    ],
+    [
+     0.833,
+     "#FFE39A"
+    ],
+    [
+     1,
+     "#EFF6FF"
+    ]
+   ],
+   "source": "phylla-kodama-topo-07-oaxacan-resonance.html PAL (bg as ground; rockLo, vineLo, pale, silver, fire, foam by luminance)"
+  },
+  {
+   "id": "topo-08",
+   "name": "08 Whisper Well",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#04060A",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#04060A"
+    ],
+    [
+     0.167,
+     "#121820"
+    ],
+    [
+     0.333,
+     "#8A96A2"
+    ],
+    [
+     0.5,
+     "#B6BEC8"
+    ],
+    [
+     0.667,
+     "#8FD8E8"
+    ],
+    [
+     0.833,
+     "#CFE0F0"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-08-whisper-well.html PAL (bg as ground; rockShadow, moonLo, rootLit, wellGlow, waterHi, moon by luminance)"
+  },
+  {
+   "id": "topo-09",
+   "name": "09 Atlas Lost Moons",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#05070C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#05070C"
+    ],
+    [
+     0.167,
+     "#1A2430"
+    ],
+    [
+     0.333,
+     "#2A323C"
+    ],
+    [
+     0.5,
+     "#8A96A2"
+    ],
+    [
+     0.667,
+     "#AEC2D6"
+    ],
+    [
+     0.833,
+     "#CFE0F0"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-09-atlas-lost-moons.html PAL (bg as ground; water, rootLo, moonLo, pale, waterHi, moon by luminance)"
+  },
+  {
+   "id": "topo-10",
+   "name": "10 Soul Pools",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#080B10",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#080B10"
+    ],
+    [
+     0.167,
+     "#141C26"
+    ],
+    [
+     0.333,
+     "#6A747E"
+    ],
+    [
+     0.5,
+     "#AEC2D6"
+    ],
+    [
+     0.667,
+     "#BFCEDC"
+    ],
+    [
+     0.833,
+     "#D8DEE6"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-10-soul-pools.html PAL (bg as ground; water, stone, pale, mist, silver, moon by luminance)"
+  },
+  {
+   "id": "topo-11",
+   "name": "11 Future Subsidence",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0A0D12",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A0D12"
+    ],
+    [
+     0.167,
+     "#1A2028"
+    ],
+    [
+     0.333,
+     "#4A5563"
+    ],
+    [
+     0.5,
+     "#AEBCCA"
+    ],
+    [
+     0.667,
+     "#C4D0DC"
+    ],
+    [
+     0.833,
+     "#E6ECF2"
+    ],
+    [
+     1,
+     "#F0F4F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-11-future-subsidence.html PAL (bg as ground; dark, dim, pale, mist, spirit, moon by luminance)"
+  },
+  {
+   "id": "topo-12",
+   "name": "12 Murmurations",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0A0D12",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A0D12"
+    ],
+    [
+     0.167,
+     "#1A241C"
+    ],
+    [
+     0.333,
+     "#4A5563"
+    ],
+    [
+     0.5,
+     "#9AA6B2"
+    ],
+    [
+     0.667,
+     "#AEC8E0"
+    ],
+    [
+     0.833,
+     "#F6E06A"
+    ],
+    [
+     1,
+     "#F0F4F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-12-murmurations.html PAL (bg as ground; mossLo, dim, moonLo, rain, fire, moon by luminance)"
+  },
+  {
+   "id": "topo-13",
+   "name": "13 Point Cloud Forests",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#06100C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#06100C"
+    ],
+    [
+     0.167,
+     "#1A241C"
+    ],
+    [
+     0.333,
+     "#3E5240"
+    ],
+    [
+     0.5,
+     "#8A96A2"
+    ],
+    [
+     0.667,
+     "#B7C6C0"
+    ],
+    [
+     0.833,
+     "#8FE0FF"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-13-point-cloud-forests.html PAL (bg as ground; ground, groundHi, moonLo, pale, agent, moon by luminance)"
+  },
+  {
+   "id": "topo-14",
+   "name": "14 Tropics",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0A0E08",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A0E08"
+    ],
+    [
+     0.167,
+     "#4A4234"
+    ],
+    [
+     0.333,
+     "#C94FD6"
+    ],
+    [
+     0.5,
+     "#3FA9C9"
+    ],
+    [
+     0.667,
+     "#C9A86A"
+    ],
+    [
+     0.833,
+     "#F6C544"
+    ],
+    [
+     1,
+     "#F6E06A"
+    ]
+   ],
+   "source": "phylla-kodama-topo-14-tropics.html PAL (bg as ground; stoneLo, mag, teal, gold, goldHi, fire by luminance)"
+  },
+  {
+   "id": "topo-15",
+   "name": "15 Arctic Suns",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0A0E14",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A0E14"
+    ],
+    [
+     0.167,
+     "#2A3644"
+    ],
+    [
+     0.333,
+     "#E8845A"
+    ],
+    [
+     0.5,
+     "#B7C6D2"
+    ],
+    [
+     0.667,
+     "#6FE0C0"
+    ],
+    [
+     0.833,
+     "#F6D9A0"
+    ],
+    [
+     1,
+     "#F0F4F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-15-arctic-suns.html PAL (bg as ground; duneLo, sun2, duneHi, aurC, sun, white by luminance)"
+  },
+  {
+   "id": "topo-16",
+   "name": "16 Beyond Ecliptic",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0B0F16",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0B0F16"
+    ],
+    [
+     0.167,
+     "#4A5563"
+    ],
+    [
+     0.333,
+     "#8A96A2"
+    ],
+    [
+     0.5,
+     "#AEBCCA"
+    ],
+    [
+     0.667,
+     "#74D6AE"
+    ],
+    [
+     0.833,
+     "#D8DEE6"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-16-beyond-ecliptic.html PAL (bg as ground; dim, moonLo, pale, bloomA, silver, moon by luminance)"
+  },
+  {
+   "id": "topo-17",
+   "name": "17 Ayutthaya",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#3A2C1E",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#3A2C1E"
+    ],
+    [
+     0.167,
+     "#4A4234"
+    ],
+    [
+     0.333,
+     "#C94FD6"
+    ],
+    [
+     0.5,
+     "#5A9A5E"
+    ],
+    [
+     0.667,
+     "#AEC2D6"
+    ],
+    [
+     0.833,
+     "#FFC46A"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-17-ayutthaya.html PAL (wood as ground; stoneLo, neon, petal, pale, lant, moon by luminance)"
+  },
+  {
+   "id": "topo-18",
+   "name": "18 Neo Bangkok",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#1A2A3E",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#1A2A3E"
+    ],
+    [
+     0.167,
+     "#14283A"
+    ],
+    [
+     0.333,
+     "#3A6E8C"
+    ],
+    [
+     0.5,
+     "#5A9A5E"
+    ],
+    [
+     0.667,
+     "#74D6AE"
+    ],
+    [
+     0.833,
+     "#BFD0E0"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-18-neo-bangkok.html PAL (sky as ground; water, waterHi, petal, bio, halo, moon by luminance)"
+  },
+  {
+   "id": "topo-19",
+   "name": "19 Nusantara",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#123028",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#123028"
+    ],
+    [
+     0.167,
+     "#2E3644"
+    ],
+    [
+     0.333,
+     "#3E7D46"
+    ],
+    [
+     0.5,
+     "#4EC8A0"
+    ],
+    [
+     0.667,
+     "#AEC8C0"
+    ],
+    [
+     0.833,
+     "#FFC98A"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-19-nusantara.html PAL (water as ground; towerLo, green, cur, rain, win, moon by luminance)"
+  },
+  {
+   "id": "topo-20",
+   "name": "20 Singapore",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0E2A30",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0E2A30"
+    ],
+    [
+     0.167,
+     "#2E4650"
+    ],
+    [
+     0.333,
+     "#8FA6AE"
+    ],
+    [
+     0.5,
+     "#74D6AE"
+    ],
+    [
+     0.667,
+     "#AECAD0"
+    ],
+    [
+     0.833,
+     "#FFD9A0"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-20-singapore.html PAL (water as ground; glassLo, steel, bio, rain, sun, moon by luminance)"
+  },
+  {
+   "id": "topo-21",
+   "name": "21 Jakarta",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0C1612",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0C1612"
+    ],
+    [
+     0.167,
+     "#16333C"
+    ],
+    [
+     0.333,
+     "#2E8C8C"
+    ],
+    [
+     0.5,
+     "#3AC8A0"
+    ],
+    [
+     0.667,
+     "#AEC8C4"
+    ],
+    [
+     0.833,
+     "#8FE0FF"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-21-jakarta.html PAL (board as ground; twr, waterHi, traceHi, rain, winC, moon by luminance)"
+  },
+  {
+   "id": "topo-22",
+   "name": "22 Manila",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#16242E",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#16242E"
+    ],
+    [
+     0.167,
+     "#3A2C1E"
+    ],
+    [
+     0.333,
+     "#8FA0AE"
+    ],
+    [
+     0.5,
+     "#9AB0BC"
+    ],
+    [
+     0.667,
+     "#74D6AE"
+    ],
+    [
+     0.833,
+     "#C8DEE8"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-22-manila.html PAL (water as ground; wood, rail, dome, bio, ref, moon by luminance)"
+  },
+  {
+   "id": "topo-23",
+   "name": "23 Kuala Lumpur",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#122A2A",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#122A2A"
+    ],
+    [
+     0.167,
+     "#16333C"
+    ],
+    [
+     0.333,
+     "#8FA6AE"
+    ],
+    [
+     0.5,
+     "#C8B890"
+    ],
+    [
+     0.667,
+     "#AEC8C4"
+    ],
+    [
+     0.833,
+     "#8FE0FF"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-23-kuala-lumpur.html PAL (water as ground; twr, steel, stone, rain, winC, moon by luminance)"
+  },
+  {
+   "id": "topo-24",
+   "name": "24 Neo Saigon",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#0A1420",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A1420"
+    ],
+    [
+     0.167,
+     "#14202A"
+    ],
+    [
+     0.333,
+     "#3A5866"
+    ],
+    [
+     0.5,
+     "#6FBE7E"
+    ],
+    [
+     0.667,
+     "#FFB870"
+    ],
+    [
+     0.833,
+     "#BFE0E8"
+    ],
+    [
+     1,
+     "#F2F5F8"
+    ]
+   ],
+   "source": "phylla-kodama-topo-24-neo-saigon.html PAL (deep as ground; floor, silt, lotusHi, sun, foam, moon by luminance)"
+  },
+  {
+   "id": "topo-25",
+   "name": "25 Star Axis",
+   "group": "Studies",
+   "cycle": false,
+   "type": "ramp",
+   "ground": "#05070C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#05070C"
+    ],
+    [
+     0.167,
+     "#0A0D14"
+    ],
+    [
+     0.333,
+     "#2F6FC4"
+    ],
+    [
+     0.5,
+     "#74D6AE"
+    ],
+    [
+     0.667,
+     "#BFD8FF"
+    ],
+    [
+     0.833,
+     "#9FF4FF"
+    ],
+    [
+     1,
+     "#FFFFFF"
+    ]
+   ],
+   "source": "phylla-kodama-topo-25-star-axis.html PAL (sky as ground; stoneDark, stoneLit, teal, trailHi, nova, novaCore by luminance)"
+  }
+ ]
+}
