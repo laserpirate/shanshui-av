@@ -1,2 +1,140 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>AV Shan Shui Infinite Scrolls</title></head>
-<body><p>AV Shan Shui Infinite Scrolls. Build in progress. Original {Shan, Shui}* by <a href="https://github.com/LingDong-/shan-shui-inf">Lingdong Huang</a>.</p></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AV Shan Shui Infinite Scrolls</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl" aria-label="landscape"></canvas>
+  <canvas id="still" width="960" height="540"></canvas>
+  <canvas id="card"></canvas>
+  <div id="frame" hidden><span id="frame-tag"></span></div>
+  <div id="black"></div>
+</div>
+
+<div id="hud" class="ui">
+  <div><b id="hud-seed">seed</b> <span id="hud-pal"></span></div>
+  <div id="hud-stats"></div>
+  <div id="hud-flags"></div>
+</div>
+
+<div id="panels" class="ui">
+  <section id="p-seed" class="panel" hidden>
+    <h3>Seed</h3>
+    <div class="row"><input id="seed-in" type="text" maxlength="64" spellcheck="false" aria-label="seed"><button id="seed-go">Go</button></div>
+    <div class="row"><button id="seed-copy">Copy link</button><a id="seed-orig" class="btn" target="_blank" rel="noopener">Original site</a></div>
+    <h4>History</h4><ol id="hist" class="list"></ol>
+    <h4>Starred</h4><ol id="stars" class="list"></ol>
+  </section>
+
+  <section id="p-look" class="panel" hidden>
+    <h3>Palette</h3>
+    <div class="row"><label class="chk"><input type="checkbox" id="pal-starred-only"> P cycles starred only</label></div>
+    <div id="pal-list"></div>
+    <div id="grad-edit" hidden>
+      <h4>Gradient stops</h4>
+      <div id="grad-stops"></div>
+      <div class="row"><button id="grad-add">Add stop</button><button id="grad-reset">Reset</button></div>
+      <div class="row seg" id="grad-drift"><button data-v="x">Distance</button><button data-v="time">Time</button></div>
+      <label class="sl">Drift <input type="range" id="grad-rate" min="0" max="1" step="0.001"><output id="grad-rate-o"></output></label>
+    </div>
+    <h4>Adjust</h4>
+    <label class="sl">Contrast <input type="range" id="u-contrast" min="0.3" max="3" step="0.01"><output></output></label>
+    <label class="sl">Ink weight <input type="range" id="u-ink" min="0.2" max="2.5" step="0.01"><output></output></label>
+    <label class="sl">Zoom <input type="range" id="u-zoom" min="0.4" max="2" step="0.01"><output></output></label>
+    <label class="sl">Vertical <input type="range" id="u-yalign" min="0" max="1" step="0.01"><output></output></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="u-paper"> Paper texture</label><label class="chk"><input type="checkbox" id="u-vignette"> Vignette</label></div>
+    <div class="row"><button id="u-reset">Reset adjust</button></div>
+  </section>
+
+  <section id="p-show" class="panel" hidden>
+    <h3>Show</h3>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-auto"> Auto reseed</label></div>
+    <div class="row seg" id="s-mode"><button data-v="min">Minutes</button><button data-v="px">Distance</button></div>
+    <label class="sl">Every <input type="number" id="s-every" min="0.5" step="0.5"><span id="s-unit">min</span></label>
+    <div class="row seg" id="s-src"><button data-v="new">New seed</button><button data-v="starred">Starred</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-autopal"> Auto palette</label></div>
+    <label class="sl">Every <input type="number" id="s-palevery" min="0.5" step="0.5"><span>min</span></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-resume"> Auto resume</label></div>
+    <label class="sl">After <input type="number" id="s-resume-s" min="1" max="120" step="1"><span>s</span></label>
+    <label class="sl">Reseed fade <input type="number" id="s-fade" min="0.5" max="10" step="0.5"><span>s</span></label>
+    <h4>Quality</h4>
+    <div class="row seg" id="s-q"><button data-v="auto">Auto</button><button data-v="1">High</button><button data-v="0.75">Med</button><button data-v="0.5">Low</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-big"> Big targets</label></div>
+    <div class="row"><button id="s-card">Test card</button><button id="s-out">Output window</button></div>
+    <div class="kv" id="s-inst"></div>
+  </section>
+
+  <section id="p-export" class="panel" hidden>
+    <h3>Export</h3>
+    <div class="row seg" id="e-format"><button data-v="view">View</button><button data-v="archd">Arch D</button></div>
+    <div class="row seg" id="e-orient"><button data-v="landscape">Landscape</button><button data-v="portrait">Portrait</button></div>
+    <label class="sl">Fit <input type="range" id="e-fit" min="0.25" max="3" step="0.01"><output></output></label>
+    <label class="sl">Vertical <input type="range" id="e-yalign" min="0" max="1" step="0.01"><output></output></label>
+    <label class="sl">Margin <input type="number" id="e-margin" min="0" max="4" step="0.125"><span>in</span></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="e-border"> Border</label><label class="chk"><input type="checkbox" id="e-label"> Label</label></div>
+    <div class="row seg" id="e-dpi"><button data-v="150">150 dpi</button><button data-v="300">300 dpi</button></div>
+    <div class="row"><button id="e-here">Frame to view</button></div>
+    <div class="row"><button id="e-svg">SVG</button><button id="e-png">PNG</button><button id="e-pdf">PDF</button></div>
+    <div class="kv" id="e-info"></div>
+    <div class="kv" id="e-status"></div>
+  </section>
+
+  <section id="p-log" class="panel" hidden>
+    <h3>Log</h3>
+    <div class="row"><button id="log-clear">Clear</button></div>
+    <ol id="log" class="list mono"></ol>
+  </section>
+
+  <section id="p-about" class="panel" hidden>
+    <h3>About</h3>
+    <p class="kv"><b>AV Shan Shui Infinite Scrolls</b> <span id="ver"></span></p>
+    <p class="kv">Original {Shan, Shui}* by Lingdong Huang:<br><a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">github.com/LingDong-/shan-shui-inf</a> (MIT)</p>
+    <p class="kv">Changes by Marko Manriquez:<br><a href="https://github.com/laserpirate/shanshui-av" target="_blank" rel="noopener">github.com/laserpirate/shanshui-av</a> (MIT)</p>
+    <p class="kv">Landscape engine unchanged from upstream. Font IBM Plex Sans Condensed (OFL).</p>
+  </section>
+
+  <section id="p-keys" class="panel" hidden>
+    <h3>Keys</h3>
+    <table id="keys" class="keys"></table>
+  </section>
+</div>
+
+<div id="bar" class="ui">
+  <div class="grp">
+    <button id="b-play" title="Play / pause (Space)"><span class="m">&#9654;</span><span class="t">Play</span></button>
+    <button id="b-stop" title="Stop (Home)"><span class="m">&#9632;</span>Stop</button>
+    <button id="b-dir" title="Direction (D)"><span class="m" id="b-dir-m">&#8594;</span>Dir</button>
+  </div>
+  <div class="grp sp"><label for="b-speed">Speed</label><input type="range" id="b-speed" min="0" max="1" step="0.001" aria-label="speed"><output id="b-speed-o"></output></div>
+  <div class="grp">
+    <button id="b-back" title="Previous seed ([)">&#9664;</button>
+    <button id="b-reseed" title="Reseed (R)">Reseed</button>
+    <button id="b-fwd" title="Next seed (])">&#9654;</button>
+    <button id="b-star" title="Star seed (S)"><span class="m">&#9734;</span>Star</button>
+  </div>
+  <div class="grp">
+    <button id="b-palprev" title="Previous palette (Shift+P)">&#9664;</button>
+    <button id="b-pal" title="Palette panel"><span id="b-pal-n">Original</span></button>
+    <button id="b-palnext" title="Next palette (P)">&#9654;</button>
+  </div>
+  <div class="grp">
+    <button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-show">Show</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log<span id="log-n"></span></button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button>
+  </div>
+  <div class="grp">
+    <button id="b-hold" title="Hold (G)">Hold</button>
+    <button id="b-out" title="Output window (O)">Output</button>
+    <button id="b-full" title="Full screen (F)">Full</button>
+    <button id="b-black" class="warn" title="Blackout (B)">Black</button>
+  </div>
+  <div class="grp next" id="b-next"></div>
+</div>
+
+<div id="toast" class="ui"></div>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

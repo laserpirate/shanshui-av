@@ -1,0 +1,111 @@
+/* Controller. Dark, squared, labels only. Colours after the Kodama Landforms bar
+   (bg #07090e, border #4d4d4f, accent #c4daf1); warn is Kodama coral #E8845A.
+   "On" states invert (filled), so they read without relying on hue. */
+@font-face { font-family: 'Plex Cond'; src: url('../../fonts/ibm-plex-sans-condensed-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'Plex Cond'; src: url('../../fonts/ibm-plex-sans-condensed-latin-500-normal.woff2') format('woff2'); font-weight: 500; font-display: block; }
+@font-face { font-family: 'Plex Cond'; src: url('../../fonts/ibm-plex-sans-condensed-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-display: block; }
+
+:root {
+  --bg: #07090e; --panel: rgba(7, 9, 14, .94); --ink: #ffffff; --dim: #a5a9ac; --acc: #c4daf1; --bor: #4d4d4f;
+  --btn: rgba(7, 9, 14, .78); --warn: #E8845A; --h: 48px; --fs: 18px; --pad: 12px;
+}
+body.big { --h: 64px; --fs: 23px; --bor: #c7c8ca; --btn: rgba(0, 0, 0, .92); --dim: #e1e2e3; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Plex Cond', 'Arial Narrow', sans-serif; font-weight: 500; font-size: var(--fs); }
+button, input, select, a.btn { font: inherit; }
+
+#stage { position: fixed; inset: 0; background: #000; overflow: hidden; touch-action: none; cursor: grab; }
+#stage.drag { cursor: grabbing; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#still, #card { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .6s; }
+#still.on, #card.on { opacity: 1; }
+#card { transition: none; }
+#black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1s linear; }
+#black.on { opacity: 1; }
+#black.fast { transition-duration: .25s; }
+
+#frame { position: absolute; top: 0; border: 2px solid var(--acc); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45); cursor: ew-resize; pointer-events: auto; }
+#frame::after { content: ''; position: absolute; inset: 0; border: 1px dashed rgba(255, 255, 255, .6); }
+#frame-tag { position: absolute; left: 0; top: -2px; transform: translateY(-100%); background: var(--acc); color: var(--bg); padding: 2px 8px; font-size: 16px; white-space: nowrap; }
+
+.ui { transition: opacity .4s; }
+body.hide .ui { opacity: 0 !important; pointer-events: none !important; }
+body.uihidden .ui { display: none !important; }
+
+#hud { position: fixed; top: var(--pad); left: var(--pad); background: var(--panel); border: 1px solid var(--bor); padding: 6px 10px; line-height: 1.35; font-size: calc(var(--fs) * .9); pointer-events: none; max-width: calc(100vw - 2 * var(--pad)); }
+#hud b { font-weight: 600; color: var(--acc); }
+#hud-stats, #hud-flags { white-space: pre; color: var(--dim); font-variant-numeric: tabular-nums; }
+#hud-flags:empty { display: none; }
+
+#bar { position: fixed; left: var(--pad); right: var(--pad); bottom: var(--pad); display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.grp { display: flex; align-items: stretch; }
+.grp > button, .grp > label, .grp > output { margin-left: -1px; }
+.grp > :first-child { margin-left: 0; }
+button, a.btn { min-height: var(--h); min-width: var(--h); padding: 0 12px; color: var(--ink); background: var(--btn); border: 1px solid var(--bor); border-radius: 0; cursor: pointer; letter-spacing: .03em; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; white-space: nowrap; }
+button:focus-visible, input:focus-visible, a.btn:focus-visible { outline: 3px solid var(--acc); outline-offset: 1px; }
+button.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
+button.warn { border-color: var(--warn); }
+button.warn.on { background: var(--warn); color: #000; }
+button:disabled { color: #5f6164; cursor: default; }
+.m { display: inline-block; min-width: 1em; text-align: center; }
+.sp { gap: 0; align-items: center; background: var(--btn); border: 1px solid var(--bor); padding: 0 10px; }
+.sp label { margin-right: 10px; }
+.sp input { width: 160px; }
+.sp output { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; }
+.next { align-items: center; color: var(--dim); padding: 0 6px; font-variant-numeric: tabular-nums; }
+.next:empty { display: none; }
+input[type=range] { accent-color: var(--acc); height: var(--h); }
+input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--acc); margin: 0 8px 0 0; }
+input[type=text], input[type=number] { min-height: var(--h); background: #000; color: var(--ink); border: 1px solid var(--bor); border-radius: 0; padding: 0 10px; }
+input[type=number] { width: 6em; }
+input[type=color] { width: var(--h); height: var(--h); border: 1px solid var(--bor); background: #000; padding: 2px; border-radius: 0; }
+
+#panels { position: fixed; right: var(--pad); bottom: calc(var(--h) * 2 + var(--pad) * 3); top: var(--pad); width: min(460px, calc(100vw - 2 * var(--pad))); display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; }
+.panel { pointer-events: auto; background: var(--panel); border: 1px solid var(--bor); padding: 10px 14px 14px; overflow-y: auto; max-height: 100%; }
+.panel h3 { margin: 0 0 8px; font-size: calc(var(--fs) * 1.05); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--acc); }
+.panel h4 { margin: 14px 0 6px; font-size: var(--fs); font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; align-items: center; }
+.row input[type=text] { flex: 1; min-width: 0; }
+.seg { gap: 0; }
+.seg button { margin-left: -1px; flex: 1; }
+.seg button:first-child { margin-left: 0; }
+.chk { display: inline-flex; align-items: center; min-height: var(--h); margin-right: 14px; cursor: pointer; }
+.sl { display: grid; grid-template-columns: 6.5em 1fr auto; align-items: center; gap: 8px; margin: 2px 0; }
+.sl output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
+.sl input[type=number] { justify-self: start; }
+.kv { color: var(--dim); margin: 6px 0; line-height: 1.4; }
+.kv b { color: var(--ink); }
+.panel a { color: var(--acc); }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; align-items: stretch; border-bottom: 1px solid #22252c; }
+.list li > button.main { flex: 1; justify-content: flex-start; background: transparent; border: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.list li > button.main.cur { color: var(--acc); }
+.list li > button.x { background: transparent; border: 0; color: var(--dim); }
+.mono { font-variant-numeric: tabular-nums; font-size: calc(var(--fs) * .85); }
+#log li { padding: 4px 0; display: block; color: var(--dim); }
+#log li.error { color: var(--warn); }
+#log li.warn { color: #f0d68a; }
+#log-n:not(:empty) { margin-left: 4px; color: var(--warn); }
+
+#pal-list .g { margin: 10px 0 4px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+.pal { display: flex; align-items: stretch; margin: 0 0 -1px; }
+.pal button.main { flex: 1; justify-content: flex-start; gap: 10px; overflow: hidden; }
+.pal .sw { display: inline-flex; height: 22px; width: 96px; flex: 0 0 auto; border: 1px solid #000; }
+.pal .sw i { flex: 1; }
+.pal button.star { margin-left: -1px; }
+.gs { display: grid; grid-template-columns: var(--h) 1fr auto; gap: 8px; align-items: center; margin: 4px 0; }
+
+.keys { border-collapse: collapse; width: 100%; }
+.keys td { border-bottom: 1px solid #22252c; padding: 6px 4px; vertical-align: top; }
+.keys td:first-child { color: var(--acc); white-space: nowrap; width: 7.5em; }
+
+#toast { position: fixed; left: 50%; top: var(--pad); transform: translateX(-50%); background: var(--acc); color: var(--bg); padding: 8px 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .3s; }
+#toast.on { opacity: 1; }
+body.hide #toast { opacity: 0; }
+
+@media (max-width: 700px) {
+  :root { --pad: 8px; }
+  .sp input { width: 100px; }
+  #panels { bottom: 50vh; }
+}

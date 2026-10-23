@@ -6,9 +6,10 @@
 //
 // in : {type:'add', items:[{id,canv}]}      parse and keep
 //      {type:'drop', ids}
-//      {type:'tile', key, x0, w, h, scale, order:[ids]}   world rect [x0, x0+w] x [0, h]
+//      {type:'tile', key, x0, w, h, scale, order:[ids], y0}   world rect [x0, x0+w] x [y0, y0+h]
 //      {type:'clear'}
-// out: {type:'tile', key, bitmap, ms, prims}
+// out: {type:'extents', items:[[id, minx, maxx]]}   after each add
+//      {type:'tile', key, bitmap, ms, prims}
 
 const store = new Map(); // id -> {prims:[...], minx, maxx}
 
@@ -81,21 +82,24 @@ self.onmessage = (e) => {
   const msg = e.data;
   try {
     if (msg.type === 'add') {
-      for (const it of msg.items) store.set(it.id, parse(it.canv));
+      const items = [];
+      for (const it of msg.items) { const el = parse(it.canv); store.set(it.id, el); items.push([it.id, el.minx, el.maxx]); }
+      self.postMessage({ type: 'extents', items });
     } else if (msg.type === 'drop') {
       for (const id of msg.ids) store.delete(id);
     } else if (msg.type === 'clear') {
       store.clear();
     } else if (msg.type === 'tile') {
       const t = performance.now();
-      const W = Math.max(1, Math.round(msg.w * msg.scale)), H = Math.max(1, Math.round(msg.h * msg.scale));
+      const W = msg.pw || Math.max(1, Math.round(msg.w * msg.scale)), H = msg.ph || Math.max(1, Math.round(msg.h * msg.scale));
       if (!canvas || canvas.width !== W || canvas.height !== H) canvas = new OffscreenCanvas(W, H);
       const ctx = canvas.getContext('2d');
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
-      ctx.setTransform(msg.scale, 0, 0, msg.scale, -msg.x0 * msg.scale, 0);
+      const y0 = msg.y0 || 0;
+      ctx.setTransform(msg.scale, 0, 0, msg.scale, -msg.x0 * msg.scale, -y0 * msg.scale);
       ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.miterLimit = 4;
       const xa = msg.x0, xb = msg.x0 + msg.w;
       let prims = 0;
@@ -103,7 +107,7 @@ self.onmessage = (e) => {
         const el = store.get(id);
         if (!el || el.maxx < xa || el.minx > xb) continue;
         for (const p of el.prims) {
-          if (p.x1 < xa || p.x0 > xb || p.y1 < 0 || p.y0 > msg.h) continue;
+          if (p.x1 < xa || p.x0 > xb || p.y1 < y0 || p.y0 > y0 + msg.h) continue;
           paint(ctx, p); prims++;
         }
       }
