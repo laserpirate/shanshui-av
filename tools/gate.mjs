@@ -36,16 +36,25 @@ console.log('local links:', links);
 
 // 3. console errors on load (controller and output)
 const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const offline = /^http:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
 for (const url of ['?i=gate&seed=1', 'output.html?i=gate']) {
   const page = await browser.newPage();
+  // against localhost, prove the app runs with no internet: block and report anything external
+  if (offline) await page.route('**/*', r => { const u = r.request().url(); if (/^(https?:\/\/(localhost|127\.0\.0\.1)|data:|blob:)/.test(u)) return r.continue(); problems.push('external request ' + u); return r.abort(); });
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') problems.push(`console ${url}: ${m.text().slice(0, 200)}`); });
   page.on('pageerror', e => problems.push(`pageerror ${url}: ${e.message}`));
   page.on('requestfailed', r => problems.push(`request failed ${url}: ${r.url()}`));
   page.on('response', r => { if (r.status() >= 400) problems.push(`HTTP ${r.status()} ${r.url()}`); });
   await page.goto(BASE + url);
   await page.waitForTimeout(4000);
+  if (url.startsWith('?')) {   // exercise the lazy PDF libraries too
+    await page.evaluate(() => { Object.assign(SSAV.cfg.exp, { format: 'view' }); return SSAV.runExport('pdf'); });
+    const st = await page.evaluate(() => window.__lastExport);
+    if (!st || st.error) problems.push('pdf export on load check: ' + (st && st.error));
+  }
   await page.close();
 }
 await browser.close();
+console.log('offline check:', offline ? 'on (external requests blocked)' : 'off (remote base)');
 console.log(problems.length ? 'GATE FAILED\n' + problems.join('\n') : 'gate passed');
 process.exit(problems.length ? 1 : 0);
