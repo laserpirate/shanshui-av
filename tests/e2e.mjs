@@ -421,7 +421,7 @@ await test('midi-learn', async () => {
   const page = await ctx.newPage(); watch(page);
   await page.goto(BASE + '?i=e2e-midi&seed=5');
   await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2, null, { timeout: 30000 });
-  const before = await page.evaluate(() => ({ midi: Object.keys(SSAV.cfg.midi).length, access: !!SSAV.midi.access }));
+  const before = await page.evaluate(() => ({ midi: Object.keys(SSAV.cfg.midi).filter(k => k !== 'weather').length, weather: SSAV.cfg.midi.weather, access: !!SSAV.midi.access }));
   await page.click('[data-panel="p-show"]');
   await page.click('#m-enable');
   await page.waitForFunction(() => !!SSAV.midi.access);
@@ -438,6 +438,7 @@ await test('midi-learn', async () => {
   const unblack = await page.evaluate(() => SSAV.flags.blackout);
   await ctx.close();
   assert(before.midi === 0 && !before.access, 'MIDI requested before Enable');
+  assert(before.weather === 'cc:0:4', 'CC 4 drives the weather by default: ' + before.weather);
   assert(/Fake nanoKONTROL/.test(dev), 'device not listed: ' + dev);
   assert(map.speed === 'cc:0:7' && map.black === 'note:1:36', 'bindings ' + JSON.stringify(map));
   assert(fast === 2000 && slow === 0, 'speed ' + fast + ' ' + slow);
