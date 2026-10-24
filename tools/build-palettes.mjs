@@ -9,6 +9,7 @@
 //   type "gradient": ramp [[u, hex], ...] along u, drift "x" (world px per cycle = period) or "time" (cycles per s = rate);
 //                    ink colour at (t, u) = mix(ground, ramp(u), t)
 //   raw: true  -> t is the ink amount as drawn (Original, Grayscale); otherwise t = ink / inkRange
+//   light, beacon (hex, optional): accents for the light channel (derelict world); default = brightest stop
 //   source: where the hex came from
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,6 +52,34 @@ const BASE = [
     stops: [[0, '#231f20'], [0.15, '#262a45'], [0.35, '#3a4166'], [0.55, '#555b7e'], [0.8, '#8a8ea6'], [1, '#c4daf1']], source: KL + ': Kit Gradient (K100, bed, low, mid, high, LB)' },
   { id: 'kl-grey', name: 'KL Greyscale', group: 'Kodama Landforms', cycle: true, type: 'ramp', ground: '#212121', paper: 'none',
     stops: [[0, '#212121'], [0.2, '#4d4d4d'], [0.45, '#828282'], [0.7, '#c8c8c8'], [1, '#f2f2f2']], source: KL + ': Greyscale K ramp (K100, K85, K60, K25, K05 from the file\'s KTAB)' },
+
+  // Megacity arc: one per Kodama topo 17 to 24, exact PAL hex (scene background as ground, an ink ramp dark to
+  // light, the window colour as light accent, a second accent for beacons). The light fields only show on
+  // worlds with lights (derelict).
+  ...[
+    ['17', 'Ayutthaya', '#060A14', ['#4A4234', '#5A7078', '#B0A088', '#AEC2D6', '#F4F6F8'], '#FFB868', '#C94FD6', 'bg 0x060A14; stoneLo, scaf, stone, pale, moon; win; neon'],
+    ['18', 'Neo Bangkok', '#0A1626', ['#2E3644', '#7A8290', '#3A6E8C', '#BFC8D2', '#F4F6F8'], '#FFC98A', '#C94FD6', 'bg 0x0A1626; coreLo, core, waterHi, ring, moon; win; neonM'],
+    ['19', 'Nusantara', '#0C1814', ['#2E3644', '#3A6E4A', '#7A8290', '#C8B890', '#F4F6F8'], '#FFC98A', '#F6C544', 'bg 0x0C1814; towerLo, hillHi, tower, stone, moon; win; gold'],
+    ['20', 'Singapore', '#0A141A', ['#2E4650', '#8FA6AE', '#A8CAD6', '#DFF4F8'], '#FFD9A0', '#9AF0C8', 'bg 0x0A141A; glassLo, steel, glass, foam; winW; fire'],
+    ['21', 'Jakarta', '#070C0A', ['#16333C', '#1E6656', '#3A8CA0', '#AEC2BC', '#DFF6FF'], '#FFC98A', '#FF4A3A', 'bg 0x070C0A; twr, trace, twrHi, pale, head; winW; beacon'],
+    ['22', 'Manila', '#101014', ['#4A3A28', '#8FA0AE', '#9AB0BC', '#C6BCB2', '#DFF0F8'], '#FFC98A', '#F6E06A', 'bg 0x101014; stilt, rail, dome, pale, foam; win; fire'],
+    ['23', 'Kuala Lumpur', '#0B100E', ['#16333C', '#3A8CA0', '#8FA6AE', '#D8E4E8'], '#FFC98A', '#3FD0E0', 'bg 0x0B100E; twr, twrHi, steel, steelHi; winW; life'],
+    ['24', 'Neo Saigon', '#05070C', ['#16303C', '#3A5866', '#3A6A78', '#C6BCB2', '#BFE0E8'], '#FFCC88', '#F6D488', 'bg 0x05070C; towerLo, silt, towerHi, pale, foam; win; gate'],
+  ].map(([n, name, ground, ramp, light, beacon, src]) => ({
+    id: 'arc-' + n, name: n + ' ' + name, group: 'Megacity arc', cycle: true, type: 'ramp', ground, paper: 'grain',
+    stops: [[0, ground], ...ramp.map((h, i) => [+((i + 1) / ramp.length).toFixed(3), h])], light, beacon,
+    source: 'phylla-kodama-topo-' + n + ' PAL (' + src + ')' })),
+
+  // working palettes for the derelict world
+  { id: 'derelict-rust', name: 'Derelict Rust', group: 'Derelict', cycle: true, type: 'ramp', ground: '#0B0907', paper: 'grain',
+    stops: [[0, '#0B0907'], [0.2, '#2A1D16'], [0.4, '#5A3424'], [0.6, '#8C5236'], [0.8, '#B8865A'], [1, '#D9C3A0']], light: '#FF9F3A', beacon: '#E8452C',
+    source: 'oxide ramp, sodium light' },
+  { id: 'derelict-rain', name: 'Derelict Rain', group: 'Derelict', cycle: true, type: 'ramp', ground: '#0A0E12', paper: 'grain',
+    stops: [[0, '#0A0E12'], [0.2, '#1C252D'], [0.4, '#36434D'], [0.6, '#5C6B75'], [0.8, '#94A2AA'], [1, '#C9D3D8']], light: '#3FD0C0', beacon: '#3FD0C0',
+    source: 'cold blue-grey ramp, one teal accent' },
+  { id: 'derelict-mono', name: 'Derelict Mono', group: 'Derelict', cycle: true, type: 'ramp', ground: '#0A0A0A', paper: 'none',
+    stops: [[0, '#0A0A0A'], [0.2, '#2A2A2A'], [0.4, '#555555'], [0.6, '#8A8A8A'], [0.8, '#C8C8C8'], [1, '#F2F2F2']], light: '#FFFFFF', beacon: '#FFFFFF',
+    source: 'ink only, lights white' },
 ];
 
 const hex = n => '#' + n.toString(16).padStart(6, '0').toUpperCase();

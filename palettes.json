@@ -388,6 +388,416 @@
    "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): Greyscale K ramp (K100, K85, K60, K25, K05 from the file's KTAB)"
   },
   {
+   "id": "arc-17",
+   "name": "17 Ayutthaya",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#060A14",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#060A14"
+    ],
+    [
+     0.2,
+     "#4A4234"
+    ],
+    [
+     0.4,
+     "#5A7078"
+    ],
+    [
+     0.6,
+     "#B0A088"
+    ],
+    [
+     0.8,
+     "#AEC2D6"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "light": "#FFB868",
+   "beacon": "#C94FD6",
+   "source": "phylla-kodama-topo-17 PAL (bg 0x060A14; stoneLo, scaf, stone, pale, moon; win; neon)"
+  },
+  {
+   "id": "arc-18",
+   "name": "18 Neo Bangkok",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0A1626",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A1626"
+    ],
+    [
+     0.2,
+     "#2E3644"
+    ],
+    [
+     0.4,
+     "#7A8290"
+    ],
+    [
+     0.6,
+     "#3A6E8C"
+    ],
+    [
+     0.8,
+     "#BFC8D2"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "light": "#FFC98A",
+   "beacon": "#C94FD6",
+   "source": "phylla-kodama-topo-18 PAL (bg 0x0A1626; coreLo, core, waterHi, ring, moon; win; neonM)"
+  },
+  {
+   "id": "arc-19",
+   "name": "19 Nusantara",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0C1814",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0C1814"
+    ],
+    [
+     0.2,
+     "#2E3644"
+    ],
+    [
+     0.4,
+     "#3A6E4A"
+    ],
+    [
+     0.6,
+     "#7A8290"
+    ],
+    [
+     0.8,
+     "#C8B890"
+    ],
+    [
+     1,
+     "#F4F6F8"
+    ]
+   ],
+   "light": "#FFC98A",
+   "beacon": "#F6C544",
+   "source": "phylla-kodama-topo-19 PAL (bg 0x0C1814; towerLo, hillHi, tower, stone, moon; win; gold)"
+  },
+  {
+   "id": "arc-20",
+   "name": "20 Singapore",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0A141A",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A141A"
+    ],
+    [
+     0.25,
+     "#2E4650"
+    ],
+    [
+     0.5,
+     "#8FA6AE"
+    ],
+    [
+     0.75,
+     "#A8CAD6"
+    ],
+    [
+     1,
+     "#DFF4F8"
+    ]
+   ],
+   "light": "#FFD9A0",
+   "beacon": "#9AF0C8",
+   "source": "phylla-kodama-topo-20 PAL (bg 0x0A141A; glassLo, steel, glass, foam; winW; fire)"
+  },
+  {
+   "id": "arc-21",
+   "name": "21 Jakarta",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#070C0A",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#070C0A"
+    ],
+    [
+     0.2,
+     "#16333C"
+    ],
+    [
+     0.4,
+     "#1E6656"
+    ],
+    [
+     0.6,
+     "#3A8CA0"
+    ],
+    [
+     0.8,
+     "#AEC2BC"
+    ],
+    [
+     1,
+     "#DFF6FF"
+    ]
+   ],
+   "light": "#FFC98A",
+   "beacon": "#FF4A3A",
+   "source": "phylla-kodama-topo-21 PAL (bg 0x070C0A; twr, trace, twrHi, pale, head; winW; beacon)"
+  },
+  {
+   "id": "arc-22",
+   "name": "22 Manila",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#101014",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#101014"
+    ],
+    [
+     0.2,
+     "#4A3A28"
+    ],
+    [
+     0.4,
+     "#8FA0AE"
+    ],
+    [
+     0.6,
+     "#9AB0BC"
+    ],
+    [
+     0.8,
+     "#C6BCB2"
+    ],
+    [
+     1,
+     "#DFF0F8"
+    ]
+   ],
+   "light": "#FFC98A",
+   "beacon": "#F6E06A",
+   "source": "phylla-kodama-topo-22 PAL (bg 0x101014; stilt, rail, dome, pale, foam; win; fire)"
+  },
+  {
+   "id": "arc-23",
+   "name": "23 Kuala Lumpur",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0B100E",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0B100E"
+    ],
+    [
+     0.25,
+     "#16333C"
+    ],
+    [
+     0.5,
+     "#3A8CA0"
+    ],
+    [
+     0.75,
+     "#8FA6AE"
+    ],
+    [
+     1,
+     "#D8E4E8"
+    ]
+   ],
+   "light": "#FFC98A",
+   "beacon": "#3FD0E0",
+   "source": "phylla-kodama-topo-23 PAL (bg 0x0B100E; twr, twrHi, steel, steelHi; winW; life)"
+  },
+  {
+   "id": "arc-24",
+   "name": "24 Neo Saigon",
+   "group": "Megacity arc",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#05070C",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#05070C"
+    ],
+    [
+     0.2,
+     "#16303C"
+    ],
+    [
+     0.4,
+     "#3A5866"
+    ],
+    [
+     0.6,
+     "#3A6A78"
+    ],
+    [
+     0.8,
+     "#C6BCB2"
+    ],
+    [
+     1,
+     "#BFE0E8"
+    ]
+   ],
+   "light": "#FFCC88",
+   "beacon": "#F6D488",
+   "source": "phylla-kodama-topo-24 PAL (bg 0x05070C; towerLo, silt, towerHi, pale, foam; win; gate)"
+  },
+  {
+   "id": "derelict-rust",
+   "name": "Derelict Rust",
+   "group": "Derelict",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0B0907",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0B0907"
+    ],
+    [
+     0.2,
+     "#2A1D16"
+    ],
+    [
+     0.4,
+     "#5A3424"
+    ],
+    [
+     0.6,
+     "#8C5236"
+    ],
+    [
+     0.8,
+     "#B8865A"
+    ],
+    [
+     1,
+     "#D9C3A0"
+    ]
+   ],
+   "light": "#FF9F3A",
+   "beacon": "#E8452C",
+   "source": "oxide ramp, sodium light"
+  },
+  {
+   "id": "derelict-rain",
+   "name": "Derelict Rain",
+   "group": "Derelict",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0A0E12",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#0A0E12"
+    ],
+    [
+     0.2,
+     "#1C252D"
+    ],
+    [
+     0.4,
+     "#36434D"
+    ],
+    [
+     0.6,
+     "#5C6B75"
+    ],
+    [
+     0.8,
+     "#94A2AA"
+    ],
+    [
+     1,
+     "#C9D3D8"
+    ]
+   ],
+   "light": "#3FD0C0",
+   "beacon": "#3FD0C0",
+   "source": "cold blue-grey ramp, one teal accent"
+  },
+  {
+   "id": "derelict-mono",
+   "name": "Derelict Mono",
+   "group": "Derelict",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#0A0A0A",
+   "paper": "none",
+   "stops": [
+    [
+     0,
+     "#0A0A0A"
+    ],
+    [
+     0.2,
+     "#2A2A2A"
+    ],
+    [
+     0.4,
+     "#555555"
+    ],
+    [
+     0.6,
+     "#8A8A8A"
+    ],
+    [
+     0.8,
+     "#C8C8C8"
+    ],
+    [
+     1,
+     "#F2F2F2"
+    ]
+   ],
+   "light": "#FFFFFF",
+   "beacon": "#FFFFFF",
+   "source": "ink only, lights white"
+  },
+  {
    "id": "topo-01",
    "name": "01 Cartography Empire",
    "group": "Studies",

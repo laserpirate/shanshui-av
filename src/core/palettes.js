@@ -63,6 +63,16 @@ export function driftOf(p) {
   if (p.type !== 'gradient') return [0, 0];
   return p.drift === 'time' ? [0, +p.rate || 0.01] : [1 / (+p.period || 6000), 0];
 }
+// light accents (0..1 RGB) for the light channel: the palette's own, else its brightest stop
+const lum3 = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+export function lightHex(p) {
+  if (p.light) return p.light;
+  const all = [p.ground, ...(p.stops || []).map(s => s[1]), ...(p.ramp || []).map(s => s[1])];
+  return all.reduce((a, b) => lum3(hexRgb(b)) > lum3(hexRgb(a)) ? b : a);
+}
+export const beaconHex = p => p.beacon || lightHex(p);
+export const lightOf = p => hexRgb(lightHex(p)).map(v => v / 255);
+export const beaconOf = p => hexRgb(beaconHex(p)).map(v => v / 255);
 export const paperMode = p => ({ tint: 1, grain: 2 }[p.paper] || 0);
 export const isDark = p => { const g = hexRgb(p.ground); return 0.2126 * g[0] + 0.7152 * g[1] + 0.0722 * g[2] < 110; };
 
