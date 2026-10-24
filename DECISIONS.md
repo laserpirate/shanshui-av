@@ -60,7 +60,9 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 | --- | --- | --- | --- | --- | --- | --- |
 | v0.1.0 | 58.6 | 37.5 | not logged | -11.4 MB | 0 | 0 |
 | v0.2.0 | 60.0 | 59.1 | 0 | -3.6 MB | 0 | 0 |
+| v0.3.0 derelict, heaviest weather, world switch every 5 min | 59.9 | 57.0 (output 57.2) | 0 | -3.75 MB | 0 | 0 |
 
+- v0.3.0 run: `node tools/soak.mjs 30 --world=derelict --heavy --worldevery=5 --fpsmin=50`. 13 seeds, 24 palettes, 6 world switches (so the run alternates 5 min derelict, 5 min shanshui, starting on derelict); heaviest weather held throughout (it only shows on derelict). Max 1,013 chunks and 16 tiles in memory, no watchdog events. Raw rows: `test-results/soak-derelict.json` (local).
 - Heap swings 67 to 126 MB per process with the 20,000 px window and reseeds, no trend. DOM grows only with the seed history list (capped at 20). Raw rows: `test-results/soak30-run*.json` (local).
 
 ## Show
@@ -142,6 +144,17 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - Water: a flood plane at world y = 700 - level x 190, covering far, mid-far, mid and ground (preflight answer 4); the near layer and the rain stay in front. Below the line the shader mirrors ink and lights about the water line with ripples. The water test uses the filtered depth, so the edge against near pieces is smooth. Water level is a visual control only: no years or figures anywhere.
 - Weather cycle: dry, drizzle, downpour, flood, night, one keyframe per fifth, held through the middle of each span and smoothstepped across the rest. Auto runs a 6 min loop (minimum 10 s); a phase can be pinned (eases there); MIDI CC 4 scrubs the position. Rain, wind, water, fog and light each have a slider: grabbing it holds that value, Follow releases it. Shown values ease over about 1/3 s.
 - Exports split into blocks (300 dpi Arch D PNG is 2 blocks tall) lose a reflection whose source sits in the other block. Accepted: a 150 dpi PNG is one block.
+
+## Performance (v0.3.0)
+
+`node tools/bench-app.mjs`: the real app scrolling at 600 px/s for 12 s, seed 2026, RTX 3080 through ANGLE D3D11, headless. Derelict at the heaviest weather (downpour rain and wind, full flood, night, fog 0.8, held). Raw rows: `test-results/bench-app.json` (local).
+
+| World | 1080p fps | 1080p p95 | 4K fps | 4K p95 | 1080p CPU 4x fps | frames over 25 ms (CPU 4x) |
+| --- | --- | --- | --- | --- | --- | --- |
+| shanshui | 60.0 | 16.7 ms | 60.0 | 16.7 ms | 59.6 | 6 |
+| derelict, heaviest | 60.0 | 16.7 ms | 60.0 | 16.7 ms | 60.0 | 0 |
+
+- Derelict chunk generation: 100 chunks in 184 ms in Node (about 2 ms a chunk, in the worker); a 1080p tile with its aux tile rasters in 6 to 7 ms.
 
 ## Export (derelict)
 
