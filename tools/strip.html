@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Derelict strip</title>
+<style>body{margin:0;background:#fff}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+// Greyscale test strip of the derelict world: generator + raster worker, no palette, no lights.
+//   tools/strip.html?seed=1&x0=0&w=6000&h=360   (h = output px height; world height is 700.5)
+import { init, generate, paintOrder } from '../src/worlds/derelict/index.js';
+const q = new URLSearchParams(location.search);
+const seed = q.get('seed') || '1', x0 = +(q.get('x0') || 0), W = +(q.get('w') || 6000), H = +(q.get('h') || 360);
+const WH = 800 / 1.142, scale = H / WH;
+const st = init(seed);
+const els = [];
+const t0 = performance.now();
+for (let c = Math.floor(x0 / 512) - 2; c <= Math.ceil((x0 + W) / 512) + 1; c++) els.push(...generate(st, c));
+const genMs = performance.now() - t0;
+els.sort(paintOrder);
+const ras = new Worker(new URL('../src/workers/raster-worker.js', import.meta.url));
+ras.postMessage({ type: 'add', items: els.map(e => ({ id: e.id, canv: e.canv })) });
+const t1 = performance.now();
+ras.onmessage = e => {
+  if (e.data.type !== 'tile') return;
+  const g = e.data.grey, cv = document.getElementById('c');
+  cv.width = g.width; cv.height = g.height;
+  const img = new ImageData(g.width, g.height);
+  for (let i = 0; i < g.data.length; i++) { const v = g.data[i]; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+  cv.getContext('2d').putImageData(img, 0, 0);
+  window.STRIP = { seed, x0, W, H, genMs, rasterMs: e.data.ms, prims: e.data.prims, chunks: els.length / 5, url: cv.toDataURL('image/png') };
+};
+ras.postMessage({ type: 'tile', key: 's', x0, y0: 0, w: W, h: WH, scale, order: els.map(e => e.id) });
+</script>
