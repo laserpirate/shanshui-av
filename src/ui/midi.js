@@ -8,6 +8,13 @@ export const MIDI_TARGETS = [
   { id: 'palNext', label: 'Palette +' },
   { id: 'palPrev', label: 'Palette -' },
   { id: 'black', label: 'Blackout' },
+  { id: 'world', label: 'World' },
+  { id: 'weather', label: 'Weather cycle', cont: true },
+  { id: 'rain', label: 'Rain', cont: true },
+  { id: 'wind', label: 'Wind', cont: true },
+  { id: 'water', label: 'Water', cont: true },
+  { id: 'fog', label: 'Fog', cont: true },
+  { id: 'light', label: 'Light', cont: true },
 ];
 
 export class Midi {

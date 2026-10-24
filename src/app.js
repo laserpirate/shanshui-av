@@ -9,6 +9,8 @@ import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download } from './e
 import { drawTestCard } from './ui/testcard.js';
 import { KEYS } from './ui/keys.js';
 import { Midi, MIDI_TARGETS } from './ui/midi.js';
+import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
+import { Weather, PHASES, PARAMS } from './core/weather.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -22,7 +24,8 @@ const DEF = {
   q: 'auto', big: false,
   gradient: null,
   midi: {},
-  exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150 },
+  exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150, lights: true, rain: false },
+  weather: { mode: 'auto', period: 360, holds: {} },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
@@ -41,7 +44,7 @@ function deepMerge(a, b) {
   return a;
 }
 function persist(now) {
-  const o = { seed: cur.seed, pal: pal.target, cfg, stars, palStars, hist };
+  const o = { seed: cur.seed, world: cur.world, pal: pal.target, cfg, stars, palStars, hist };
   now ? saveNow(o) : save(o);
 }
 
@@ -62,6 +65,10 @@ function urlSeed() {
 }
 const cleanSeed = s => String(s).trim().slice(0, 64).replace(/\s/g, '%20').replace(/[#&?]/g, '');
 const newSeed = () => String(Date.now());
+// history and star entries: a shanshui seed is stored as itself (as in v0.2.0), other worlds as "world:seed"
+const tok = (world, seed) => world === 'shanshui' ? seed : world + ':' + seed;
+function untok(t) { const i = t.indexOf(':'); const w = i > 0 ? t.slice(0, i) : ''; return w && WORLDS[w] && w !== 'shanshui' ? { world: w, seed: t.slice(i + 1) } : { world: 'shanshui', seed: t }; }
+function urlWorld() { const w = new URLSearchParams(location.search).get('world'); return w && WORLDS[w] ? w : null; }
 
 // ---------- palettes ----------
 const palettes = await loadPalettes(new URL('../palettes.json', import.meta.url).href).catch(e => { showFatal(e); throw e; });
@@ -90,10 +97,11 @@ const pb = new Playback();
 pb.speed = cfg.speed; pb.dir = cfg.dir; pb.autoResume = cfg.show.resume; pb.resumeSecs = cfg.show.resumeS;
 
 let epoch = 0;
-const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '' };
+const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
 cur.seed = cleanSeed(cur.seed);
-cur.key = cur.seed + '#' + (++epoch);
-let outgoing = null;          // {key, seed, x}
+const keyOf = (world, seed) => (world === 'shanshui' ? '' : world + ':') + seed + '#' + (++epoch);
+cur.key = keyOf(cur.world, cur.seed);
+let outgoing = null;          // {key, seed, world, x}
 let fade = null;              // {t0, dur, ready}
 const pal = { a: byId.has(saved.pal) ? saved.pal : 'original', b: null, t0: 0, dur: 1.2, mix: 0 };
 pal.target = pal.a;
@@ -101,7 +109,8 @@ const Qpal = new URLSearchParams(location.search).get('palette');
 if (Qpal && byId.has(Qpal)) { pal.a = Qpal; pal.target = Qpal; }
 
 const flags = { blackout: false, card: false, panic: false, hold: false, uiHidden: false };
-pushHist(cur.seed);
+pushHist(tok(cur.world, cur.seed));
+const weather = new Weather(cfg.weather);
 
 // ---------- seeds ----------
 function pushHist(seed) {
@@ -111,49 +120,58 @@ function pushHist(seed) {
   if (hist.length > 20) hist = hist.slice(-20);
   histIdx = hist.length - 1;
 }
-function setSeed(seed, { history = true, why = '' } = {}) {
+// a new seed, a world switch, or both: the new landscape generates behind the old one and crossfades in
+function setSeed(seed, { history = true, why = '', world = cur.world } = {}) {
   seed = cleanSeed(seed);
   if (!seed) return;
+  if (!WORLDS[world]) world = 'shanshui';
   if (outgoing) { outgoing = null; fade = null; }
-  outgoing = { key: cur.key, seed: cur.seed, x: pb.x };
-  cur.seed = seed; cur.key = seed + '#' + (++epoch);
+  outgoing = { key: cur.key, seed: cur.seed, world: cur.world, x: pb.x };
+  cur.seed = seed; cur.world = world; cur.key = keyOf(world, seed);
   pb.x = 0; pb.pull = 0; pb.tween = null;
   fade = { t0: 0, dur: cfg.show.fade, wait: performance.now() };
-  if (history) pushHist(seed);
+  if (history) pushHist(tok(world, seed));
   resetAuto();
   updateUrl();
   persist();
-  renderSeed();
-  log('info', 'seed ' + seed + (why ? ' (' + why + ')' : ''));
+  renderSeed(); renderWorld();
+  log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
 function reseed(why) { setSeed(newSeed(), { why }); }
+function setWorld(w, why = 'world') { if (WORLDS[w] && w !== cur.world) setSeed(cur.seed, { world: w, why }); }
+function nextWorld() { setWorld(WORLD_NAMES[(WORLD_NAMES.indexOf(cur.world) + 1) % WORLD_NAMES.length], 'world'); }
+function playTok(t, opts) { const e = untok(t); setSeed(e.seed, { ...opts, world: e.world }); }
 function histStep(d) {
   const i = histIdx + d;
   if (i < 0 || i >= hist.length) return toast(d < 0 ? 'Start of history' : 'End of history');
-  histIdx = i; setSeed(hist[i], { history: false, why: 'history' });
+  histIdx = i; playTok(hist[i], { history: false, why: 'history' });
 }
 function toggleStar() {
-  const i = stars.indexOf(cur.seed);
-  if (i >= 0) stars.splice(i, 1); else stars.unshift(cur.seed);
+  const t = tok(cur.world, cur.seed);
+  const i = stars.indexOf(t);
+  if (i >= 0) stars.splice(i, 1); else stars.unshift(t);
   persist(); renderSeed();
   toast(i >= 0 ? 'Unstarred' : 'Starred');
 }
 function stop() {
   const w = scene.peek(cur.key);
-  const culled = w && w.culledBelow > -2000;   // the start of the seed was dropped by the memory cap
-  if (Math.abs(pb.x) > CULL * 0.9 || culled) { pb.pause(); pb.k = 0; setSeed(cur.seed, { history: false, why: 'stop, restart from 0' }); }
+  const cap = worldOf(cur.world).cull;
+  // the start of the seed was dropped by the memory cap; chunk-seeded worlds regenerate it exactly
+  const culled = w && w.culledBelow > -2000 && !w.meta.chunked;
+  if (Math.abs(pb.x) > cap * 0.9 || culled) { pb.pause(); pb.k = 0; setSeed(cur.seed, { history: false, why: 'stop, restart from 0' }); }
   else pb.goTo(0);
   renderPlay();
 }
 function updateUrl() {
   const q = new URLSearchParams(location.search);
-  q.delete('seed');
+  q.delete('seed'); q.delete('world');
   let s = '?seed=' + cur.seed;
+  if (cur.world !== 'shanshui') s += '&world=' + cur.world;
   const rest = q.toString();
   if (rest) s += '&' + rest;
   try { history.replaceState(null, '', location.pathname + s); } catch (e) { /* file:// or sandbox */ }
 }
-function shareUrl() { return location.origin + location.pathname + '?seed=' + cur.seed; }
+function shareUrl() { return location.origin + location.pathname + '?seed=' + cur.seed + (cur.world !== 'shanshui' ? '&world=' + cur.world : ''); }
 
 // ---------- palettes ----------
 function setPalette(id, why) {
@@ -184,7 +202,7 @@ resetAuto(); resetAutoPal();
 function autoReseed() {
   if (cfg.show.src === 'starred' && stars.length) {
     auto.starIdx = (auto.starIdx + 1) % stars.length;
-    setSeed(stars[auto.starIdx], { why: 'auto, starred' });
+    playTok(stars[auto.starIdx], { why: 'auto, starred' });
   } else reseed('auto');
 }
 function showTick(now, dt, vWorld) {
@@ -220,7 +238,7 @@ if (chan) chan.onmessage = e => {
     if (m.key === 'b' || m.key === 'B') setBlack();
     else if (m.key === 'panic') setPanic(true);
     else if (m.key === 'Escape' && flags.panic) setPanic(false);
-    else if (['r', 'R', ' ', 'p', 'P', 'g', 'G', 't', 'T', 'Home', '[', ']'].includes(m.key)) onKey({ key: m.key, shiftKey: m.shift, target: document.body, preventDefault() {} });
+    else if (['r', 'R', ' ', 'p', 'P', 'g', 'G', 't', 'T', 'Home', '[', ']', 'w', 'W'].includes(m.key)) onKey({ key: m.key, shiftKey: m.shift, target: document.body, preventDefault() {} });
   }
 };
 function openOutput() {
@@ -239,16 +257,17 @@ function openOutput() {
 let time0 = performance.now();
 function frameState(now) {
   const worlds = [];
-  if (outgoing) worlds.push({ key: outgoing.key, seed: outgoing.seed, x: outgoing.x, alpha: 1 });
+  if (outgoing) worlds.push({ key: outgoing.key, seed: outgoing.seed, world: outgoing.world, x: outgoing.x, alpha: 1 });
   let a = 1;
   if (fade && fade.t0) { const t = Math.min(1, (now - fade.t0) / (fade.dur * 1000)); a = t * t * (3 - 2 * t); }
   else if (fade) a = 0;
-  worlds.push({ key: cur.key, seed: cur.seed, x: pb.x, alpha: outgoing ? a : 1 });
+  worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1 });
   return {
     worlds, dir: pb.dir,
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
     u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign },
     time: (now - time0) / 1000,
+    weather: weather.values(),
     v: pb.velocity, t: Date.now(),
   };
 }
@@ -261,7 +280,7 @@ function tick(now) {
   try {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const v0 = pb.velocity;
-    if (!flags.panic) pb.step(dt, now);
+    if (!flags.panic) { pb.step(dt, now); weather.step(dt); }
     if (outgoing) outgoing.x += v0 * dt;
     // reseed fade starts when the new world covers the view (or after 4 s)
     if (fade && !fade.t0) {
@@ -400,6 +419,7 @@ function onKey(e) {
     case 'g': case 'G': setHold(); break;
     case 't': case 'T': setCard(); break;
     case 'o': case 'O': openOutput(); break;
+    case 'w': case 'W': nextWorld(); break;
     case '?': case '/': togglePanel('p-keys'); break;
     default: return;
   }
@@ -488,6 +508,8 @@ body.classList.toggle('big', cfg.big);
 $('s-inst').textContent = 'Instance ' + INSTANCE + '   channel ' + chanName;
 
 // ---------- MIDI (opt-in learn) ----------
+// CC 4 on channel 1 drives the weather cycle unless that control or target was learned elsewhere
+if (cfg.midi && !cfg.midi.weather && !Object.values(cfg.midi).includes('cc:0:4')) cfg.midi.weather = 'cc:0:4';
 const midi = new Midi({
   map: cfg.midi, onLog: log,
   onAction(id, v) {
@@ -498,6 +520,9 @@ const midi = new Midi({
     else if (id === 'reseed') reseed('midi');
     else if (id === 'palNext') palStep(1);
     else if (id === 'palPrev') palStep(-1);
+    else if (id === 'world') nextWorld();
+    else if (id === 'weather') { cfg.weather.mode = 'scrub'; weather.p = v * 0.9999; persist(); renderWeather(); }
+    else if (PARAMS.includes(id)) { cfg.weather.holds[id] = v; persist(); renderWeather(); }
   },
   onChange() { cfg.midi = { ...midi.map }; persist(); renderMidi(); },
 });
@@ -567,6 +592,8 @@ bindNum('e-margin', 'margin', E, renderExport);
 bindCheck('e-border', 'border', E);
 bindCheck('e-label', 'label', E);
 bindSeg('e-dpi', () => String(E.dpi), v => { E.dpi = +v; renderExport(); });
+bindCheck('e-lights', 'lights', E);
+bindCheck('e-rain', 'rain', E);
 $('e-here').onclick = () => { const g = geom(); E.x0 = pb.x + (lastView.viewW - g.worldW) / 2; persist(); };
 $('e-svg').onclick = () => runExport('svg');
 $('e-png').onclick = () => runExport('png');
@@ -612,13 +639,13 @@ async function runExport(kind) {
     if (!world) throw new Error('no landscape yet');
     const g = geom();
     if (g.unit === 'in') {
-      if (g.x0 < world.culledBelow || g.x0 + g.worldW < world.xmin) throw new Error('frame is behind the memory cap; move it nearer the view');
+      if (!world.meta.chunked && (g.x0 < world.culledBelow || g.x0 + g.worldW < world.xmin)) throw new Error('frame is behind the memory cap; move it nearer the view');
       st.textContent = 'Generating to x ' + Math.round(g.x0 + g.worldW) + ' ...';
-      await world.ensureRight(g.x0 + g.worldW);
+      await world.ensureRight(g.x0 + g.worldW, 60000, world.meta.chunked ? g.x0 : Infinity);
     }
-    const look = scene.look(frameState(performance.now()));
+    const look = { ...scene.look(frameState(performance.now())), rainOn: !!E.rain };
     const p = byId.get(pal.target);
-    const o = { seed: cur.seed, paletteId: pal.target, paletteName: p ? p.name : pal.target, border: E.border, label: E.label, viewScale: 2 };
+    const o = { seed: cur.seed, world: cur.world, paletteId: pal.target, paletteName: p ? p.name : pal.target, border: E.border, label: E.label, viewScale: 2, lights: E.lights, rain: E.rain };
     let name, blob, extra = '';
     if (kind === 'png') {
       st.textContent = 'PNG 0 %';
@@ -645,6 +672,39 @@ async function runExport(kind) {
   } finally { exporting = false; }
 }
 
+// ---------- world and weather ----------
+function renderWorld() {
+  document.querySelectorAll('#b-world button').forEach(b => b.classList.toggle('on', b.dataset.v === cur.world));
+  $('hud-world').textContent = 'World: ' + cur.world;
+  $('weather-off').hidden = worldOf(cur.world).weather;
+}
+document.querySelectorAll('#b-world button').forEach(b => b.onclick = () => setWorld(b.dataset.v));
+const paintCycle = bindSeg('w-cycle', () => cfg.weather.mode === 'scrub' ? '' : cfg.weather.mode, v => { cfg.weather.mode = v; renderWeather(); });
+bindNum('w-period', 'period', cfg.weather);
+function renderWeather() {
+  paintCycle();
+  for (const k of PARAMS) {
+    const held = cfg.weather.holds[k] !== undefined;
+    $('w-' + k + '-f').classList.toggle('on', !held);
+    $('w-' + k + '-f').textContent = held ? 'Follow' : 'Cycle';
+  }
+}
+for (const k of PARAMS) {
+  const el = $('w-' + k);
+  el.addEventListener('input', () => { cfg.weather.holds[k] = +el.value; persist(); renderWeather(); });
+  $('w-' + k + '-f').onclick = () => { delete cfg.weather.holds[k]; persist(); renderWeather(); };
+}
+function weatherTick() {
+  if ($('p-weather').hidden) return;
+  const v = weather.values();
+  for (const k of PARAMS) {
+    const el = $('w-' + k);
+    if (document.activeElement !== el || cfg.weather.holds[k] === undefined) el.value = cfg.weather.holds[k] !== undefined ? cfg.weather.holds[k] : v[k];
+    el.parentElement.querySelector('output').textContent = v[k].toFixed(2);
+  }
+  $('w-phase').textContent = 'Phase ' + weather.phase;
+}
+
 // ---------- render UI ----------
 function renderPlay() {
   const on = pb.playing;
@@ -656,17 +716,18 @@ function renderSeed() {
   $('seed-in').value = decodeSafe(cur.seed);
   $('hud-seed').textContent = 'seed ' + cur.seed;
   $('seed-orig').href = UPSTREAM_SITE + '?seed=' + cur.seed;
-  const starred = stars.includes(cur.seed);
+  $('seed-orig').hidden = cur.world !== 'shanshui';
+  const starred = stars.includes(tok(cur.world, cur.seed));
   $('b-star').classList.toggle('on', starred);
   $('b-star').querySelector('.m').innerHTML = starred ? '&#9733;' : '&#9734;';
   $('b-back').disabled = histIdx <= 0; $('b-fwd').disabled = histIdx >= hist.length - 1;
   const hl = $('hist'); hl.textContent = '';
   hist.slice().reverse().forEach((s, ri) => {
     const i = hist.length - 1 - ri;
-    hl.appendChild(item(s, i === histIdx, () => { histIdx = i; setSeed(s, { history: false, why: 'history' }); }));
+    hl.appendChild(item(s, i === histIdx, () => { histIdx = i; playTok(s, { history: false, why: 'history' }); }));
   });
   const sl = $('stars'); sl.textContent = '';
-  stars.forEach(s => sl.appendChild(item(s, s === cur.seed, () => setSeed(s, { why: 'starred' }), () => { stars = stars.filter(x => x !== s); persist(); renderSeed(); })));
+  stars.forEach(s => sl.appendChild(item(s, s === tok(cur.world, cur.seed), () => playTok(s, { why: 'starred' }), () => { stars = stars.filter(x => x !== s); persist(); renderSeed(); })));
   if (!stars.length) { const li = document.createElement('li'); li.className = 'kv'; li.textContent = 'None'; sl.appendChild(li); }
 }
 function decodeSafe(s) { try { return decodeURIComponent(s); } catch (e) { return s; } }
@@ -724,6 +785,7 @@ function hudTick(now) {
   if (flags.panic) f.push('panic');
   if (out.connected && out.info) f.push(`output ${out.info.w} x ${out.info.h} ${Math.round(out.info.fps || 0)} fps${out.info.blank ? ' BLANK' : ''}`);
   if (scene.watch.blank) f.push('watchdog: blank');
+  if (worldOf(cur.world).weather) f.push('weather ' + weather.phase + (cfg.weather.mode === 'auto' ? '' : ' (' + (cfg.weather.mode === 'scrub' ? 'MIDI' : 'pinned') + ')'));
   $('hud-flags').textContent = f.join('   ');
   // countdown to the next automatic change
   const n = [];
@@ -731,6 +793,7 @@ function hudTick(now) {
   if (cfg.show.autoPal) n.push('Palette ' + clock((auto.palAt - now) / 1000));
   $('b-next').textContent = n.join('   ');
   renderPlay();
+  weatherTick();
 }
 const clock = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 let toastT = 0;
@@ -745,13 +808,14 @@ addEventListener('beforeunload', () => { persist(true); if (chan) chan.postMessa
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
 
 setSpeed(cfg.speed); setDir(cfg.dir);
-renderSeed(); renderPal(); renderPlay(); renderExport(); updateUrl(); layoutPanels();
-log('info', 'v' + VERSION + ' ready, instance ' + INSTANCE + ', seed ' + cur.seed);
+renderSeed(); renderPal(); renderPlay(); renderExport(); renderWorld(); renderWeather(); updateUrl(); layoutPanels();
+log('info', 'v' + VERSION + ' ready, instance ' + INSTANCE + ', world ' + cur.world + ', seed ' + cur.seed);
 requestAnimationFrame(tick);
 
 // test and console hooks
 window.SSAV = {
   get seed() { return cur.seed; }, get key() { return cur.key; }, get x() { return pb.x; }, get playing() { return pb.playing; },
+  get worldName() { return cur.world; }, setWorld, nextWorld, weather, renderWeather,
   get palette() { return pal.target; }, get flags() { return { ...flags }; }, get hist() { return hist.slice(); }, get histIdx() { return histIdx; },
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,

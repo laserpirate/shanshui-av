@@ -18,9 +18,10 @@ export const KEYS = [
   ['G', 'Hold: freeze auto reseed and auto palette'],
   ['T', 'Projector test card'],
   ['O', 'Output window'],
+  ['W', 'World: shanshui / derelict'],
   ['?', 'This key card'],
   ['Esc', 'Close panels; leave panic'],
   ['Esc held 1 s', 'Panic: fade to the last good frame'],
 ];
 // the keys the handler listens for, by KeyboardEvent.key, for the duplicate check
-export const KEY_CODES = [' ', 'Home', 'd', '-', '=', 'ArrowLeft', 'ArrowRight', 'r', '[', ']', 's', 'p', 'P', 'S', 'f', 'h', 'b', 'g', 't', 'o', '?', 'Escape'];
+export const KEY_CODES = [' ', 'Home', 'd', '-', '=', 'ArrowLeft', 'ArrowRight', 'r', '[', ']', 's', 'p', 'P', 'S', 'f', 'h', 'b', 'g', 't', 'o', 'w', '?', 'Escape'];
