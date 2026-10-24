@@ -1,4 +1,5 @@
-// Gate before every push: node --check on all JS, local links resolve, zero console errors on load.
+// Gate before every push: node --check on all JS, local links resolve, no password strings, zero console
+// errors on load (both worlds).
 //   node tools/serve.mjs --port 8093 &   then   node tools/gate.mjs [http://localhost:8093/]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,10 +35,19 @@ for (const f of docs) {
 }
 console.log('local links:', links);
 
-// 3. console errors on load (controller and output)
+// 3. no password strings in the repo (a gate password from another project must never land here)
+const all = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(f => f && !/^(vendor|upstream|tools\/node_modules)\//.test(f) && !/\.(png|jpe?g|pdf|woff2?|ico)$/i.test(f));
+const SECRET = /(password|passwd|passphrase|pwd)\s*[:=]\s*\S|(password|passphrase)\s+(is|was)\s+\S/i;
+for (const f of all) {
+  const txt = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  txt.split('\n').forEach((l, i) => { if (SECRET.test(l) && f !== 'tools/gate.mjs') problems.push(`password string? ${f}:${i + 1}`); });
+}
+console.log('password grep:', all.length, 'files');
+
+// 4. console errors on load (controller and output)
 const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const offline = /^http:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
-for (const url of ['?i=gate&seed=1', 'output.html?i=gate']) {
+for (const url of ['?i=gate&seed=1', '?i=gate-d&seed=1&world=derelict', 'output.html?i=gate']) {
   const page = await browser.newPage();
   // against localhost, prove the app runs with no internet: block and report anything external
   if (offline) await page.route('**/*', r => { const u = r.request().url(); if (/^(https?:\/\/(localhost|127\.0\.0\.1)|data:|blob:)/.test(u)) return r.continue(); problems.push('external request ' + u); return r.abort(); });

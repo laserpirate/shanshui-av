@@ -12,15 +12,16 @@ const args = process.argv.slice(2);
 const BASE = args.find(a => a.startsWith('http')) || 'http://localhost:8093/';
 const SEED = (args.find(a => a.startsWith('--seed=')) || '--seed=1').slice(7);
 const THUMBS = args.includes('--thumbs');
+const WORLD = (args.find(a => a.startsWith('--world=')) || '--world=shanshui').slice(8);   // new palettes swatch on derelict
 
 const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
 page.on('pageerror', e => errors.push(e.message));
-await page.goto(`${BASE}?i=preflight&seed=${SEED}`);
+await page.goto(`${BASE}?i=preflight-${WORLD}&seed=${SEED}${WORLD === 'shanshui' ? '' : '&world=' + WORLD}`);
 await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 3, null, { timeout: 30000 });
-await page.evaluate(() => { document.body.classList.add('uihidden'); SSAV.pb.x = 300; });
+await page.evaluate(w => { document.body.classList.add('uihidden'); SSAV.pb.x = w === 'shanshui' ? 300 : 1200; if (SSAV.weather) { SSAV.cfg.weather.mode = 'dry'; SSAV.weather.p = 0; } }, WORLD);
 await page.waitForTimeout(1500);
 const gpu = await page.evaluate(() => { const gl = document.createElement('canvas').getContext('webgl'); const e = gl.getExtension('WEBGL_debug_renderer_info'); return gl.getParameter(e.UNMASKED_RENDERER_WEBGL); });
 const ids = await page.evaluate(() => SSAV.palettes.palettes.map(p => p.id));

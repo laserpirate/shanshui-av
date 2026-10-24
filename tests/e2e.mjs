@@ -460,6 +460,263 @@ await test('long-travel-cull', async () => {
   return r;
 });
 
+// ---------------------------------------------------------------------------------------------
+// v0.3.0: worlds. The derelict world, the world switch, weather, lights; shanshui unchanged.
+const ready = () => {
+  const w = SSAV.world(); if (!w || SSAV.fading || !SSAV.scene.lastFrame) return false;
+  const v = SSAV.scene.lastFrame.v, k0 = Math.floor(SSAV.x / 512), k1 = Math.floor((SSAV.x + v.viewW) / 512);
+  for (let k = k0; k <= k1; k++) { const t = w.tiles.get(k); if (!t || !t.tex || t.pending || t.dirty) return false; }
+  return true;
+};
+const HEAVY = () => { SSAV.cfg.weather.mode = 'downpour'; Object.assign(SSAV.cfg.weather.holds, { rain: 1, wind: 0.8, water: 1, fog: 0.8, light: 0 }); };
+
+await test('shanshui-unchanged', async () => {
+  // the same frames from the v0.2.0 tag (served from a worktree) and from this build, compared pixel for pixel
+  const V020 = (args.find(a => a.startsWith('--v020=')) || '--v020=http://localhost:8094/').slice(7);
+  const b = await browser(false);
+  const shots = [];
+  for (const [seed, palette, x] of [['1', 'original', 0], ['1', 'dark', 2600], ['7', 'kl4-look', 900], ['7', 'gradient', 4000], ['shanshui', 'kodama-water', 1500]]) {
+    const one = async base => {
+      const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
+      const page = await ctx.newPage(); if (base === BASE) watch(page);
+      await page.goto(`${base}?i=e2e-same-${seed}&seed=${seed}&palette=${palette}`);
+      await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2, null, { timeout: 30000 });
+      await page.evaluate(x => { document.body.classList.add('uihidden'); SSAV.pb.x = x; }, x);
+      await page.waitForTimeout(500);
+      await page.waitForFunction(ready, null, { timeout: 60000 });
+      await page.waitForTimeout(400);
+      const png = PNG.sync.read(await page.screenshot());
+      await ctx.close();
+      return png;
+    };
+    const a = await one(V020), c = await one(BASE);
+    let maxd = 0, n = 0;
+    for (let i = 0; i < a.data.length; i++) { const d = Math.abs(a.data[i] - c.data[i]); if (d) { n++; if (d > maxd) maxd = d; } }
+    shots.push({ seed, palette, x, maxDiff: maxd, bytesDiffering: n });
+  }
+  const bad = shots.filter(s => s.maxDiff > 0);
+  assert(!bad.length, 'differs from v0.2.0: ' + JSON.stringify(bad));
+  return shots;
+});
+
+await test('world-switch', async () => {
+  const { ctx, page } = await newPage('?i=e2e-world&seed=5', { w: 960, h: 540 });
+  await page.evaluate(() => { try { localStorage.removeItem('shanshui-av:e2e-world'); } catch (e) {} });
+  assert(await page.evaluate(() => SSAV.worldName) === 'shanshui', 'shanshui on first load');
+  await hideUI(page);
+  await page.keyboard.press('w');
+  await page.waitForTimeout(150);
+  const mid = await page.evaluate(() => ({ w: SSAV.worldName, fading: SSAV.fading, worlds: SSAV.frameState().worlds.map(x => x.world) }));
+  assert(mid.w === 'derelict' && mid.fading && mid.worlds.join() === 'shanshui,derelict', 'crossfade shanshui to derelict ' + JSON.stringify(mid));
+  await page.waitForFunction(() => !SSAV.fading, null, { timeout: 15000 });
+  assert(page.url().includes('world=derelict') && page.url().includes('seed=5'), 'URL ' + page.url());
+  await page.waitForFunction(ready, null, { timeout: 30000 });
+  const d = await pixels(page);
+  assert(d.sd > 4, 'derelict blank, sd ' + d.sd.toFixed(1));
+  await page.keyboard.press('s');
+  const st = await page.evaluate(() => SSAV.stars);
+  assert(st.includes('derelict:5'), 'star remembers its world ' + st);
+  await showUI(page); await page.click('#b-world button[data-v="shanshui"]'); await hideUI(page);
+  await page.waitForTimeout(150);
+  const back = await page.evaluate(() => ({ w: SSAV.worldName, worlds: SSAV.frameState().worlds.map(x => x.world) }));
+  assert(back.w === 'shanshui' && back.worlds.join() === 'derelict,shanshui', 'crossfade back ' + JSON.stringify(back));
+  await page.waitForFunction(() => !SSAV.fading, null, { timeout: 15000 });
+  assert(!page.url().includes('world='), 'URL back to shanshui ' + page.url());
+  // history step returns to the derelict entry
+  await page.keyboard.press('BracketLeft'); await page.waitForTimeout(150);
+  const h = await page.evaluate(() => ({ w: SSAV.worldName, s: SSAV.seed, hist: SSAV.hist }));
+  assert(h.w === 'derelict' && h.s === '5', 'history remembers its world ' + JSON.stringify(h));
+  await page.waitForFunction(() => !SSAV.fading, null, { timeout: 15000 });
+  // reload restores the world
+  await page.goto(BASE + '?i=e2e-world');
+  await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2);
+  const r = await page.evaluate(() => ({ w: SSAV.worldName, s: SSAV.seed, playing: SSAV.playing }));
+  await ctx.close();
+  assert(r.w === 'derelict' && r.s === '5' && !r.playing, 'reload ' + JSON.stringify(r));
+  return { mid, back, reload: r };
+});
+
+await test('derelict-determinism', async () => {
+  // tiles at x 0, then 50,000 px away (the start is culled), then back: the same tile bytes
+  const { ctx, page } = await newPage('?i=e2e-det&seed=21&world=derelict', { w: 960, h: 540 });
+  const hashes = () => page.evaluate(() => { const w = SSAV.world(), v = SSAV.scene.lastFrame.v, o = {}; for (let k = Math.floor(SSAV.x / 512); k <= Math.floor((SSAV.x + v.viewW) / 512); k++) o[k] = w.tiles.get(k).hash; return o; });
+  const at = async x => { await page.evaluate(x => { SSAV.pb.x = x; }, x); await page.waitForTimeout(300); await page.waitForFunction(ready, null, { timeout: 120000 }); await page.waitForTimeout(300); await page.waitForFunction(ready, null, { timeout: 60000 }); return hashes(); };
+  const a0 = await at(0), a1 = await at(3000);
+  for (let x = 5000; x <= 50000; x += 5000) await at(x);
+  const far = await page.evaluate(() => { const w = SSAV.world(); let mn = Infinity; for (const c of w.chunks.values()) mn = Math.min(mn, c.x); return { minX: mn, xmin: w.xmin, chunks: w.chunks.size }; });
+  assert(far.minX > 30000, 'start not culled at 50,000: ' + JSON.stringify(far));
+  for (let x = 45000; x >= 5000; x -= 5000) await at(x);
+  const b1 = await at(3000), b0 = await at(0);
+  await ctx.close();
+  const diff = [...Object.keys(a0).filter(k => a0[k] !== b0[k]), ...Object.keys(a1).filter(k => a1[k] !== b1[k])];
+  assert(Object.keys(a0).length >= 3 && !diff.length, 'tiles differ after the round trip: ' + diff.join(',') + ' ' + JSON.stringify({ a0, b0 }));
+  return { tiles: Object.keys(a0).length + Object.keys(a1).length, far };
+});
+
+await test('derelict-palettes-non-blank', async () => {
+  const { ctx, page } = await newPage('?i=e2e-dpal&seed=1&world=derelict', { w: 960, h: 540 });
+  await hideUI(page);
+  await page.evaluate(() => { SSAV.pb.x = 1500; SSAV.cfg.weather.mode = 'dry'; SSAV.weather.p = 0; });
+  await page.waitForFunction(ready, null, { timeout: 30000 });
+  const ids = await page.evaluate(() => SSAV.palettes.palettes.map(p => p.id));
+  const bad = [];
+  for (const id of ids) {
+    await page.evaluate(id => SSAV.setPalette(id), id);
+    await page.waitForFunction(() => !SSAV.fading);
+    await page.waitForTimeout(80);
+    const p = await pixels(page);
+    if (p.sd < 4 || p.max - p.min < 12) bad.push(id + ' sd ' + p.sd.toFixed(1));
+  }
+  await ctx.close();
+  assert(!bad.length, 'blank on derelict: ' + bad.join(', '));
+  return { palettes: ids.length };
+});
+
+await test('weather-cycle', async () => {
+  const { ctx, page } = await newPage('?i=e2e-wx&seed=3&world=derelict', { w: 960, h: 540 });
+  await page.evaluate(() => { SSAV.cfg.weather.mode = 'auto'; SSAV.cfg.weather.period = 10; SSAV.cfg.weather.holds = {}; SSAV.weather.p = 0; });
+  const seen = new Set(); let maxRain = 0, maxWater = 0, minLight = 1;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 12500) {
+    const v = await page.evaluate(() => ({ ph: SSAV.weather.phase, ...SSAV.weather.values() }));
+    seen.add(v.ph); maxRain = Math.max(maxRain, v.rain); maxWater = Math.max(maxWater, v.water); minLight = Math.min(minLight, v.light);
+    await page.waitForTimeout(150);
+  }
+  // pinned phase and a held slider
+  await page.evaluate(() => { SSAV.cfg.weather.mode = 'flood'; });
+  await page.waitForTimeout(5000);
+  const pinned = await page.evaluate(() => ({ ph: SSAV.weather.phase, water: SSAV.weather.values().water }));
+  await page.evaluate(() => { SSAV.cfg.weather.holds.rain = 0.9; });
+  await page.waitForTimeout(2500);
+  const held = await page.evaluate(() => SSAV.weather.values().rain);
+  await ctx.close();
+  assert(['dry', 'drizzle', 'downpour', 'flood', 'night'].every(p => seen.has(p)), 'phases seen ' + [...seen]);
+  assert(maxRain > 0.9 && maxWater > 0.95 && minLight < 0.05, 'extremes ' + JSON.stringify({ maxRain, maxWater, minLight }));
+  assert(pinned.ph === 'flood' && pinned.water > 0.95, 'pinned flood ' + JSON.stringify(pinned));
+  assert(Math.abs(held - 0.9) < 0.02, 'held rain ' + held);
+  return { phases: [...seen], maxRain: +maxRain.toFixed(2), maxWater: +maxWater.toFixed(2), minLight: +minLight.toFixed(2) };
+});
+
+await test('lights-at-night', async () => {
+  const { ctx, page } = await newPage('?i=e2e-lights&seed=7&world=derelict&palette=derelict-rust', { w: 1280, h: 720 });
+  await hideUI(page);
+  // sodium light #FF9F3A: count warm bright pixels by day and by night
+  const warm = async () => { const png = PNG.sync.read(await page.screenshot()); let n = 0; for (let i = 0; i < png.data.length; i += 4) { const r = png.data[i], g = png.data[i + 1], b = png.data[i + 2]; if (r > 200 && r - b > 110 && g > 80) n++; } return n; };
+  await page.evaluate(() => { SSAV.pb.x = 1200; SSAV.cfg.weather.mode = 'dry'; SSAV.weather.p = 0; SSAV.cfg.weather.holds = { rain: 0, fog: 0.2, light: 1 }; });
+  await page.waitForFunction(ready, null, { timeout: 30000 }); await page.waitForTimeout(1500);
+  const day = await warm();
+  await page.evaluate(() => { SSAV.cfg.weather.holds = { rain: 0, fog: 0.2, light: 0 }; });
+  await page.waitForTimeout(2500);
+  const night = await warm();
+  await ctx.close();
+  assert(night > 150 && night > day * 5, `lights at night: ${night} warm pixels, by day ${day}`);
+  return { day, night };
+});
+
+await test('derelict-export', async () => {
+  const { ctx, page } = await newPage('?i=e2e-dexp&seed=4&world=derelict&palette=derelict-rain', { w: 1400, h: 800 });
+  await page.evaluate(() => { SSAV.cfg.weather.mode = 'night'; SSAV.weather.p = 0.8; SSAV.cfg.weather.holds = {}; });
+  await page.waitForTimeout(2500);
+  const run = async (kind, setup) => {
+    await page.evaluate(setup);
+    const dl = page.waitForEvent('download', { timeout: 600000 });
+    await page.evaluate(k => SSAV.runExport(k), kind);
+    const d = await dl; const f = path.join(DL, d.suggestedFilename()); await d.saveAs(f);
+    const st = await page.evaluate(() => window.__lastExport);
+    assert(!st.error, kind + ': ' + st.error);
+    return f;
+  };
+  const arch = (rain, lights) => `Object.assign(SSAV.cfg.exp, { format: 'archd', portrait: false, margin: 0.5, fit: 1, dpi: 150, x0: 2000, rain: ${rain}, lights: ${lights} })`;
+  let f = await run('svg', arch(false, true));
+  const svg = fs.readFileSync(f, 'utf8');
+  assert(/width="36in" height="24in" viewBox="0 0 2592 1728"/.test(svg.slice(0, 400)), 'Arch D SVG size');
+  assert(path.basename(f).startsWith('derelict_4_derelict-rain_2000_archD-landscape'), 'file name ' + path.basename(f));
+  const circles = (svg.match(/<circle [^>]*fill='#3FD0C0'/g) || []).length;
+  assert(circles > 20, 'lights as accent circles: ' + circles);
+  assert(!/data-l=/.test(svg), 'raw light elements left in SVG');
+  assert(/<rect x="[\d.-]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" fill="#/.test(svg), 'water plane');
+  assert(!/stroke-opacity="0.45" stroke-width="0.5"/.test(svg), 'rain off by default');
+  f = await run('svg', arch(true, false));
+  const svg2 = fs.readFileSync(f, 'utf8');
+  assert(!/<circle /.test(svg2), 'lights off');
+  f = await run('pdf', arch(false, true));
+  const pdf = fs.readFileSync(f, 'latin1');
+  const mb = /\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/.exec(pdf);
+  assert(mb && Math.abs(+mb[1] - 2592) < 0.01 && Math.abs(+mb[2] - 1728) < 0.01, 'PDF MediaBox ' + (mb && mb[0]));
+  f = await run('png', arch(true, true));
+  const png = PNG.sync.read(fs.readFileSync(f));
+  assert(png.width === 5400 && png.height === 3600, 'PNG 150 dpi ' + png.width + 'x' + png.height);
+  // glow: teal-bright pixels exist in the PNG at night
+  let teal = 0; for (let i = 0; i < png.data.length; i += 16) { const r = png.data[i], g = png.data[i + 1], b = png.data[i + 2]; if (g > 150 && b > 140 && r < g - 50) teal++; }
+  await ctx.close();
+  assert(teal > 50, 'no glow in PNG: ' + teal);
+  return { circles, pdf: mb[0], png: [png.width, png.height], teal };
+});
+
+await test('derelict-blackout-panic', async () => {
+  const { ctx, page } = await newPage('?i=e2e-dblack&seed=6&world=derelict', { w: 960, h: 540 });
+  await hideUI(page);
+  await page.evaluate(HEAVY);
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(3500);
+  const heavy = await page.evaluate(() => SSAV.weather.values());
+  await page.keyboard.press('b'); await page.waitForTimeout(1300);
+  const blk = await pixels(page);
+  await page.keyboard.press('b'); await page.waitForTimeout(1300);
+  await page.keyboard.down('Escape'); await page.waitForTimeout(1300); await page.keyboard.up('Escape');
+  await page.waitForTimeout(500);
+  const pan = await page.evaluate(() => ({ panic: SSAV.flags.panic, playing: SSAV.playing }));
+  const still = await pixels(page);
+  // blackout from panic, and while rendering throws
+  await page.keyboard.press('b'); await page.waitForTimeout(1300);
+  const blk2 = await pixels(page);
+  await page.keyboard.press('b'); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+  await page.evaluate(() => { SSAV.scene.renderer.draw = () => { throw new Error('test: render broken'); }; });
+  await page.keyboard.press('b'); await page.waitForTimeout(1300);
+  const blk3 = await pixels(page);
+  await ctx.close();
+  assert(heavy.rain > 0.95 && heavy.water > 0.95 && heavy.light < 0.05, 'heaviest weather ' + JSON.stringify(heavy));
+  assert(blk.max < 6 && blk2.max < 6 && blk3.max < 6, 'blackout not black ' + [blk.max, blk2.max, blk3.max]);
+  assert(pan.panic && !pan.playing && still.sd > 3, 'panic still ' + JSON.stringify(pan) + ' sd ' + still.sd.toFixed(1));
+  return { stillSd: +still.sd.toFixed(1) };
+});
+
+await test('derelict-output-fullscreen', async () => {
+  const { ctx, page } = await newPage('?i=e2e-dout&seed=8&world=derelict&palette=arc-21', { head: true, w: 1280, h: 720 });
+  await page.evaluate(HEAVY);
+  const popP = ctx.waitForEvent('page');
+  await page.keyboard.press('o');
+  const out = await popP;
+  watch(out);
+  await out.setViewportSize({ width: 1280, height: 720 });
+  await out.waitForFunction(() => window.SSOUT && SSOUT.msg && SSOUT.scene.stats().tiles >= 2, null, { timeout: 30000 });
+  // rain streaks animate per frame, so the mirror compare holds rain at 0 (flood and night stay)
+  await page.evaluate(() => { SSAV.pb.x = 900; SSAV.cfg.weather.holds.rain = 0; });
+  await page.waitForTimeout(3000);
+  await hideUI(page);
+  const a = await pixels(page), b = await pixels(out);
+  await page.evaluate(() => { SSAV.cfg.weather.holds.rain = 1; });
+  const r = corr(downsample(a, 64, 36), downsample(b, 64, 36));
+  const ow = await out.evaluate(() => SSOUT.msg.fs.worlds.at(-1).world);
+  // blackout and panic reach the output
+  await page.keyboard.press('b'); await page.waitForTimeout(1300);
+  const ob = await pixels(out);
+  await page.keyboard.press('b'); await page.waitForTimeout(1300);
+  await out.close();
+  // full screen on the controller, heaviest weather
+  await page.keyboard.press('f');
+  await page.waitForFunction(() => !!document.fullscreenElement || document.body.classList.contains('fullwin'), null, { timeout: 5000 });
+  await page.waitForTimeout(4000);
+  const fsp = await pixels(page);
+  await page.keyboard.press('f');
+  await ctx.close();
+  assert(ow === 'derelict', 'output world ' + ow);
+  assert(r > 0.85, 'output differs from controller, corr ' + r.toFixed(3));
+  assert(ob.max < 6, 'output not black');
+  assert(fsp.sd > 4, 'full screen blank, sd ' + fsp.sd.toFixed(1));
+  return { corr: +r.toFixed(3), fullscreenSd: +fsp.sd.toFixed(1) };
+});
+
 for (const b of [headless, headed]) if (b) await b.close();
 const failed = results.filter(r => !r.pass);
 const summary = { date: new Date().toISOString(), base: BASE, pass: failed.length === 0 && consoleProblems.length === 0, tests: results.length, failed: failed.map(f => f.name), consoleProblems };
