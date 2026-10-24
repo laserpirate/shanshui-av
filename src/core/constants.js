@@ -1,5 +1,5 @@
 // Shared numbers. World units are upstream SVG px.
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 export const WORLD_H = 800 / 1.142;   // upstream viewBox height (windy / zoom)
 export const TILE_W = 512;            // world px per raster tile (= upstream chunk width)
 export const REF_H = 1080;            // speed is px/s on a 1080 px tall screen at zoom 1

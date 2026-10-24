@@ -48,10 +48,20 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - The paper texture is upstream's own, per seed (the worker paints it with the same PRNG draws), tiled every 448 world px (512 screen px at upstream scale), moving with the landscape.
 - Non-raw palettes read ink through `inkRange` 0.75 (`palettes.json`), because upstream's darkest composited ink rarely passes 75 %; Original and Grayscale use the raw value.
 - Tiles are 512 world px wide (one upstream chunk), uploaded as single channel R8 textures: 3.4 MB each at 4K. A tile is drawn once the generator is 2000 world px past its right edge; an element that lands later on a drawn tile marks it for redraw (extents come back from the raster worker).
+- v0.2.0: no GPU readback on the frame path. The first 30 min soak (v0.1.0) averaged 58.6 fps but dipped to 37.5 (1 s average) about 1 s after each reseed, in both windows at once. Profiling found frame gaps with no main-thread long tasks: GPU stalls. Three causes, three fixes: (1) uploading an RGBA ImageBitmap from the worker's accelerated canvas into an R8 texture forced a readback and conversion, so the raster worker now draws on a CPU canvas (`willReadFrequently`) and sends one grey byte per pixel; reading back an accelerated canvas in the worker instead was worse, because it stalls the shared GPU process; (2) the watchdog's 160 x 90 `readPixels` and (3) the panic still's `drawImage` of the WebGL canvas were synchronous, so both now render to a small target and read back through a pixel pack buffer and a fence, picked up on a later frame. Result at 1500 px/s, 1920 x 1080, 4 reseeds: frame gaps over 25 ms 34 -> 0. Raster check after the change: mean difference 0.19 to 1.02 levels; 300 dpi Arch D PNG still about 8 s.
 - DPR is capped at 1. Quality Auto starts at full resolution and steps to 0.75, then 0.5 after 5 s under 45 fps (per session). While an output window is connected the controller preview draws at half resolution.
 - Reseed: the new world generates and rasters behind the old one; the crossfade (default 2.5 s, Show panel) starts when the new world covers the view, or after 4 s.
 - Speed is px/s on a 1080 px tall screen at zoom 1 (world speed = speed x 700.5 / 1080), so the look is the same on any output size. Slider range 0 to 2000 px/s, square-root scale. `-` and `=` step by 1.25x.
 - Play and pause ease over about 0.6 s (exponential); Stop is a cosine ease back to x = 0 (0.8 to 3 s by distance).
+
+## Soak (30 min, 1500 px/s, output 1920 x 1080, reseed every 2 min, palette every 1 min, RTX 3080, headless)
+
+| Build | fps avg | fps min (1 s) | dips under 50 | heap first to last third | reloads | console |
+| --- | --- | --- | --- | --- | --- | --- |
+| v0.1.0 | 58.6 | 37.5 | not logged | -11.4 MB | 0 | 0 |
+| v0.2.0 | 60.0 | 59.1 | 0 | -3.6 MB | 0 | 0 |
+
+- Heap swings 67 to 126 MB per process with the 20,000 px window and reseeds, no trend. DOM grows only with the seed history list (capped at 20). Raw rows: `test-results/soak30-run*.json` (local).
 
 ## Show
 
@@ -64,6 +74,7 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - Watchdog: a 160 x 90 copy of the frame each second; flat (under 4 levels of range) for 3 s while tiles exist = redraw all tiles; 15 s = the output window reloads itself (the controller keeps state). Blackout and panic pause the check.
 - Output window keys: F and double-click for full screen; B, Space, R, p, P, G, T, Home, [ and ] are sent to the controller; Esc held 1 s there also triggers panic. The output never writes storage (tested).
 - The output extrapolates the controller's position for up to 1 s between messages, then holds.
+- v0.2.0: the output window opens with `noopener`. With an opener Chrome keeps both windows in one renderer process on one main thread, so controller work could stall the projector. Everything already went over BroadcastChannel, so nothing else changed. Side effects: `O` while an output is connected only says so (a noopener window cannot be focused from the controller), and a blocked popup is detected by the missing heartbeat after 4 s.
 - Web MIDI: not in v0.1.0 (preflight answer). v0.2.0 adds opt-in learn (Show panel): nothing calls `requestMIDIAccess` until Enable is pressed, so the browser never prompts on load. Targets: speed (CC, absolute, same square-root curve as the slider), play, reseed, palette + and -, blackout (note-on, or a CC crossing the middle upward). Bindings persist per instance. While blacked out, only the blackout binding acts. Tested with a fake input in e2e; not tested with a real controller.
 
 ## Export
