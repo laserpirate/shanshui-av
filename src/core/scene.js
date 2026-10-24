@@ -33,10 +33,10 @@ export class Scene {
   palette(id) { return this.byId.get(id) || this.byId.get('original'); }
   setPalette(p) { this.byId.set(p.id, p); }
 
-  world(key, seed) {
+  world(key, seed, kind) {
     let w = this.worlds.get(key);
     if (!w) {
-      const world = new World(seed, { key, onLog: this.onLog });
+      const world = new World(seed, { key, onLog: this.onLog, world: kind });
       this.renderer.attach(world);
       w = { world, lastUsed: performance.now() };
       this.worlds.set(key, w);
@@ -53,7 +53,8 @@ export class Scene {
     return [W, H];
   }
 
-  // fs: {worlds:[{key, seed, x, alpha}], dir, pal:{a, b, mix}, u:{contrast, ink, paper, vignette, zoom, yAlign}, time}
+  // fs: {worlds:[{key, seed, world, x, alpha}], dir, pal:{a, b, mix}, u:{contrast, ink, paper, vignette, zoom, yAlign}, time,
+  //      weather:{rain, wind, water, fog, light}}
   frame(fs, { blackout = false, panic = false } = {}) {
     const now = performance.now();
     if (this._last) { this._ft.push(now - this._last); if (this._ft.length > 60) this._ft.shift(); this.fps = 1000 / (this._ft.reduce((a, b) => a + b, 0) / this._ft.length); }
@@ -63,7 +64,7 @@ export class Scene {
     const rscale = Math.round(v.scale * 64) / 64;   // quantized so small resizes do not redraw every tile
     const list = [];
     for (const it of fs.worlds) {
-      const world = this.world(it.key, it.seed);
+      const world = this.world(it.key, it.seed, it.world);
       this.worlds.get(it.key).lastUsed = now;
       world.update(it.x, v.viewW, fs.dir, rscale);
       list.push({ world, x: it.x, alpha: it.alpha });
@@ -86,6 +87,7 @@ export class Scene {
       palA: this.palette(fs.pal.a), palB: this.palette(fs.pal.b), mix: fs.pal.mix,
       inkRange: this.palettes.inkRange || 0.75,
       contrast: fs.u.contrast, ink: fs.u.ink, paperOn: fs.u.paper, vignette: fs.u.vignette ? 0.55 : 0, time: fs.time,
+      weather: fs.weather || null,
     };
   }
 

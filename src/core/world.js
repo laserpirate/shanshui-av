@@ -1,13 +1,18 @@
-// World: one seed. Owns a generator worker (upstream engine), a raster worker (tiles), the element
-// store (strings kept for vector export) and the tile set. The renderer only reads `tiles`.
-import { TILE_W, WORLD_H, AHEAD, CULL, READY_MARGIN } from './constants.js';
+// World: one seed of one world kind. Owns a generator worker (upstream engine for shanshui, the
+// chunk-seeded generator for derelict), a raster worker (tiles), the element store (strings kept for
+// vector export) and the tile set. The renderer only reads `tiles`.
+import { TILE_W, WORLD_H, AHEAD, READY_MARGIN } from './constants.js';
+import { worldOf } from '../worlds/registry.js';
 
 const base = new URL('../workers/', import.meta.url);
 let worldCount = 0;
 
 export class World {
-  constructor(seed, { key, onLog } = {}) {
+  constructor(seed, { key, onLog, world } = {}) {
     this.seed = String(seed);
+    this.kind = worldOf(world).name;
+    this.meta = worldOf(world);
+    this.cull = this.meta.cull;
     this.key = key || this.seed + '#' + (++worldCount);
     this.onLog = onLog || (() => {});
     this.chunks = new Map();          // id -> {id, tag, x, y, canv, minx, maxx}
@@ -25,7 +30,7 @@ export class World {
     this.errors = 0;
     this.waiters = [];
     this.leftWanted = false;
-    this.gen = new Worker(new URL('gen-worker.js', base));
+    this.gen = new Worker(new URL(this.meta.worker, base), this.meta.module ? { type: 'module' } : undefined);
     this.ras = new Worker(new URL('raster-worker.js', base));
     this.gen.onmessage = e => this._onGen(e.data);
     this.ras.onmessage = e => this._onRas(e.data);
@@ -51,7 +56,7 @@ export class World {
     }
     if (m.type !== 'chunks') return;
     const items = [];
-    for (const a of m.added) { a.minx = a.x - 1500; a.maxx = a.x + 1500; this.chunks.set(a.id, a); items.push({ id: a.id, canv: a.canv }); }
+    for (const a of m.added) { a.minx = a.x - 1500; a.maxx = a.x + 1500; this.chunks.set(a.id, a); items.push(a.depth ? { id: a.id, canv: a.canv, depth: a.depth } : { id: a.id, canv: a.canv }); }
     for (const id of m.removed) this.chunks.delete(id);
     if (items.length) this.ras.postMessage({ type: 'add', items });
     if (m.removed.length) this.ras.postMessage({ type: 'drop', ids: m.removed });
@@ -81,11 +86,12 @@ export class World {
     }
     if (m.type === 'tile') {
       this.pendingRaster = Math.max(0, this.pendingRaster - 1);
-      if (typeof m.key === 'string') { const cb = this._exportCbs && this._exportCbs.get(m.key); if (cb) { this._exportCbs.delete(m.key); cb(m.grey); } return; }
+      if (typeof m.key === 'string') { const cb = this._exportCbs && this._exportCbs.get(m.key); if (cb) { this._exportCbs.delete(m.key); if (m.aux) m.grey.aux = m.aux; cb(m.grey); } return; }
       const t = this.tiles.get(m.key);
       if (!t || !this.onTile) return;
       t.pending = false;
-      this.onTile(t, m.grey, t.reqScale);
+      t.hash = m.hash; t.final = !t.dirty;
+      this.onTile(t, m.grey, t.reqScale, m.aux);
       this.rasterMs = m.ms;
     }
   }
@@ -97,13 +103,20 @@ export class World {
     if (this.disposed) return;
     const camR = camX + viewW;
     // generation, one chunk at a time
-    if (!this.genBusy && this.started) {
+    if (this.meta.chunked) {
+      // chunks regenerate identically, so fill both sides of the view, travel side first
+      if (!this.genBusy && this.started) {
+        const needR = this.xmax < camR + AHEAD, needL = this.xmin > camX - AHEAD;
+        if (needR && (dir >= 0 || !needL)) { this.genBusy = true; this.gen.postMessage({ type: 'right' }); }
+        else if (needL) { this.genBusy = true; this.gen.postMessage({ type: 'left' }); }
+      }
+    } else if (!this.genBusy && this.started) {
       if (this.xmax < camR + AHEAD && (dir >= 0 || this.xmax < camR + TILE_W)) { this.genBusy = true; this.gen.postMessage({ type: 'right' }); }
       else if (dir < 0 && this.xmin > camX - AHEAD) { this.genBusy = true; this.leftWanted = true; this.gen.postMessage({ type: 'left' }); }
     }
     // memory cap
     if (!this.genBusy && this.started) {
-      const below = camX - CULL, above = camR + CULL;
+      const below = camX - this.cull, above = camR + this.cull;
       if (below > this.culledBelow + 4 * TILE_W && this.xmin < below) { this.culledBelow = below; this.genBusy = true; this.gen.postMessage({ type: 'cull', below, above: Infinity }); }
       else if (above < this.culledAbove - 4 * TILE_W && this.xmax > above) { this.culledAbove = above; this.genBusy = true; this.gen.postMessage({ type: 'cull', below: -Infinity, above }); }
     }
@@ -127,12 +140,12 @@ export class World {
       if (!stale || t.pending) continue;
       // wait until the generator is far enough past this tile that nothing new can land on it,
       // unless it is on screen and has nothing yet
-      const final = (k + 1) * TILE_W + READY_MARGIN <= this.xmax;
+      const final = (k + 1) * TILE_W + READY_MARGIN <= this.xmax && (!this.meta.chunked || k * TILE_W - READY_MARGIN >= this.xmin);
       const onScreen = k >= k0 && k <= k1;
-      if (!final && !(onScreen && !t.tex && this.xmax >= (k + 1) * TILE_W)) continue;
+      if (!final && !(onScreen && !t.tex && this.xmax >= (k + 1) * TILE_W && this.xmin <= k * TILE_W)) continue;
       t.pending = true; t.dirty = !final; t.reqScale = scale;
       this.pendingRaster++;
-      this.ras.postMessage({ type: 'tile', key: k, x0: k * TILE_W, w: TILE_W, h: WORLD_H, scale, order: this.order });
+      this.ras.postMessage({ type: 'tile', key: k, x0: k * TILE_W, w: TILE_W, h: WORLD_H, scale, order: this.order, aux: this.meta.kind === 1 });
     }
   }
 
@@ -145,16 +158,18 @@ export class World {
 
   refreshTiles() { for (const t of this.tiles.values()) t.dirty = true; }
 
-  // make sure elements exist up to x1 (export of a frame ahead of the view); resolves when generated
-  ensureRight(x1, timeoutMs = 60000) {
+  // make sure elements exist up to x1 (export of a frame ahead of the view); resolves when generated.
+  // Chunked worlds also fill back to x0 (a frame behind the view regenerates exactly).
+  ensureRight(x1, timeoutMs = 60000, x0 = Infinity) {
     const t0 = performance.now();
     return new Promise((res, rej) => {
       const step = () => {
         if (this.disposed) return rej(new Error('world closed'));
-        if (this.xmax >= x1 + READY_MARGIN) return res();
+        const left = this.meta.chunked && this.xmin > x0 - READY_MARGIN;
+        if (this.xmax >= x1 + READY_MARGIN && !left) return res();
         if (performance.now() - t0 > timeoutMs) return rej(new Error('generation timed out'));
         if (this.genBusy) { this.waiters.push(step); return; }
-        this.genBusy = true; this.waiters.push(step); this.gen.postMessage({ type: 'right' });
+        this.genBusy = true; this.waiters.push(step); this.gen.postMessage({ type: left ? 'left' : 'right' });
       };
       step();
     });
@@ -174,7 +189,7 @@ export class World {
     return new Promise(res => {
       this._exportCbs.set(key, res);
       this.pendingRaster++;
-      this.ras.postMessage({ type: 'tile', key, x0, y0, w, h, scale, pw, ph, order: this.order });
+      this.ras.postMessage({ type: 'tile', key, x0, y0, w, h, scale, pw, ph, order: this.order, aux: this.meta.kind === 1 });
     });
   }
 

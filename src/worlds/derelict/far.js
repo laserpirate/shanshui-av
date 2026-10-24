@@ -23,7 +23,7 @@ function tower(s, x, base, w, h, tone, r, lit) {
     const cols = Math.max(1, Math.floor(w / 5)), rows = Math.floor(h / 9);
     for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
       if (r() > 0.07) continue;
-      o += lamp(x + 2.5 + i * (w - 5) / Math.max(1, cols - 1 || 1), top + 6 + j * 9, 1.1, r() < 0.2 ? L.flicker : L.steady, r(), 0.35 + r() * 0.3);
+      o += lamp(x + 2.5 + i * (w - 5) / Math.max(1, cols - 1 || 1), top + 6 + j * 9, 1.1, r() < 0.2 ? L.flicker : L.steady, r(), 0.6 + r() * 0.35);
     }
   }
   // tall ones keep a red beacon
@@ -156,10 +156,11 @@ function megas(s, p) {
   let o = '';
   const g = 560;
   for (let j = Math.ceil(p.x0 / g); j * g < p.x1; j++) {
-    const h = hash01(s, 531, j);
-    if (h > 0.62) continue;
-    const rr = rngFor(s, j, 532), x = j * g + rr() * 200;
-    o += h < 0.25 ? deck(x, rr) : h < 0.48 ? frame(x, rr) : greatPipe(x, rr);
+    // only over dense passages, more of them the denser it gets; quiet stretches keep an open sky
+    const h = hash01(s, 531, j), keep = p.quiet ? 0 : Math.max(0, (p.dens - 0.35) * 0.9);
+    if (h >= keep) continue;
+    const rr = rngFor(s, j, 532), x = j * g + rr() * 200, k = h / keep;
+    o += k < 0.4 ? deck(x, rr) : k < 0.75 ? frame(x, rr) : greatPipe(x, rr);
   }
   return o;
 }
