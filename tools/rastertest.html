@@ -28,8 +28,9 @@ function px(img, w, h) { const c = new OffscreenCanvas(w, h), x = c.getContext('
   for (let k = 0; k < TILES; k++) {
     const x0 = k * TW;
     const r = await tileFrom({ type: 'tile', key: k, x0, w: TW, h: WH, scale: SCALE, order });
-    const W = r.bitmap.width, H = r.bitmap.height;
-    const a = px(r.bitmap, W, H);
+    const W = r.grey.width, H = r.grey.height;
+    const g = r.grey.data, a = new Uint8Array(W * H * 4);
+    for (let i = 0; i < g.length; i++) a[4 * i] = a[4 * i + 1] = a[4 * i + 2] = g[i];
     let body = '';
     for (const id of order) { const c = chunks.get(id); body += c.canv; }
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}' viewBox='${x0} 0 ${TW} ${WH}' preserveAspectRatio='none'><rect x='${x0 - 10}' y='-10' width='${TW + 20}' height='${WH + 20}' fill='white'/>${body}</svg>`;

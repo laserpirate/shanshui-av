@@ -109,3 +109,4 @@ body.hide #toast { opacity: 0; }
   .sp input { width: 100px; }
   #panels { bottom: 50vh; }
 }
+.mlist button { flex: 1 1 45%; }

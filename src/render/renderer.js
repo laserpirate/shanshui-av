@@ -108,12 +108,13 @@ export class Renderer {
     return t;
   }
 
-  // grey ImageBitmap -> single channel texture
-  tileTexture(bitmap, old) {
+  // grey bytes {width, height, data} -> single channel texture
+  tileTexture(grey, old) {
     const gl = this.gl;
     const t = old || gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, gl.RED, gl.UNSIGNED_BYTE, bitmap);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, grey.width, grey.height, 0, gl.RED, gl.UNSIGNED_BYTE, grey.data);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return t;
@@ -122,9 +123,9 @@ export class Renderer {
 
   // world.onTile / onTileDrop hooks
   attach(world) {
-    world.onTile = (tile, bitmap, scale) => {
+    world.onTile = (tile, grey, scale) => {
       if (this.lost) return;
-      tile.tex = this.tileTexture(bitmap, tile.tex);
+      tile.tex = this.tileTexture(grey, tile.tex);
       tile.scale = scale;
     };
     world.onTileDrop = tile => { this.deleteTexture(tile.tex); tile.tex = null; };
@@ -228,22 +229,52 @@ export class Renderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return { fbo, tex, w, h };
   }
-  freeTarget(t) { const gl = this.gl; gl.deleteFramebuffer(t.fbo); gl.deleteTexture(t.tex); }
+  freeTarget(t) { const gl = this.gl; gl.deleteFramebuffer(t.fbo); gl.deleteTexture(t.tex); if (t.pbo) gl.deleteBuffer(t.pbo); }
   read(t) {
     const gl = this.gl; const px = new Uint8Array(t.w * t.h * 4);
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo); gl.readPixels(0, 0, t.w, t.h, gl.RGBA, gl.UNSIGNED_BYTE, px);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return px; // bottom-up rows
   }
-
-  // colour one grey bitmap of world rect [x0,y0,w,h] into RGBA (top-down), for PNG export
-  colorize(bitmap, rect, look, world) {
+  // non-blocking read: pixels go to a pack buffer, cb(px) runs from poll() once the GPU fence has passed,
+  // so the frame never waits on the GPU (a sync readPixels cost a dropped frame each time)
+  readAsync(t, cb) {
+    if (this.lost) return;
     const gl = this.gl;
-    const W = bitmap.width, H = bitmap.height;
+    if (!t.pbo) { t.pbo = gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, t.pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER, t.w * t.h * 4, gl.STREAM_READ); }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, t.pbo);
+    gl.readPixels(0, 0, t.w, t.h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    (this.reads || (this.reads = [])).push({ t, cb, sync: gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0) });
+    gl.flush();
+  }
+  poll() {
+    if (!this.reads || !this.reads.length) return;
+    if (this.lost) { this.reads.length = 0; return; }
+    const gl = this.gl;
+    this.reads = this.reads.filter(r => {
+      const st = gl.clientWaitSync(r.sync, 0, 0);
+      if (st !== gl.ALREADY_SIGNALED && st !== gl.CONDITION_SATISFIED) return true;
+      gl.deleteSync(r.sync);
+      const px = new Uint8Array(r.t.w * r.t.h * 4);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, r.t.pbo);
+      gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, px);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      r.cb(px);   // bottom-up rows
+      return false;
+    });
+  }
+
+  // colour one grey raster {width, height, data} of world rect [x0,y0,w,h] into RGBA (top-down), for PNG export
+  colorize(grey, rect, look, world) {
+    const gl = this.gl;
+    const W = grey.width, H = grey.height;
     const tgt = this.target(W, H);
-    const tex = this.tileTexture(bitmap);
+    const tex = this.tileTexture(grey);
     const fakeWorld = { tiles: new Map(), paper: world.paper, paperVersion: world.paperVersion, _paperTex: world._paperTex, _paperVersion: world._paperVersion };
-    // draw one quad with the bitmap as its tile
+    // draw one quad with the raster as its tile
     const { p, u } = this.main;
     this.draw({ ...look, W, H, scale: W / rect.w, camY: rect.y, worlds: [{ world: fakeWorld, x: rect.x, alpha: 1 }], vignette: 0 }, tgt);
     gl.useProgram(p);

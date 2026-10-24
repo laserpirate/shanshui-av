@@ -32,7 +32,7 @@ export class World {
     this.gen.onerror = e => this._fail('generator: ' + (e.message || 'error'));
     this.ras.onerror = e => this._fail('raster: ' + (e.message || 'error'));
     this.gen.postMessage({ type: 'init', seed: this.seed });
-    this.onTile = null;               // (k, bitmap, scale) set by the renderer owner
+    this.onTile = null;               // (tile, grey, scale) set by the renderer owner
     this.onTileDrop = null;           // (tile) to free textures
   }
 
@@ -65,7 +65,7 @@ export class World {
   }
 
   _onRas(m) {
-    if (this.disposed) { if (m.bitmap) m.bitmap.close(); return; }
+    if (this.disposed) return;
     if (m.type === 'error') { this._fail('raster: ' + m.message.split('\n')[0]); const t = this.tiles.get(m.key); if (t) { t.pending = false; } this.pendingRaster = Math.max(0, this.pendingRaster - 1); return; }
     if (m.type === 'extents') {
       for (const [id, minx, maxx] of m.items) {
@@ -81,12 +81,11 @@ export class World {
     }
     if (m.type === 'tile') {
       this.pendingRaster = Math.max(0, this.pendingRaster - 1);
-      if (typeof m.key === 'string') { const cb = this._exportCbs && this._exportCbs.get(m.key); if (cb) { this._exportCbs.delete(m.key); cb(m.bitmap); } else m.bitmap.close(); return; }
+      if (typeof m.key === 'string') { const cb = this._exportCbs && this._exportCbs.get(m.key); if (cb) { this._exportCbs.delete(m.key); cb(m.grey); } return; }
       const t = this.tiles.get(m.key);
-      if (!t || !this.onTile) { m.bitmap.close(); return; }
+      if (!t || !this.onTile) return;
       t.pending = false;
-      this.onTile(t, m.bitmap, t.reqScale);
-      m.bitmap.close();
+      this.onTile(t, m.grey, t.reqScale);
       this.rasterMs = m.ms;
     }
   }

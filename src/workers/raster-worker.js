@@ -9,7 +9,7 @@
 //      {type:'tile', key, x0, w, h, scale, order:[ids], y0}   world rect [x0, x0+w] x [y0, y0+h]
 //      {type:'clear'}
 // out: {type:'extents', items:[[id, minx, maxx]]}   after each add
-//      {type:'tile', key, bitmap, ms, prims}
+//      {type:'tile', key, grey: {width, height, data}, ms, prims}
 
 const store = new Map(); // id -> {prims:[...], minx, maxx}
 
@@ -93,7 +93,7 @@ self.onmessage = (e) => {
       const t = performance.now();
       const W = msg.pw || Math.max(1, Math.round(msg.w * msg.scale)), H = msg.ph || Math.max(1, Math.round(msg.h * msg.scale));
       if (!canvas || canvas.width !== W || canvas.height !== H) canvas = new OffscreenCanvas(W, H);
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });   // CPU canvas: no GPU readback
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#ffffff';
@@ -111,8 +111,12 @@ self.onmessage = (e) => {
           paint(ctx, p); prims++;
         }
       }
-      const bitmap = canvas.transferToImageBitmap();
-      self.postMessage({ type: 'tile', key: msg.key, bitmap, ms: performance.now() - t, prims }, [bitmap]);
+      // read back here, in the worker, and send one grey byte per pixel: uploading an RGBA ImageBitmap
+      // into an R8 texture made the main thread wait on a GPU readback and conversion (frame drops on reseed)
+      const rgba = ctx.getImageData(0, 0, W, H).data;
+      const grey = new Uint8Array(W * H);
+      for (let i = 0, j = 0; j < grey.length; i += 4, j++) grey[j] = rgba[i];
+      self.postMessage({ type: 'tile', key: msg.key, grey: { width: W, height: H, data: grey }, ms: performance.now() - t, prims }, [grey.buffer]);
     }
   } catch (err) {
     self.postMessage({ type: 'error', key: msg && msg.key, message: String(err && err.stack || err) });

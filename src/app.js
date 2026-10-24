@@ -8,6 +8,7 @@ import { INSTANCE, load, save, saveNow } from './core/store.js';
 import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download } from './export/export.js';
 import { drawTestCard } from './ui/testcard.js';
 import { KEYS } from './ui/keys.js';
+import { Midi, MIDI_TARGETS } from './ui/midi.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -20,6 +21,7 @@ const DEF = {
   show: { auto: false, mode: 'min', every: 5, src: 'new', autoPal: false, palEvery: 3, resume: false, resumeS: 8, fade: 2.5 },
   q: 'auto', big: false,
   gradient: null,
+  midi: {},
   exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150 },
 };
 const saved = load();
@@ -208,7 +210,7 @@ function qualityTick(now) {
 // ---------- output window ----------
 const chanName = 'shanshui-av:' + INSTANCE;
 const chan = 'BroadcastChannel' in window ? new BroadcastChannel(chanName) : null;
-const out = { win: null, connected: false, last: 0, info: null, fullPreview: false };
+const out = { connected: false, last: 0, info: null, fullPreview: false };
 if (chan) chan.onmessage = e => {
   const m = e.data;
   if (m.type === 'hello' || m.type === 'beat') { out.connected = true; out.last = performance.now(); out.info = m; }
@@ -224,9 +226,13 @@ if (chan) chan.onmessage = e => {
 function openOutput() {
   const url = new URL('output.html', location.href);
   if (INSTANCE !== 'main') url.searchParams.set('i', INSTANCE);
-  out.win = window.open(url.href, 'shanshui-out-' + INSTANCE, 'popup,width=1280,height=720');
-  if (!out.win) toast('Popup blocked: allow popups for this page');
-  else log('info', 'output window opened');
+  if (out.connected) return toast('Output window already open');
+  // noopener: the output gets its own browsing context group, so Chrome gives it its own process and
+  // main thread and a busy controller never stalls the projector. Everything goes over BroadcastChannel.
+  window.open(url.href, '_blank', 'popup,noopener,width=1280,height=720');
+  log('info', 'output window requested');
+  const t = performance.now();
+  setTimeout(() => { if (!out.connected || out.last < t) toast('No output window: allow popups for this page'); }, 4000);
 }
 
 // ---------- frame state ----------
@@ -481,6 +487,37 @@ bindCheck('s-big', 'big', cfg, () => { body.classList.toggle('big', cfg.big); la
 body.classList.toggle('big', cfg.big);
 $('s-inst').textContent = 'Instance ' + INSTANCE + '   channel ' + chanName;
 
+// ---------- MIDI (opt-in learn) ----------
+const midi = new Midi({
+  map: cfg.midi, onLog: log,
+  onAction(id, v) {
+    if (id === 'black') return setBlack();
+    if (flags.blackout) return;
+    if (id === 'speed') setSpeed(sliderToSpeed(v));
+    else if (id === 'play') { if (flags.panic) setPanic(false); else pb.toggle(); renderPlay(); }
+    else if (id === 'reseed') reseed('midi');
+    else if (id === 'palNext') palStep(1);
+    else if (id === 'palPrev') palStep(-1);
+  },
+  onChange() { cfg.midi = { ...midi.map }; persist(); renderMidi(); },
+});
+function renderMidi() {
+  $('m-enable').classList.toggle('on', !!midi.access);
+  $('m-enable').textContent = midi.access ? 'MIDI on' : 'Enable MIDI';
+  $('m-dev').textContent = !midi.supported ? 'Web MIDI not available' : midi.access ? (midi.devices.length ? midi.devices.join(', ') : 'No MIDI inputs') : '';
+  $('m-map').replaceChildren(...MIDI_TARGETS.map(t => {
+    const b = document.createElement('button');
+    b.textContent = midi.learn === t.id ? t.label + ': move a control' : t.label + (midi.map[t.id] ? ' ' + midi.map[t.id].replace(/:(\d+):/, (m, c) => ' ch' + (+c + 1) + ' ') : '');
+    b.classList.toggle('on', midi.learn === t.id);
+    b.disabled = !midi.access;
+    b.onclick = () => midi.startLearn(t.id);
+    b.oncontextmenu = e => { e.preventDefault(); midi.clear(t.id); };
+    return b;
+  }));
+}
+$('m-enable').onclick = () => midi.enable();
+renderMidi();
+
 function syncInputs() {
   for (const [id, k] of [['u-contrast', 'contrast'], ['u-ink', 'ink'], ['u-zoom', 'zoom'], ['u-yalign', 'yAlign']]) { $(id).value = cfg[k]; $(id).dispatchEvent(new Event('input')); }
   $('u-paper').checked = cfg.paper; $('u-vignette').checked = cfg.vignette;
@@ -718,5 +755,5 @@ window.SSAV = {
   get palette() { return pal.target; }, get flags() { return { ...flags }; }, get hist() { return hist.slice(); }, get histIdx() { return histIdx; },
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
-  openOutput, runExport, geom, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
+  openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
 };

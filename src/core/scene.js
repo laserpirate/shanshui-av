@@ -19,7 +19,7 @@ export class Scene {
     this.byId = new Map(palettes.palettes.map(p => [p.id, p]));
     this.onLog = onLog || (() => {});
     this.renderer = new Renderer(canvas, { onLog: this.onLog });
-    this.renderer.onRestore = () => { for (const w of this.worlds.values()) { this.renderer.attach(w.world); w.world.tiles.forEach(t => { t.tex = null; t.dirty = true; t.pending = false; }); w.world.pendingRaster = 0; } };
+    this.renderer.onRestore = () => { this.checkTarget = this.stillTarget = null; for (const w of this.worlds.values()) { this.renderer.attach(w.world); w.world.tiles.forEach(t => { t.tex = null; t.dirty = true; t.pending = false; }); w.world.pendingRaster = 0; } };
     this.worlds = new Map();            // key -> {world, lastUsed}
     this.still = still || null;         // canvas for the panic still
     this.fps = 60; this._ft = []; this._last = 0;
@@ -75,6 +75,7 @@ export class Scene {
     const look = this.look(fs);
     const f = { ...look, W, H, scale: v.scale, camY: v.camY, worlds: list };
     this.lastFrame = { fs, f, v };
+    this.renderer.poll();
     const ok = this.renderer.draw(f);
     if (ok && !blackout && !panic) this._watch(now, f, list);
     return v;
@@ -88,17 +89,20 @@ export class Scene {
     };
   }
 
-  // once a second: a 160 x 90 copy of the frame; blank = one flat colour for 3 s while tiles should be there
+  // once a second: a 160 x 90 copy of the frame; blank = one flat colour for 3 s while tiles should be there.
+  // Both copies are read back asynchronously (renderer.readAsync), so they never cost a frame.
   _watch(now, f, list) {
     if (now - this.lastCheck < 1000) {
-      if (this.still && now - this.lastStill > 2000 && this.goodFrames > 2) { this._copyStill(); this.lastStill = now; }
+      if (this.still && now - this.lastStill > 2000 && this.goodFrames > 2) { this._copyStill(f); this.lastStill = now; }
       return;
     }
     this.lastCheck = now;
     const r = this.renderer;
     if (!this.checkTarget) this.checkTarget = r.target(160, 90);
     r.draw({ ...f, W: 160, H: 90, scale: f.scale * 160 / f.W, vignette: 0 }, this.checkTarget);
-    const px = r.read(this.checkTarget);
+    r.readAsync(this.checkTarget, px => this._judge(px, performance.now(), list));
+  }
+  _judge(px, now, list) {
     let mn = 255, mx = 0;
     for (let i = 0; i < px.length; i += 4) { const l = (px[i] + px[i + 1] + px[i + 2]) / 3; if (l < mn) mn = l; if (l > mx) mx = l; }
     const anyTiles = list.some(w => w.world.started);
@@ -119,10 +123,16 @@ export class Scene {
     this.lastLum = [mn, mx];
   }
 
-  _copyStill() {
-    const s = this.still; if (!s) return;
-    const ctx = s.getContext('2d');
-    try { ctx.drawImage(this.canvas, 0, 0, s.width, s.height); } catch (e) { /* keep the previous still */ }
+  _copyStill(f) {
+    const s = this.still, r = this.renderer; if (!s) return;
+    const W = s.width, H = s.height;
+    if (!this.stillTarget) this.stillTarget = r.target(W, H);
+    r.draw({ ...f, W, H, scale: f.scale * H / f.H }, this.stillTarget);
+    r.readAsync(this.stillTarget, px => {
+      const img = new ImageData(W, H), row = W * 4;
+      for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * row, (H - y) * row), y * row);
+      try { s.getContext('2d').putImageData(img, 0, 0); } catch (e) { /* keep the previous still */ }
+    });
   }
 
   stats() {

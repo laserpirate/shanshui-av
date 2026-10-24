@@ -138,9 +138,8 @@ export async function buildPNG(world, renderer, g, look, o, dpi, onProgress) {
   let n = 0;
   for (const [bx, by, bw, bh] of blocks) {
     const rect = { x: g.x0 + bx / s, y: g.y0 + by / s, w: bw / s, h: bh / s };
-    const bmp = await world.rasterRect(rect.x, rect.y, rect.w, rect.h, s, bw, bh);
-    const rgba = renderer.colorize(bmp, rect, { ...look, vignette: 0 }, world);
-    bmp.close();
+    const grey = await world.rasterRect(rect.x, rect.y, rect.w, rect.h, s, bw, bh);
+    const rgba = renderer.colorize(grey, rect, { ...look, vignette: 0 }, world);
     ctx.putImageData(new ImageData(rgba, bw, bh), Mp + bx, Mp + by);
     if (onProgress) onProgress(++n / blocks.length);
     await new Promise(r => setTimeout(r, 0));
