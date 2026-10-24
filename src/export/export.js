@@ -1,8 +1,13 @@
 // Export: SVG and PDF stay vector (upstream element strings, colours mapped through the palette),
 // PNG goes through the same raster + shader as the screen. Frames: the current view, or Arch D
 // (36 x 24 in, landscape or portrait) placed on the scroll. View zoom never enters Arch D math.
+// Worlds with weather (derelict) export the current cycle state: night darkens the colours, fog thins
+// each depth layer, the flood is a flat water plane over layers 1 to 4 (no reflections in vector),
+// lights are small filled circles in the palette accent (optional), rain is optional (off for print).
 import { WORLD_H, CREDIT } from '../core/constants.js';
-import { colorAt, inkCurve, driftOf, rgbHex } from '../core/palettes.js';
+import { colorAt, inkCurve, driftOf, rgbHex, lightHex, beaconHex, hexRgb } from '../core/palettes.js';
+import { waterY } from '../core/weather.js';
+import { mulberry32, seedInt } from '../worlds/derelict/rng.js';
 
 export const ARCH_D = { long: 36, short: 24 };
 
@@ -37,14 +42,14 @@ function parseCol(s) {
 }
 
 // palette look -> colour mapper for one element at world x
-export function colorMapper(look, paperAvg) {
+export function colorMapper(look, paperAvg, night = 1) {
   const [dxA, dtA] = driftOf(look.palA), [dxB, dtB] = driftOf(look.palB);
   const tint = (p, c) => (look.paperOn && p.paper === 'tint' && paperAvg) ? c.map((v, i) => v * paperAvg[i] / 255) : c;
   const at = (i, x) => {
     const a = tint(look.palA, colorAt(look.palA, i, x * dxA + look.time * dtA, look.inkRange));
-    if (look.mix <= 0.001) return a;
+    if (look.mix <= 0.001) return night === 1 ? a : a.map(v => v * night);
     const b = tint(look.palB, colorAt(look.palB, i, x * dxB + look.time * dtB, look.inkRange));
-    return a.map((v, k) => v + (b[k] - v) * look.mix);
+    return a.map((v, k) => (v + (b[k] - v) * look.mix) * night);
   };
   const map = (s, x) => {
     const c = parseCol(s);
@@ -63,7 +68,18 @@ function attrs(col, kind) {
   if (!col) return kind + "='none'";
   return kind + "='" + col[0] + "'" + (col[1] < 1 ? ' ' + kind + "-opacity='" + col[1] + "'" : '');
 }
-export function mapElement(canv, x, mapper) {
+const RE_LAMP = /<circle cx='([^']*)' cy='([^']*)' r='([^']*)' data-l='([^']*)'\/>/g;
+const RE_NEON = /<polyline points='([^']*)' data-l='([^']*)'\/>/g;
+// light elements: accent circles and strokes, or nothing
+function mapLights(canv, lights) {
+  if (!lights) return canv.replace(RE_LAMP, '').replace(RE_NEON, '');
+  const col = k => +k === 5 ? lights.beacon : lights.light;
+  return canv
+    .replace(RE_LAMP, (_, cx, cy, r, d) => { const [k, , i] = d.split(','); return `<circle cx='${cx}' cy='${cy}' r='${(+r * 1.3).toFixed(1)}' fill='${col(k)}' fill-opacity='${Math.min(1, +i).toFixed(2)}'/>`; })
+    .replace(RE_NEON, (_, pts, d) => { const [k, , i, w] = d.split(','); return `<polyline points='${pts}' fill='none' stroke='${col(k)}' stroke-opacity='${Math.min(1, +i).toFixed(2)}' stroke-width='${w}' stroke-linecap='round'/>`; });
+}
+export function mapElement(canv, x, mapper, lights) {
+  if (canv.indexOf('data-l') >= 0) canv = mapLights(canv, lights);
   return canv
     .replace(RE_STYLE, (_, f, s, w) => {
       const wid = parseFloat(w) || 0;
@@ -80,20 +96,51 @@ export function labelText(o) {
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&apos;');
 
 // full SVG document string. o: {seed, paletteName, border, label}
+const FOG_W = [0, 0.8, 0.58, 0.36, 0.18, 0.02];
 export function buildSVG(world, g, look, o) {
   const [PW, PH, M] = pageUnits(g);
-  const mapper = colorMapper(look, world.paper && world.paper.avg);
+  const wx = world.meta && world.meta.weather ? (look.weather || null) : null;
+  const night = wx ? 0.42 + 0.58 * wx.light : 1;
+  const mapper = colorMapper(look, world.paper && world.paper.avg, night);
   const els = world.elementsIn(g.x0, g.x0 + g.worldW);
+  const lights = wx && o.lights ? { light: lightHex(look.palA), beacon: beaconHex(look.palA) } : null;
   const parts = [];
   parts.push(`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="${g.unit === 'in' ? g.pageW + 'in' : PW}" height="${g.unit === 'in' ? g.pageH + 'in' : PH}" viewBox="0 0 ${PW} ${PH}">`);
-  parts.push(`<title>${esc('shanshui ' + o.seed + ' ' + o.paletteName)}</title>`);
+  parts.push(`<title>${esc((o.world || 'shanshui') + ' ' + o.seed + ' ' + o.paletteName)}</title>`);
   parts.push(`<desc>${esc(CREDIT)}</desc>`);
   if (g.unit === 'in') parts.push(`<rect x="0" y="0" width="${PW}" height="${PH}" fill="#ffffff"/>`);
   const pw = PW - 2 * M, ph = PH - 2 * M;
   parts.push(`<defs><clipPath id="frame"><rect x="${M}" y="${M}" width="${pw}" height="${ph}"/></clipPath></defs>`);
   parts.push(`<g clip-path="url(#frame)"><rect x="${M}" y="${M}" width="${pw}" height="${ph}" fill="${mapper.ground}"/>`);
   parts.push(`<g transform="translate(${M} ${M}) scale(${g.k}) translate(${-g.x0} ${-g.y0})">`);
-  for (const c of els) parts.push(mapElement(c.canv, c.x, mapper));
+  let water = !wx;
+  const waterPlane = () => {
+    // the flood: a flat plane over the far, mid-far, mid and ground layers, with a shore line
+    water = true;
+    const y = waterY(wx.water);
+    if (y >= g.y0 + g.worldH) return;
+    const x0 = g.x0 - 10, w = g.worldW + 20;
+    parts.push(`<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${(WORLD_H + 20 - y).toFixed(1)}" fill="${rgbHex(mapper.at(0.08, g.x0))}"/>`);
+    parts.push(`<line x1="${x0.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x0 + w).toFixed(1)}" y2="${y.toFixed(1)}" stroke="${rgbHex(mapper.at(0.45, g.x0))}" stroke-width="0.8"/>`);
+  };
+  for (const c of els) {
+    if (!water && c.depth >= 5) waterPlane();
+    const el = mapElement(c.canv, c.x, mapper, lights);
+    const fog = wx && c.depth ? 1 - wx.fog * FOG_W[c.depth] : 1;
+    parts.push(fog < 0.999 ? `<g opacity="${fog.toFixed(3)}">${el}</g>` : el);
+  }
+  if (!water) waterPlane();
+  if (wx && o.rain && wx.rain > 0.01) {
+    // rain: seeded streaks over the frame, slanted by the wind
+    const r = mulberry32(seedInt(o.seed) ^ 0x7A1);
+    const n = Math.round(wx.rain * g.worldW * g.worldH / 900), col = rgbHex(mapper.at(0.5, g.x0));
+    const d = [];
+    for (let i = 0; i < n; i++) {
+      const x = g.x0 + r() * g.worldW, y = g.y0 + r() * g.worldH, l = 8 + r() * 16;
+      d.push(`M${x.toFixed(1)} ${y.toFixed(1)}l${(l * wx.wind * 0.5).toFixed(1)} ${l.toFixed(1)}`);
+    }
+    parts.push(`<path d="${d.join('')}" fill="none" stroke="${col}" stroke-opacity="0.45" stroke-width="0.5"/>`);
+  }
   parts.push('</g></g>');
   if (o.border) parts.push(`<rect x="${M}" y="${M}" width="${pw}" height="${ph}" fill="none" stroke="#000000" stroke-width="0.75"/>`);
   if (o.label) {
@@ -109,7 +156,7 @@ export function buildSVG(world, g, look, o) {
 export function fileName(o, g, ext) {
   const safe = s => String(s).replace(/[^\w.-]+/g, '-').slice(0, 64);
   const tail = g.unit === 'in' ? '_archD-' + (g.pageW > g.pageH ? 'landscape' : 'portrait') : '';
-  return `shanshui_${safe(o.seed)}_${safe(o.paletteId)}_${Math.round(g.x0)}${tail}.${ext}`;
+  return `${o.world && o.world !== 'shanshui' ? safe(o.world) : 'shanshui'}_${safe(o.seed)}_${safe(o.paletteId)}_${Math.round(g.x0)}${tail}.${ext}`;
 }
 
 export function download(blob, name) {
@@ -139,7 +186,7 @@ export async function buildPNG(world, renderer, g, look, o, dpi, onProgress) {
   for (const [bx, by, bw, bh] of blocks) {
     const rect = { x: g.x0 + bx / s, y: g.y0 + by / s, w: bw / s, h: bh / s };
     const grey = await world.rasterRect(rect.x, rect.y, rect.w, rect.h, s, bw, bh);
-    const rgba = renderer.colorize(grey, rect, { ...look, vignette: 0 }, world);
+    const rgba = renderer.colorize(grey, rect, { ...look, vignette: 0, rainPage: [bx, by, pw, ph] }, world);
     ctx.putImageData(new ImageData(rgba, bw, bh), Mp + bx, Mp + by);
     if (onProgress) onProgress(++n / blocks.length);
     await new Promise(r => setTimeout(r, 0));
