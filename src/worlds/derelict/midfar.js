@@ -188,7 +188,10 @@ export function midfar(s, p) {
   let o = '';
   o += pylons(s, p, r);
   if (p.quiet) return o;
-  switch (p.passage) {
+  // thin the edges of each passage: below density 0.67 a chunk may skip its passage piece, so busy
+  // passages fade in and out instead of starting at full height (the busy share stays near a third)
+  const skip = hash01(s, 640, p.c) > (p.dens - 0.22) * 2.2;
+  switch (skip ? '' : p.passage) {
     case 'terminal': o += hall(s, p, r); break;
     case 'hangars': {
       let x = p.x0 + r() * 60;

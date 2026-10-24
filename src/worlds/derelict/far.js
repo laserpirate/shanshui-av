@@ -174,7 +174,7 @@ export function far(s, p) {
   // back row: palest, many thin towers
   const g1 = 17;
   for (let j = Math.ceil(x0 / g1); j * g1 < x1; j++) {
-    if (hash01(s, 501, j) > 0.42 + 0.25 * p.dens) continue;
+    if (hash01(s, 501, j) > 0.14 + 0.5 * p.dens) continue;
     const rr = rngFor(s, j, 502);
     const w = 8 + rr() * 18, h = (25 + Math.pow(rr(), 1.8) * 150) * big;
     o += tower(s, j * g1, Y.horizon - 6, w, h, 205, rr, rr() < 0.5);
@@ -183,7 +183,7 @@ export function far(s, p) {
   const g2 = 41;
   for (let j = Math.ceil(x0 / g2); j * g2 < x1; j++) {
     const h0 = hash01(s, 511, j);
-    if (h0 > 0.3 + 0.35 * p.dens) continue;
+    if (h0 > 0.08 + 0.5 * p.dens) continue;
     const rr = rngFor(s, j, 512);
     if (h0 < 0.05) o += arcology(j * g2, Y.horizon, 70 + rr() * 80, (80 + rr() * 120) * big, 180, rr);
     else o += tower(s, j * g2 + rr() * 10, Y.horizon, 14 + rr() * 26, (30 + Math.pow(rr(), 1.5) * 190) * big, 185, rr, true);
