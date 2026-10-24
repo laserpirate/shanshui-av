@@ -14,6 +14,7 @@ The room is the risk, not the code. Rehearse once on the real projector.
 - [ ] Star the palettes you want (`S`), then Look panel: "P cycles starred only"
 - [ ] Sleep, Windows Update and notifications off; Do Not Disturb on
 - [ ] Blackout tested: `B` from the controller and from the output window
+- [ ] MIDI (optional): plug the controller in before opening the page, Show panel, Enable MIDI, press a target and move a control. Map Blackout to a pad you can find in the dark
 
 ## During
 

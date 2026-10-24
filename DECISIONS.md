@@ -64,7 +64,7 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - Watchdog: a 160 x 90 copy of the frame each second; flat (under 4 levels of range) for 3 s while tiles exist = redraw all tiles; 15 s = the output window reloads itself (the controller keeps state). Blackout and panic pause the check.
 - Output window keys: F and double-click for full screen; B, Space, R, p, P, G, T, Home, [ and ] are sent to the controller; Esc held 1 s there also triggers panic. The output never writes storage (tested).
 - The output extrapolates the controller's position for up to 1 s between messages, then holds.
-- Web MIDI: not in v0.1.0 (preflight answer).
+- Web MIDI: not in v0.1.0 (preflight answer). v0.2.0 adds opt-in learn (Show panel): nothing calls `requestMIDIAccess` until Enable is pressed, so the browser never prompts on load. Targets: speed (CC, absolute, same square-root curve as the slider), play, reseed, palette + and -, blackout (note-on, or a CC crossing the middle upward). Bindings persist per instance. While blacked out, only the blackout binding acts. Tested with a fake input in e2e; not tested with a real controller.
 
 ## Export
 

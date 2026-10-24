@@ -409,6 +409,42 @@ await test('output-mirrors', async () => {
   return { corr: +r.toFixed(3), seed: seeds[0] };
 });
 
+await test('midi-learn', async () => {
+  // fake MIDI input (no hardware): learn a CC for speed and a note for blackout, then drive them
+  const b = await browser(false);
+  const ctx = await b.newContext({ viewport: { width: 1400, height: 800 } });
+  await ctx.addInitScript(() => {
+    const input = { name: 'Fake nanoKONTROL', onmidimessage: null };
+    window.__midi = d => input.onmidimessage && input.onmidimessage({ data: d });
+    navigator.requestMIDIAccess = async () => ({ inputs: new Map([['fake', input]]), onstatechange: null });
+  });
+  const page = await ctx.newPage(); watch(page);
+  await page.goto(BASE + '?i=e2e-midi&seed=5');
+  await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2, null, { timeout: 30000 });
+  const before = await page.evaluate(() => ({ midi: Object.keys(SSAV.cfg.midi).length, access: !!SSAV.midi.access }));
+  await page.click('[data-panel="p-show"]');
+  await page.click('#m-enable');
+  await page.waitForFunction(() => !!SSAV.midi.access);
+  const dev = await page.textContent('#m-dev');
+  await page.evaluate(() => { SSAV.midi.startLearn('speed'); __midi([0xb0, 7, 10]); SSAV.midi.startLearn('black'); __midi([0x91, 36, 100]); });
+  const map = await page.evaluate(() => ({ ...SSAV.cfg.midi }));
+  await page.evaluate(() => __midi([0xb0, 7, 127]));
+  const fast = await page.evaluate(() => SSAV.cfg.speed);
+  await page.evaluate(() => __midi([0xb0, 7, 0]));
+  const slow = await page.evaluate(() => SSAV.cfg.speed);
+  await page.evaluate(() => __midi([0x91, 36, 90]));
+  const black = await page.evaluate(() => SSAV.flags.blackout);
+  await page.evaluate(() => __midi([0x91, 36, 90]));
+  const unblack = await page.evaluate(() => SSAV.flags.blackout);
+  await ctx.close();
+  assert(before.midi === 0 && !before.access, 'MIDI requested before Enable');
+  assert(/Fake nanoKONTROL/.test(dev), 'device not listed: ' + dev);
+  assert(map.speed === 'cc:0:7' && map.black === 'note:1:36', 'bindings ' + JSON.stringify(map));
+  assert(fast === 2000 && slow === 0, 'speed ' + fast + ' ' + slow);
+  assert(black && !unblack, 'blackout toggle ' + black + ' ' + unblack);
+  return { map, fast, slow };
+});
+
 await test('long-travel-cull', async () => {
   const { ctx, page } = await newPage('?i=e2e-cull&seed=13', { w: 960, h: 540 });
   await page.evaluate(() => { SSAV.cfg.speed = 2000; SSAV.pb.speed = 2000; SSAV.pb.play(); });

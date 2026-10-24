@@ -60,7 +60,7 @@ tests/              e2e (Playwright, real GPU), smoke
 cd tools && npm install          # Playwright 1.48.2 + pngjs, dev only
 node tools/serve.mjs --port 8093
 node tools/gate.mjs              # syntax, links, console errors
-node tests/e2e.mjs               # upstream identity, playback, seeds, palettes, export, blackout, full screen, output
+node tests/e2e.mjs               # upstream identity, playback, seeds, palettes, export, blackout, full screen, output, MIDI
 node tools/preflight.mjs         # every palette on this GPU
 node tools/soak.mjs 30           # 30 min at high speed: heap, fps, DOM, chunks
 ```
