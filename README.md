@@ -5,6 +5,9 @@ the infinite procedural landscape scroll with playback controls, seeds, palette 
 output window and print export. The landscape engine is Lingdong Huang's, unchanged. Credit and
 license: `NOTICE.md`, `LICENSE`.
 
+World: shanshui / derelict. `derelict` is a second generator (`src/worlds/derelict/`): a derelict
+airport and drowned megacity edge with lights and a weather cycle. Switch with `W` or the World buttons.
+
 Live: https://laserpirate.github.io/shanshui-av/
 
 ## Run offline
@@ -24,6 +27,7 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?seed=<seed>` | Landscape seed. Same seeds as https://lingdong-.github.io/shan-shui-inf/?seed=... |
 | `?i=<name>` | Instance: its own settings, stars and output channel, so two laptops or two outputs never mix |
 | `?palette=<id>` | Start on a palette from `palettes.json` |
+| `?world=derelict` | Start on the derelict world (shanshui is the default) |
 
 `output.html?i=<name>` is the output window for that instance (no UI, writes nothing).
 
@@ -39,14 +43,17 @@ All palettes live in `palettes.json`. Add one by hand:
 `stops` map ink amount (0 bare paper, 1 darkest ink) to colour. `type: "gradient"` with `ramp`, `drift`
 (`x` or `time`), `period` and `rate` makes colour travel along the scroll. Field notes at the top of
 `tools/build-palettes.mjs`, which built the file (the 25 Studies come from the Kodama Topo pages).
+`light` and `beacon` (hex) colour the derelict world's lights; without them the brightest stop is used.
+Swatches: `docs/palettes/`.
 
 ## Layout
 
 ```
 index.html          controller            output.html   output window
 src/engine/         upstream engine, extracted unchanged (tools/extract-engine.mjs)
-src/workers/        gen-worker (runs the engine), raster-worker (tiles, off the main thread)
-src/core/           world, scene, playback, palettes, store
+src/workers/        gen-worker (runs the engine), derelict-worker, raster-worker (tiles, off the main thread)
+src/worlds/         registry, shanshui (wraps the engine), derelict (planner and layer kits)
+src/core/           world, scene, playback, palettes, weather, store
 src/render/         WebGL2 renderer (palette tables, crossfades)
 src/export/         SVG, PDF (vendor/jspdf + vendor/svg2pdf), PNG
 upstream/           untouched copy of shan-shui-inf@9f754d2
@@ -60,9 +67,12 @@ tests/              e2e (Playwright, real GPU), smoke
 cd tools && npm install          # Playwright 1.48.2 + pngjs, dev only
 node tools/serve.mjs --port 8093
 node tools/gate.mjs              # syntax, links, console errors
-node tests/e2e.mjs               # upstream identity, playback, seeds, palettes, export, blackout, full screen, output, MIDI
+node tests/e2e.mjs               # upstream identity, playback, seeds, palettes, export, blackout, full screen, output, MIDI,
+                                 # worlds: shanshui vs v0.2.0 (--v020=<url of the v0.2.0 tag served>), derelict round trip, weather, lights
 node tools/preflight.mjs         # every palette on this GPU
 node tools/soak.mjs 30           # 30 min at high speed: heap, fps, DOM, chunks
+node tools/soak.mjs 30 --world=derelict --heavy --worldevery=5 --fpsmin=50 --out=soak-derelict.json
+node tools/strip.mjs             # greyscale strips of the derelict world
 ```
 
 Decisions and numbers: `DECISIONS.md`.

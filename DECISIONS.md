@@ -96,3 +96,66 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - 48 px buttons and 18 px labels; Big targets: 64 px and 23 px, brighter borders.
 - Key map in `src/ui/keys.js`, one table, duplicate-checked by the e2e suite. Case matters: s stars the seed, S (Shift) stars the palette; p next palette, P previous.
 - The panels sit above the bar on the right; one open at a time.
+
+## Worlds (v0.3.0)
+
+- A world is a generator behind the same worker messages: `init` -> chunks, `right` / `left` (generate up to x), `cull` -> removed ids. World (`src/core/world.js`), the raster worker, the renderer and export treat every world alike. The registry is `src/worlds/registry.js`.
+- Interface, per world module (`src/worlds/<name>/index.js`):
+  - `meta`: name, height (700.5 world px for both, so framing and Arch D math are shared), chunk width (512), layers back to front, a line on how seeds work;
+  - `init(seed)` -> state;
+  - `generate(state, chunk)` -> that chunk's elements `[{id, layer, depth, x, canv}]`, back to front. The handoff wrote `generate(chunkIndex)`; the state argument keeps the module free of globals.
+- `src/worlds/shanshui/` wraps the existing engine and says why its `generate` is not random access: upstream draws every chunk from one global PRNG in travel order, so the worker advances to a chunk. Nothing in the shanshui path changed.
+- Registry fields: `kind` (shader branch: 0 ink only, 1 ink + lights + weather), `worker`, `module`, `chunked` (every chunk is a pure function of seed and chunk), `cull` (px kept behind the view: shanshui 20,000, derelict 12,000), `weather`.
+- Adding a third world: a module with the interface, a worker that answers the same messages (copy `derelict-worker.js`), a registry entry, a button in `#b-world`. Kind 1 gets lights and weather if the elements carry `data-l` lights and a depth.
+- Shanshui loads first; `?world=derelict` selects; W or the World buttons switch with the reseed crossfade. The seed carries over. History and stars store `derelict:<seed>` for derelict and the bare seed for shanshui, so v0.2.0 lists still load.
+- Shanshui output is pixel-identical to v0.2.0: the e2e test serves the `shanshui-av-v0.2.0` tag from a worktree and compares 1280 x 720 frames (5 seed, palette, x cases): 0 bytes differ.
+
+## Derelict world
+
+- Vocabulary from Kodama topos 17 to 24 (table below); Rain World only for atmosphere (layered rust, rain, a ruin that keeps a few lights on). No assets, characters, symbols or names from either. Runway numbers and the airliner livery are invented (a 7-segment glyph, two stripes).
+- Seeds: `mulberry32(hash(seed, chunk, stream))` per chunk and layer; the planner reads only seeded hashes and value noise at the chunk and its neighbours. A chunk never depends on generation order: 100 of 100 chunks identical generated in reverse (Node), and the e2e test drives 50,000 px out (the start is culled) and back, comparing tile hashes from the raster worker.
+- Five depth layers: far (megastructures, two rows of towers, arcologies, cranes, seawall), mid-far (terminal halls, hangars, tank farms, container cranes, low roofs, radar, pylons), mid (control tower, airliner, parking structure, jet bridges, monorail), ground (runway with invented threshold numbers, taxiway, fence, carts, pipes, mangrove, stilt houses, nets, longtails, rubble), near (cables, chains, vines, girders, lamp posts, reeds).
+- Planner: a smooth density field; quiet stretches (open flooded runway and haze) where density < 0.22; dense passages in runs of 7 chunks (terminal, tanks, kampung, hangars, port); landmarks in slots with minimum spacing (tower at most once per 23 chunks, airliner 13, parking 17, radar 9); a higher landmark wins within one chunk.
+- Element id = chunk x 8 + layer + 1. Paint order is depth first, then chunk, so a near cable from one chunk never hides under a far tower of the next.
+
+| Topo | Taken |
+| --- | --- |
+| 17 Ayutthaya | Flood plane, scaffold fused to ruin, hanging vines, lanterns, a flickering neon glyph, warm windows, a distant spire city; its day to night cycle as the model for the weather keyframes. |
+| 18 neo-Bangkok | Longtail and wake, window flicker, reflection column on the water, ripple and current lines; its dry, monsoon, flood, night keyframes. |
+| 19 Nusantara | Drowned planned city, the rain layer, pale stone and tower grey. |
+| 20 Singapore | Seawall and barrier line with breaches, a cool glass ramp with a mint accent. |
+| 21 Jakarta | Pulsing canal water, tower windows with blinking red beacons, kampung low districts, seawall, rain; cycle values for rain, water, veil and windows. |
+| 22 Manila | Rain, ripples, reflections, typhoon wind (the slant of the rain), stilt houses, nets, small boats. |
+| 23 Kuala Lumpur | Steel and tower ramp, a teal edge light along the water, channel lines. |
+| 24 neo-Saigon | Drowned-ward towers with breathing windows, shimmer on the flood surface. |
+
+- Each topo's `PAL` (exact hex) is one palette of the Megacity arc group, `arc-17` to `arc-24`: scene background as ground, ink ramp dark to light, window colour as the light accent, a second accent for beacons.
+
+## Lights, aux tile and weather
+
+- Two-channel tiles: the grey R8 ink tile as before, plus (derelict only) an RGBA8 aux tile at half resolution: R depth layer x 50, G light glow (additive radial gradients, drawn on a CPU canvas in the raster worker), B light kind x 32 + phase. Kinds: steady, breathe, blink, flicker, chase, beacon. The shader animates them from the code, so a blinking runway never re-rasters a tile.
+- Lights live in the element strings as `circle` and `polyline` elements with a `data-l` attribute (kind, phase, intensity), so export sees them too.
+- Light colour: the palette's `light` (beacons: `beacon`); palettes without one use their brightest stop, so all 49 palettes work on derelict (e2e: none blank).
+- Night: colour x mix(0.42, 1, day) plus glow x mix(1.8, 0.22, day), plus a hot core above glow 0.25 so a small window light still reads at 720p.
+- Fog per depth layer (far 0.8 to near 0.02 of the fog value) plus a horizon haze band. Rain is a separate full-screen pass, three depths of streaks slanted by wind, coloured from the palette at mid ink. Both in the shader; no tile re-rasters for weather.
+- Water: a flood plane at world y = 700 - level x 190, covering far, mid-far, mid and ground (preflight answer 4); the near layer and the rain stay in front. Below the line the shader mirrors ink and lights about the water line with ripples. The water test uses the filtered depth, so the edge against near pieces is smooth. Water level is a visual control only: no years or figures anywhere.
+- Weather cycle: dry, drizzle, downpour, flood, night, one keyframe per fifth, held through the middle of each span and smoothstepped across the rest. Auto runs a 6 min loop (minimum 10 s); a phase can be pinned (eases there); MIDI CC 4 scrubs the position. Rain, wind, water, fog and light each have a slider: grabbing it holds that value, Follow releases it. Shown values ease over about 1/3 s.
+- Exports split into blocks (300 dpi Arch D PNG is 2 blocks tall) lose a reflection whose source sits in the other block. Accepted: a 150 dpi PNG is one block.
+
+## Export (derelict)
+
+- SVG and PDF: night darkens mapped colours by the same factor as the screen; fog is a group opacity per depth layer; the flood is a flat water plane with a shore line, inserted before the near layer (no reflections in vector). Lights on (default): accent circles (radius x 1.3) and neon strokes in the light and beacon colours. Rain off by default ("rain in export"); on, it is a seeded path of streaks slanted by the wind.
+- PNG uses the screen pipeline: glow and reflections as on screen; rain only with the toggle, laid out on the whole page so blocks join.
+- File names start with the world: `derelict_<seed>_<palette>_<x>...`; shanshui names are unchanged.
+
+## Overnight calls (2026-10-23 to 24)
+
+- Derelict cull distance 12,000 px (not 20,000): travel back regenerates the same landscape, so a shorter window only saves memory.
+- A derelict tile is final only once generation is 2,000 px past both of its edges (it fills both ways).
+- Heaviest weather for perf, soak and GPU checks = downpour rain and wind, full flood, night, fog 0.8, all held.
+- The output window gets the weather in the frame message and never runs its own cycle, so the projector cannot drift from the controller.
+- Panic freezes the weather cycle with the scroll.
+- The mirror test holds rain at 0: streaks animate per frame, so two windows a frame apart never match; flood and night stay on.
+- Far window lights brightened (intensity 0.6 to 0.95) and a hot core added, after the night test showed them under-reading at 720p.
+- MIDI CC 4 (channel 1) is bound to the weather cycle by default, unless learn moved it; clearing it brings it back on reload.
+- The gate greps tracked files for password-like assignments; the gate itself holds no password.
