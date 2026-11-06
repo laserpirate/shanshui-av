@@ -160,6 +160,7 @@ function stop() {
   const culled = w && w.culledBelow > -2000 && !w.meta.chunked;
   if (Math.abs(pb.x) > cap * 0.9 || culled) { pb.pause(); pb.k = 0; setSeed(cur.seed, { history: false, why: 'stop, restart from 0' }); }
   else pb.goTo(0);
+  if (scoreHook) scoreHook.stop();
   renderPlay();
 }
 function updateUrl() {
@@ -272,6 +273,13 @@ function frameState(now) {
   };
 }
 
+// ---------- score (?score=1): laserpirate/sonar's ambient score, controller only ----------
+let scoreHook = null;
+if (new URLSearchParams(location.search).get('score') === '1') {
+  import('./score/sonar-score.js').then(m => { scoreHook = m.attach({ pb, weather, flags, cur, scene, worldOf, view: () => lastView, log }); window.SSAV.scoreHook = scoreHook; })
+    .catch(e => log('error', 'score: ' + (e && e.message || e)));
+}
+
 // ---------- loop ----------
 let last = performance.now();
 let lastView = null;
@@ -301,6 +309,7 @@ function tick(now) {
     lastView = scene.frame(fs, { blackout: flags.blackout, panic: flags.panic });
     lastView.W = canvas.clientWidth; lastView.H = canvas.clientHeight;
     if (chan) chan.postMessage({ type: 'frame', fs, flags: { ...flags }, custom: cfg.gradient ? { ...cfg.gradient, rev: gradRev } : null });
+    if (scoreHook) scoreHook.frame(now, dt);
     if (out.connected && now - out.last > 3500) { out.connected = false; log('warn', 'output window stopped answering'); }
     hudTick(now);
     frameTick();

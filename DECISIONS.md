@@ -173,3 +173,12 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - Far window lights brightened (intensity 0.6 to 0.95) and a hot core added, after the night test showed them under-reading at 720p.
 - MIDI CC 4 (channel 1) is bound to the weather cycle by default, unless learn moved it; clearing it brings it back on reload.
 - The gate greps tracked files for password-like assignments; the gate itself holds no password.
+
+## Score (branch score-v01, 2026-11-06, not merged)
+
+- `?score=1` loads laserpirate/sonar's score (`src/score/sonar-score.js`): from `https://laserpirate.github.io/sonar/js/score.js` when online, from `vendor/sonar/` (six files, `VERSION.txt` names the sonar commit) when that fails or with `?offline=1`. Controller only; the output window never loads it.
+- app.js changes: one import block behind the flag, one call per frame in `tick`, one call in `stop()`. Flag off: no request, no DOM change; `shanshui-unchanged` and the other 24 e2e checks pass.
+- A tag enters when its anchor x crosses the view's right edge (geometry), not when the generator delivers it, so worker timing never decides what the score hears. Water layers of mounts (y - 10000) are skipped.
+- Blackout or panic call `score.panic()`; clearing them while playing resumes. Home calls `score.stop()`; Space resumes. A reseed (any path) reseeds the score.
+- Audio starts on the first click or key press with the flag on; until then the score runs silent.
+- sonar decisions: SN-36 to SN-38 in the sonar folder.

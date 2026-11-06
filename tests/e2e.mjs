@@ -718,6 +718,33 @@ await test('derelict-output-fullscreen', async () => {
   return { corr: +r.toFixed(3), fullscreenSd: +fsp.sd.toFixed(1) };
 });
 
+// ?score=1 (branch score-v01): laserpirate/sonar's score reads the scroll; 10 s of play gives a
+// non-empty event log, and a second run of the same seed gives the same log (times left out: frame
+// timing differs between runs, the order of plant, generations, notes and rests must not)
+await test('score-flag', async () => {
+  const runOnce = async () => {
+    const { ctx, page } = await newPage('index.html?score=1&seed=42');
+    await page.waitForFunction(() => SSAV.scoreHook && SSAV.scoreHook.score, null, { timeout: 15000 });
+    // fake clock: rAF and performance.now advance in fixed 16 ms frames, so both runs see the same
+    // frame times; generator workers run on real time between steps and stay 3500 px ahead
+    await page.clock.install();
+    await page.evaluate(() => { SSAV.pb.speed = 120; SSAV.pb.play(); });
+    for (let i = 0; i < 40; i++) { await page.clock.runFor(250); await page.waitForTimeout(60); }
+    const r = await page.evaluate(() => ({
+      from: SSAV.scoreHook.from, strip: document.getElementById('hud-score').textContent,
+      log: SSAV.scoreHook.score.log.map(e => [e.k, e.plant ?? e.n ?? e.g ?? e.p ?? e.c ?? '', e.src ?? ''].join(':')),
+    }));
+    await ctx.close();
+    return r;
+  };
+  const a = await runOnce(), b = await runOnce();
+  const notes = a.log.filter(s => s.startsWith('note:')).length;
+  assert(a.log.length > 2 && notes > 0, 'empty score log: ' + a.log.join(' '));
+  assert(/^score on · seed 42 · p\d\d · gen \d+ · bpm \d+$/.test(a.strip), 'strip: ' + a.strip);
+  assert(a.log.join() === b.log.join(), 'logs differ:\n' + a.log.join(' ') + '\n' + b.log.join(' '));
+  return { from: a.from, events: a.log.length, notes, strip: a.strip };
+});
+
 for (const b of [headless, headed]) if (b) await b.close();
 const failed = results.filter(r => !r.pass);
 const summary = { date: new Date().toISOString(), base: BASE, pass: failed.length === 0 && consoleProblems.length === 0, tests: results.length, failed: failed.map(f => f.name), consoleProblems };
