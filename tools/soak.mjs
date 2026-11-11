@@ -3,6 +3,8 @@
 // nodes, element and tile counts, worlds, watchdog events.
 //   node tools/serve.mjs --port 8093 &   then   node tools/soak.mjs [minutes=30] [http://localhost:8093/] [--speed=1500] [--every=2] [--palevery=1] [--headed]
 //   nashua: --world=nashua [--ends=pingpong|loop|handover] (--heavy also holds the 1936 level)
+//   --fxevery=N cycles the slit-scan modes (off, strip, smear, displace) every N minutes
+//   --midi: a fake nanoKONTROL, enabled, sweeping slit position, slit width, ink and the weather knob at 50 messages/s
 //   derelict: --world=derelict --heavy (downpour + flood + night held) --worldevery=5 (switch world every N min) --fpsmin=50 --out=soak-derelict.json
 // Pass: no console errors, no reloads, no context loss, fps (1 s average) min >= 45 and mean >= 58, heap growth first third to last third < 8 MB,
 // DOM nodes flat, elements and tiles bounded. Writes test-results/soak.json.
@@ -16,7 +18,8 @@ const BASE = args.find(a => a.startsWith('http')) || 'http://localhost:8093/';
 const SPEED = Number((args.find(a => a.startsWith('--speed=')) || '--speed=1500').slice(8));
 const headed = args.includes('--headed');
 const opt = (k, d) => Number((args.find(a => a.startsWith('--' + k + '=')) || '=' + d).split('=')[1]);
-const EVERY = opt('every', 2), PAL_EVERY = opt('palevery', 1), WORLD_EVERY = opt('worldevery', 0), FPS_MIN = opt('fpsmin', 45);
+const EVERY = opt('every', 2), PAL_EVERY = opt('palevery', 1), WORLD_EVERY = opt('worldevery', 0), FPS_MIN = opt('fpsmin', 45), FX_EVERY = opt('fxevery', 0);
+const MIDI = args.includes('--midi');
 const WORLD = (args.find(a => a.startsWith('--world=')) || '--world=shanshui').slice(8);
 const HEAVY = args.includes('--heavy');
 const ENDS = (args.find(a => a.startsWith('--ends=')) || '--ends=pingpong').slice(7);
@@ -27,6 +30,12 @@ const browser = await chromium.launch({
   args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--window-size=1600,900', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'],
 });
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+if (MIDI) await ctx.addInitScript(() => {
+  const input = { id: 'in1', name: 'nanoKONTROL', type: 'input', state: 'connected', onmidimessage: null };
+  const access = { inputs: new Map([['in1', input]]), outputs: new Map(), onstatechange: null };
+  navigator.requestMIDIAccess = async () => access;
+  window.__midiSweep = () => { let k = 0; setInterval(() => { k++; const v = Math.round(63.5 + 63.5 * Math.sin(k / 40)); for (const cc of [14, 15, 16, 20]) if (k % 4 === [14, 15, 16, 20].indexOf(cc)) input.onmidimessage && input.onmidimessage({ data: Uint8Array.from([0xb0, cc, v]) }); }, 5); };
+});
 const page = await ctx.newPage();
 const problems = [];
 const watch = (p, tag) => {
@@ -53,6 +62,9 @@ await page.evaluate(o => {
   // heaviest weather: downpour rain and wind, full flood, night, held for the whole run
   if (o.heavy) { SSAV.cfg.weather.mode = 'downpour'; Object.assign(SSAV.cfg.weather.holds, { rain: 1, wind: 0.8, water: 1, fog: 0.8, light: 0 }); }
 }, { speed: SPEED, every: EVERY, palEvery: PAL_EVERY, heavy: HEAVY });
+if (MIDI) { await page.evaluate(() => document.getElementById('m-enable').click()); await page.waitForFunction(() => !!SSAV.midi.access); await page.evaluate(() => window.__midiSweep()); }
+const FX = ['off', 'strip', 'smear', 'displace'];
+let nextFx = FX_EVERY * 60000, fxi = 0;
 const cdp = await ctx.newCDPSession(page);
 const cdpOut = await ctx.newCDPSession(out);
 async function heap(c) { await c.send('HeapProfiler.collectGarbage'); return (await c.send('Runtime.getHeapUsage')).usedSize / 1048576; }
@@ -65,6 +77,7 @@ const dips = [];   // every 1 s sample under 50 fps, with what was happening
 while (Date.now() - t0 < MIN * 60000) {
   for (let k = 0; k < 30; k++) {
     await page.waitForTimeout(1000);
+    if (FX_EVERY && Date.now() - t0 >= nextFx) { nextFx += FX_EVERY * 60000; fxi = (fxi + 1) % FX.length; await page.evaluate(m => { SSAV.cfg.fx.mode = m; }, FX[fxi]); }
     if (WORLD_EVERY && Date.now() - t0 >= nextWorld) { nextWorld += WORLD_EVERY * 60000; switches++; await page.evaluate(() => SSAV.nextWorld()); }
     const f = await page.evaluate(() => [SSAV.scene.fps, SSAV.fading, SSAV.seed, SSAV.palette, SSAV.worldName]);
     const fo = await out.evaluate(() => SSOUT.scene.fps);

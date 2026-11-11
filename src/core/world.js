@@ -5,6 +5,8 @@ import { TILE_W, WORLD_H, AHEAD, READY_MARGIN } from './constants.js';
 import { worldOf } from '../worlds/registry.js';
 
 const base = new URL('../workers/', import.meta.url);
+// ?baked=1: tiles from baked/ (tools/bake.mjs) where they exist, drawn live elsewhere
+const BAKED = typeof location !== 'undefined' && new URLSearchParams(location.search).get('baked') === '1' ? new URL('../../baked/', import.meta.url).href : null;
 let worldCount = 0;
 
 export class World {
@@ -18,6 +20,8 @@ export class World {
     this.onLog = onLog || (() => {});
     this.chunks = new Map();          // id -> {id, tag, x, y, canv, minx, maxx}
     this.order = [];
+    this.hidden = null;               // data worlds: mode layers not drawn (Set), null = all
+    this._drawOrder = null;
     this.xmin = 0; this.xmax = 0;
     this.started = false;             // first batch arrived
     this.paper = null;                // {w, h, data, mean}
@@ -39,7 +43,7 @@ export class World {
     this.ras.onerror = e => this._fail('raster: ' + (e.message || 'error'));
     this.gen.postMessage(this.opts ? { type: 'init', seed: this.seed, opts: this.opts } : { type: 'init', seed: this.seed });
     if (this.meta.data) {             // data worlds keep the pack on the main thread too (water line, facts, labels)
-      import('../worlds/nashua/pack.js').then(m => m.loadPack().then(p => { if (!this.disposed) { this.pack = p; this._packMod = m; this.keepK = [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
+      import('../worlds/nashua/pack.js').then(m => m.packFor(this.opts || {}).then(({ pack: p, designMissing }) => { if (!this.disposed) { this.pack = p; this.designMissing = designMissing; this._packMod = m; this.keepK = [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
         .catch(e => this._fail('pack: ' + (e && e.message || e)));
       this.waterLine = lv => {
         if (!this.pack) return null;
@@ -48,6 +52,7 @@ export class World {
         return this._wl;
       };
     }
+    this._bk = new Map();             // baked indexes by bake key (null = none)
     this.onTile = null;               // (tile, grey, scale) set by the renderer owner
     this.onTileDrop = null;           // (tile) to free textures
   }
@@ -97,7 +102,7 @@ export class World {
     }
     if (m.type === 'tile') {
       this.pendingRaster = Math.max(0, this.pendingRaster - 1);
-      if (typeof m.key === 'string') { const cb = this._exportCbs && this._exportCbs.get(m.key); if (cb) { this._exportCbs.delete(m.key); if (m.aux) m.grey.aux = m.aux; cb(m.grey); } return; }
+      if (typeof m.key === 'string') { const cb = this._exportCbs && this._exportCbs.get(m.key); if (cb) { this._exportCbs.delete(m.key); if (m.aux) m.grey.aux = m.aux; m.grey.hash = m.hash; cb(m.grey); } return; }
       const t = this.tiles.get(m.key);
       if (!t || !this.onTile) return;
       t.pending = false;
@@ -113,8 +118,10 @@ export class World {
   update(camX, viewW, dir, scale) {
     if (this.disposed) return;
     const camR = camX + viewW;
-    // generation, one chunk at a time
-    if (this.meta.chunked) {
+    const B = this._baked(), k0b = Math.floor(camX / TILE_W) - 1, k1b = Math.floor(camR / TILE_W) + 2;
+    const covered = B && k0b >= B.k0 && k1b <= B.k1;
+    // generation, one chunk at a time (not while baked tiles cover the view)
+    if (covered) { /* nothing to generate */ } else if (this.meta.chunked) {
       // chunks regenerate identically, so fill both sides of the view, travel side first
       if (!this.genBusy && this.started) {
         const needR = this.xmax < camR + AHEAD, needL = this.xmin > camX - AHEAD;
@@ -150,6 +157,12 @@ export class World {
       if (this.pendingRaster >= 2) break;
       let t = this.tiles.get(k);
       if (!t) { t = { k, tex: null, scale: 0, dirty: true, pending: false }; this.tiles.set(k, t); }
+      if (B && k >= B.k0 && k <= B.k1 && !B.miss.has(k)) {
+        if (t.bakedKey === B.key || t.pending) continue;
+        t.pending = true; this.pendingRaster++; this._loadBaked(B, k, t);
+        continue;
+      }
+      if (t.bakedKey) { t.bakedKey = null; t.dirty = true; }
       const stale = t.dirty || Math.abs(t.scale - scale) > 1e-6;
       if (!stale || t.pending) continue;
       // wait until the generator is far enough past this tile that nothing new can land on it,
@@ -159,7 +172,7 @@ export class World {
       if (!final && !(onScreen && !t.tex && this.xmax >= (k + 1) * TILE_W && this.xmin <= k * TILE_W)) continue;
       t.pending = true; t.dirty = !final; t.reqScale = scale;
       this.pendingRaster++;
-      this.ras.postMessage({ type: 'tile', key: k, x0: k * TILE_W, w: TILE_W, h: WORLD_H, scale, order: this.order, aux: this.meta.kind === 1 });
+      this.ras.postMessage({ type: 'tile', key: k, x0: k * TILE_W, w: TILE_W, h: WORLD_H, scale, order: this.drawOrder(), aux: this.meta.kind === 1 });
     }
   }
 
@@ -170,7 +183,57 @@ export class World {
     return n ? ok / n : 0;
   }
 
+  // the bake key: world, seed, data options and the hidden mode layers (tools/bake.mjs uses the same)
+  bakeKey() {
+    const o = this.opts || {};
+    return [this.kind, this.seed, Object.keys(o).sort().map(k => k + o[k]).join('') || 'none', this._hiddenKey || 'all'].join('_').replace(/[^\w.-]/g, '');
+  }
+  _baked() {
+    if (!BAKED) return null;
+    const key = this.bakeKey(), e = this._bk.get(key);
+    if (e !== undefined) return e === 'loading' ? null : e;
+    this._bk.set(key, 'loading');
+    fetch(BAKED + key + '/index.json').then(r => (r.ok ? r.json() : null)).catch(() => null).then(j => {
+      if (this.disposed) return;
+      this._bk.set(key, j ? { ...j, key, root: BAKED + key + '/', miss: new Set() } : null);
+      this.onLog('info', j ? 'baked tiles ' + j.k0 + ' to ' + j.k1 + ' for ' + key : 'no baked tiles for ' + key + ', drawing live');
+      if (j) this.refreshTiles();
+    });
+    return null;
+  }
+  // one baked tile: 'SSB1', grey w, h, aux w, h (u32) then grey bytes and aux bytes, gzip
+  _loadBaked(B, k, t) {
+    const done = () => { this.pendingRaster = Math.max(0, this.pendingRaster - 1); t.pending = false; };
+    fetch(B.root + k + '.bin.gz').then(r => { if (!r.ok) throw new Error(r.status); return new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); })
+      .then(buf => {
+        done();
+        if (this.disposed || this.tiles.get(k) !== t) return;
+        const h = new Uint32Array(buf, 0, 5);
+        if (h[0] !== 0x31425353) throw new Error('not a baked tile');
+        const gn = h[1] * h[2], grey = { width: h[1], height: h[2], data: new Uint8Array(buf, 20, gn) };
+        const aux = h[3] ? { width: h[3], height: h[4], data: new Uint8Array(buf, 20 + gn, h[3] * h[4] * 4) } : null;
+        t.bakedKey = B.key; t.dirty = false; t.final = true; t.hash = B.tiles ? B.tiles[k] : 0;
+        if (this.onTile) this.onTile(t, grey, B.scale, aux);
+      })
+      .catch(e => { if (t.pending) done(); B.miss.add(k); t.dirty = true; this.onLog('warn', 'baked tile ' + k + ' unreadable (' + (e && e.message || e) + '), drawing live'); });
+  }
+
   refreshTiles() { for (const t of this.tiles.values()) t.dirty = true; }
+
+  // modes: the paint order without the hidden layers (elements carry their mode layer)
+  drawOrder() {
+    if (!this.hidden) return this.order;
+    if (!this._drawOrder || this._drawOrder.src !== this.order) this._drawOrder = { src: this.order, ids: this.order.filter(id => { const c = this.chunks.get(id); return !(c && this.hidden.has(c.layer)); }) };
+    return this._drawOrder.ids;
+  }
+  // layers: the mode layers to draw (array), or null for all; redraws the tiles when it changes
+  setLayers(layers, all) {
+    const hide = layers && all ? all.filter(l => !layers.includes(l)) : [];
+    const key = hide.join(',');
+    if (key === (this._hiddenKey || '')) return;
+    this._hiddenKey = key; this.hidden = hide.length ? new Set(hide) : null; this._drawOrder = null;
+    this.refreshTiles();
+  }
 
   // make sure elements exist up to x1 (export of a frame ahead of the view); resolves when generated.
   // Chunked worlds also fill back to x0 (a frame behind the view regenerates exactly).
@@ -192,7 +255,7 @@ export class World {
   // elements overlapping [x0, x1], in upstream paint order
   elementsIn(x0, x1) {
     const out = [];
-    for (const id of this.order) { const c = this.chunks.get(id); if (c && c.maxx >= x0 && c.minx <= x1) out.push(c); }
+    for (const id of this.drawOrder()) { const c = this.chunks.get(id); if (c && c.maxx >= x0 && c.minx <= x1) out.push(c); }
     return out;
   }
 
@@ -203,7 +266,7 @@ export class World {
     return new Promise(res => {
       this._exportCbs.set(key, res);
       this.pendingRaster++;
-      this.ras.postMessage({ type: 'tile', key, x0, y0, w, h, scale, pw, ph, order: this.order, aux: this.meta.kind === 1 });
+      this.ras.postMessage({ type: 'tile', key, x0, y0, w, h, scale, pw, ph, order: this.drawOrder(), aux: this.meta.kind === 1 });
     });
   }
 

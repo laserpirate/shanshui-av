@@ -157,6 +157,13 @@ void main() {
   o = vec4(0.0, 0.0, 0.0, uAmt * smoothstep(0.45, 1.05, d));
 }`;
 
+// master dim: a flat black pass, drawn only below 1, so the default picture is untouched
+const DIM_FS = `#version 300 es
+precision highp float;
+uniform float uAmt;
+out vec4 o;
+void main() { o = vec4(0.0, 0.0, 0.0, uAmt); }`;
+
 const NO_WEATHER = { rain: 0, wind: 0, water: 0, fog: 0, light: 1 };
 
 export class Renderer {
@@ -187,6 +194,7 @@ export class Renderer {
     };
     this.main = prog(FS);
     this.vig = prog(VIG_FS);
+    this.dim = prog(DIM_FS);
     this.rain = prog(RAIN_FS);
     const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
@@ -368,6 +376,15 @@ export class Renderer {
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.uniform2f(this.vig.u.uView, W, H); gl.uniform4f(this.vig.u.uRect, 0, 0, W, H); gl.uniform4f(this.vig.u.uWorld, 0, 0, 1, 1);
       gl.uniform1f(this.vig.u.uAmt, f.vignette);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+    if (f.master != null && f.master < 0.999) {
+      gl.useProgram(this.dim.p);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      if (this.dim.u.uView) gl.uniform2f(this.dim.u.uView, W, H);
+      if (this.dim.u.uRect) gl.uniform4f(this.dim.u.uRect, 0, 0, W, H);
+      if (this.dim.u.uWorld) gl.uniform4f(this.dim.u.uWorld, 0, 0, 1, 1);
+      gl.uniform1f(this.dim.u.uAmt, 1 - Math.max(0, f.master));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
     gl.disable(gl.BLEND);

@@ -8,11 +8,18 @@ import { INSTANCE, load, save, saveNow } from './core/store.js';
 import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download } from './export/export.js';
 import { drawTestCard } from './ui/testcard.js';
 import { KEYS } from './ui/keys.js';
-import { Midi, MIDI_TARGETS } from './ui/midi.js';
+import { Midi, MIDI_TARGETS, PRESETS, presetFor, mapOf } from './ui/midi.js';
+import { MidiOut, OUT_CC, featureNotes } from './ui/midiout.js';
 import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
 import { ReachOverlay, factLine } from './ui/reach.js';
+import { SectionInset } from './ui/section.js';
 import { xOf, sOf, reachW } from './worlds/nashua/pack.js';
+import { MODES, MODE_ORDER, MODE_DEFAULT, LAYERS, layersOf } from './worlds/nashua/modes.js';
+import { wsSync } from './wall.js';
+import { loadGauge, dayOf, isoOf, qAt, lvOfQ, timeFact, MARCH_1936 } from './worlds/nashua/gauge.js';
+import { offline } from './offline.js';
+import { Ladder } from './core/ladder.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -25,12 +32,15 @@ const DEF = {
   show: { auto: false, mode: 'min', every: 5, src: 'new', autoPal: false, palEvery: 3, resume: false, resumeS: 8, fade: 2.5 },
   q: 'auto', big: false,
   gradient: null,
-  midi: {},
+  midi: {}, midiDev: {}, master: 1,
   exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150, lights: true, rain: false },
   weather: { mode: 'auto', period: 360, holds: {} },
+  // slit-scan / time-smear (off by default): mode off|strip|smear|displace, source scroll|video
+  fx: { mode: 'off', source: 'scroll', slit: 0.5, width: 2, dir: 1, depth: 64, mix: 1, freeze: false, axis: 'x', slope: 1 },
   // data world (nashua): bank in view, vertical exaggeration, water level position (0 = first named level),
   // what happens at the ends of the reach, labels in the controller and on the output, fact line on the output
-  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false },
+  // mode: a list of layers (modes.js); sections: the live section toggle (X) on top of any mode
+  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false, mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false } },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
@@ -108,8 +118,13 @@ let epoch = 0;
   if (q.get('ve') && isFinite(+q.get('ve'))) N.ve = Math.max(1, Math.min(20, Math.round(+q.get('ve'))));
   if (['handover', 'loop', 'pingpong'].includes(q.get('ends'))) N.ends = q.get('ends');
   if (q.get('level') && isFinite(+q.get('level'))) N.level = Math.max(0, +q.get('level'));
+  if (MODES[q.get('mode')]) N.mode = q.get('mode');
+  if (q.get('morph') && isFinite(+q.get('morph'))) N.morph = Math.max(0, Math.min(1, +q.get('morph')));
 }
-const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve } : undefined;
+const modeLayers = () => layersOf(cfg.nashua.mode, cfg.nashua.sections || cfg.nashua.mode === 'sections');
+// morph is quantized to 5% steps: each step is a regenerated reach (pure function of bank, ve, morph)
+const morphQ = v => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
+const optsFor = world => WORLDS[world] && WORLDS[world].data ? (morphQ(cfg.nashua.morph) > 0 ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve, morph: morphQ(cfg.nashua.morph) } : { bank: cfg.nashua.bank, ve: cfg.nashua.ve }) : undefined;
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
 cur.opts = optsFor(cur.world);
 let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
@@ -155,6 +170,10 @@ function setSeed(seed, { history = true, why = '', world = cur.world, keepX } = 
   renderSeed(); renderWorld();
   log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
+offline();
+const wallUrl = new URLSearchParams(location.search).get('sync');
+const wall = wallUrl ? wsSync(wallUrl, 'controller', null, s => log('info', 'wall relay ' + s)) : null;
+let wallSent = 0;
 function reseed(why) { setSeed(newSeed(), isData() ? { why, keepX: pb.x } : { why }); }
 function setWorld(w, why = 'world') {
   if (!WORLDS[w] || w === cur.world) return;
@@ -237,13 +256,10 @@ function showTick(now, dt, vWorld) {
 }
 
 // ---------- quality ----------
-let autoQ = 1, lowSince = 0;
+// the ladder (core/ladder.js) when quality is auto; the output runs its own
+const ladder = new Ladder((l, m) => log(l, m));
 function qualityTick(now) {
-  const want = cfg.q === 'auto' ? autoQ : +cfg.q;
-  if (cfg.q === 'auto') {
-    if (scene.fps < 45 && !flags.blackout && !document.hidden) { if (!lowSince) lowSince = now; if (now - lowSince > 5000 && autoQ > 0.5) { autoQ = autoQ > 0.75 ? 0.75 : 0.5; lowSince = 0; log('warn', 'quality lowered to ' + autoQ + ' (fps under 45)'); } }
-    else lowSince = 0;
-  }
+  const want = cfg.q === 'auto' ? ladder.tick(now, scene.fps, !flags.blackout && !document.hidden).q : +cfg.q;
   scene.q = want * (out.connected && !out.fullPreview ? 0.5 : 1);
 }
 
@@ -266,6 +282,8 @@ if (chan) chan.onmessage = e => {
 function openOutput() {
   const url = new URL('output.html', location.href);
   if (INSTANCE !== 'main') url.searchParams.set('i', INSTANCE);
+  // the output draws baked tiles and works offline when the controller does
+  for (const k of ['baked', 'offline']) { const v = new URLSearchParams(location.search).get(k); if (v) url.searchParams.set(k, v); }
   if (out.connected) return toast('Output window already open');
   // noopener: the output gets its own browsing context group, so Chrome gives it its own process and
   // main thread and a busy controller never stalls the projector. Everything goes over BroadcastChannel.
@@ -284,15 +302,17 @@ function frameState(now) {
   if (fade && fade.t0) { const t = Math.min(1, (now - fade.t0) / (fade.dur * 1000)); a = t * t * (3 - 2 * t); }
   else if (fade) a = 0;
   worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts });
+  for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = modeLayers(); w.all = LAYERS; }
   return {
     level: lvShown,
-    reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts },
+    reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts, time: timeText() },
     worlds, dir: pb.dir,
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
-    u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign },
+    u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign, master: cfg.master },
     time: (now - time0) / 1000,
     weather: weather.values(),
     v: pb.velocity, t: Date.now(),
+    fx: cfg.fx.mode !== 'off' ? { ...cfg.fx, vt: fxVideo.currentTime || 0 } : null,
   };
 }
 
@@ -305,6 +325,7 @@ function tick(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const v0 = pb.velocity;
     if (!flags.panic) { pb.step(dt, now); weather.step(dt); }
+    timeTick(dt);
     if (!lvScrub) lvShown += (cfg.nashua.level - lvShown) * Math.min(1, dt * 1.5);
     if (Math.abs(cfg.nashua.level - lvShown) < 1e-4) lvShown = cfg.nashua.level;
     endsTick();
@@ -327,7 +348,10 @@ function tick(now) {
     const fs = frameState(now);
     lastView = scene.frame(fs, { blackout: flags.blackout, panic: flags.panic });
     lastView.W = canvas.clientWidth; lastView.H = canvas.clientHeight;
-    if (chan) chan.postMessage({ type: 'frame', fs, flags: { ...flags }, custom: cfg.gradient ? { ...cfg.gradient, rev: gradRev } : null });
+    const msgOut = { type: 'frame', fs, flags: { ...flags }, custom: cfg.gradient ? { ...cfg.gradient, rev: gradRev } : null };
+    if (chan) chan.postMessage(msgOut);
+    // the LAN wall (?sync=ws://host:port): the same frame, stamped in the relay's clock, at most 30 per second
+    if (wall && now - wallSent >= 33) { wallSent = now; wall.send({ ...msgOut, fs: { ...fs, t: wall.serverNow() } }); }
     if (out.connected && now - out.last > 3500) { out.connected = false; log('warn', 'output window stopped answering'); }
     hudTick(now);
     frameTick();
@@ -451,6 +475,12 @@ function onKey(e) {
     case 'k': case 'K': setBank(cfg.nashua.bank === 'L' ? 'R' : 'L'); break;
     case ',': setVE(cfg.nashua.ve - 1, true); break;
     case '.': setVE(cfg.nashua.ve + 1, true); break;
+    case 'm': case 'M': setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]); break;
+    case 'v': case 'V': setFxMode(FX_MODES[(FX_MODES.indexOf(cfg.fx.mode) + 1) % FX_MODES.length]); break;
+    case 'z': case 'Z': cfg.fx.freeze = !cfg.fx.freeze; persist(); renderFx(); toast(cfg.fx.freeze ? 'FX frozen' : 'FX running'); break;
+    case 'x': case 'X': cfg.nashua.sections = !cfg.nashua.sections; persist(); renderReach(); toast(cfg.nashua.sections ? 'Sections on' : 'Sections off'); break;
+    case 'y': case 'Y': setTime({ on: !cfg.nashua.time.on, run: !cfg.nashua.time.on }); toast(cfg.nashua.time.on ? 'Time scroll on' : 'Time scroll off'); break;
+    case 'u': case 'U': setTime({ on: true, run: true, iso: '1936-03-01' }); toast('March 1936'); break;
     case 'l': case 'L': cfg.nashua.labels = !cfg.nashua.labels; persist(); renderReach(); toast(cfg.nashua.labels ? 'Labels on' : 'Labels off'); break;
     case '1': case '2': case '3': case '4': case '5': case '6': setLevel(+k - 1); break;
     case '?': case '/': togglePanel('p-keys'); break;
@@ -535,49 +565,209 @@ bindNum('s-palevery', 'palEvery', cfg.show, resetAutoPal);
 bindCheck('s-resume', 'resume', cfg.show, () => { pb.autoResume = cfg.show.resume; });
 bindNum('s-resume-s', 'resumeS', cfg.show, () => { pb.resumeSecs = cfg.show.resumeS; });
 bindNum('s-fade', 'fade', cfg.show);
-bindSeg('s-q', () => cfg.q, v => { cfg.q = v; autoQ = 1; });
+bindSeg('s-q', () => cfg.q, v => { cfg.q = v; ladder.reset(); });
 bindCheck('s-big', 'big', cfg, () => { body.classList.toggle('big', cfg.big); layoutPanels(); });
 body.classList.toggle('big', cfg.big);
 $('s-inst').textContent = 'Instance ' + INSTANCE + '   channel ' + chanName;
 
-// ---------- MIDI (opt-in learn) ----------
+// ---------- MIDI (opt-in; ui/midi.js maps messages, ACT does the work) ----------
 // CC 4 on channel 1 drives the weather cycle unless that control or target was learned elsewhere
 if (cfg.midi && !cfg.midi.weather && !Object.values(cfg.midi).includes('cc:0:4')) cfg.midi.weather = 'cc:0:4';
+// The action seam: continuous actions have set(v) and get() (0..1, for soft takeover), buttons have fire().
+// An action that does not apply here returns a short note for the MIDI monitor instead of failing.
+const sliderAct = id => ({
+  get: () => { const e = $(id); return (e.value - e.min) / (e.max - e.min); },
+  set: v => { const e = $(id); e.value = +e.min + v * (e.max - e.min); e.dispatchEvent(new Event('input')); },
+});
+const inFlight = () => !!fade;
+const weatherWorld = () => !!worldOf(cur.world).weather;
+const levelGet = () => (isData() && nLevels() > 1 ? lvShown / (nLevels() - 1) : null);
+const param = k => ({
+  get: () => { if (!weatherWorld()) return null; const h = cfg.weather.holds[k]; return h !== undefined ? h : weather.values()[k]; },
+  set: v => { if (!weatherWorld()) return k + ': weather worlds only (derelict, nashua)'; cfg.weather.holds[k] = v; persist(); renderWeather(); },
+});
+const fxSet = (k, f) => v => { cfg.fx[k] = f(v); persist(); renderFx(); };
+const ACT = {
+  speed: { get: () => speedToSlider(cfg.speed), set: v => setSpeed(sliderToSpeed(v)) },
+  play: { fire: () => { if (flags.panic) setPanic(false); else pb.toggle(); renderPlay(); } },
+  reseed: { fire: () => (inFlight() ? 'reseed dropped: one already in flight' : reseed('midi')) },
+  back: { fire: () => (inFlight() ? 'seed back dropped: one already in flight' : histIdx <= 0 ? 'seed back: start of history' : histStep(-1)) },
+  forward: { fire: () => (inFlight() ? 'seed forward dropped: one already in flight' : histIdx >= hist.length - 1 ? 'seed forward: end of history' : histStep(1)) },
+  world: { fire: () => (inFlight() ? 'world dropped: one already in flight' : nextWorld()) },
+  palNext: { fire: () => palStep(1) },
+  palPrev: { fire: () => palStep(-1) },
+  palPick: {
+    get: () => { const L = palettes.palettes, i = L.findIndex(p => p.id === pal.target); return i < 0 ? 0 : i / Math.max(1, L.length - 1); },
+    set: v => { const L = palettes.palettes, p = L[Math.round(v * (L.length - 1))]; if (p && p.id !== pal.target) setPalette(p.id); },
+  },
+  black: { fire: () => setBlack() },
+  panic: { fire: () => midiPanic() },
+  hold: { fire: () => setHold() },
+  star: { fire: () => toggleStar() },
+  hide: { fire: () => toggleUI() },
+  clean: { fire: () => toggleClean() },
+  speedReset: { fire: () => (cfg.speed === DEF.speed ? 'speed already ' + DEF.speed + ' px/s' : setSpeed(DEF.speed)) },
+  dir: { fire: () => setDir(-cfg.dir) },
+  contrast: sliderAct('u-contrast'),
+  ink: sliderAct('u-ink'),
+  drift: sliderAct('grad-rate'),
+  master: { get: () => cfg.master, set: v => { cfg.master = v; persist(); } },
+  weather: {
+    get: () => (isData() ? levelGet() : cfg.weather.mode === 'scrub' ? weather.p : null),
+    set: v => { if (isData()) return scrubLevel(v); if (!weatherWorld()) return 'weather cycle: weather worlds only'; cfg.weather.mode = 'scrub'; weather.p = v * 0.9999; persist(); renderWeather(); },
+  },
+  weatherAuto: { fire: () => { if (!weatherWorld()) return 'weather: weather worlds only'; if (cfg.weather.mode === 'auto' && !Object.keys(cfg.weather.holds).length) return 'weather already auto'; cfg.weather.mode = 'auto'; cfg.weather.holds = {}; persist(); renderWeather(); } },
+  rain: param('rain'), wind: param('wind'), fog: param('fog'), light: param('light'),
+  water: { get: () => (isData() ? levelGet() : param('water').get()), set: v => (isData() ? scrubLevel(v) : param('water').set(v)) },
+  level: { get: levelGet, set: v => (isData() ? scrubLevel(v) : 'level: nashua only') },
+  ve: { get: () => (isData() ? (cfg.nashua.ve - 1) / 19 : null), set: v => (isData() ? setVE(1 + Math.round(v * 19), false) : 'exaggeration: nashua only') },
+  bank: { fire: () => (isData() ? setBank(cfg.nashua.bank === 'L' ? 'R' : 'L') : 'bank: nashua only') },
+  mode: { fire: () => (isData() ? setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]) : 'mode: nashua only') },
+  morph: { get: () => (isData() ? cfg.nashua.morph : null), set: v => (isData() ? setMorph(v) : 'morph: nashua only') },
+  sections: { fire: () => { if (!isData()) return 'sections: nashua only'; cfg.nashua.sections = !cfg.nashua.sections; persist(); renderReach(); } },
+  time: { get: () => (gauge && cfg.nashua.time.on ? cfg.nashua.time.d / (gauge.qf.length - 1) : null), set: v => (isData() ? setTime({ on: true, run: false, frac: v }) : 'time: nashua only') },
+  timeRun: { fire: () => (isData() ? setTime({ on: true, run: !cfg.nashua.time.run }) : 'time: nashua only') },
+  fxMode: { fire: () => setFxMode(FX_MODES[(FX_MODES.indexOf(cfg.fx.mode) + 1) % FX_MODES.length]) },
+  fxFreeze: { fire: () => { cfg.fx.freeze = !cfg.fx.freeze; persist(); renderFx(); } },
+  fxDir: { fire: () => { cfg.fx.dir = -cfg.fx.dir; persist(); renderFx(); } },
+  fxSlit: { get: () => cfg.fx.slit, set: fxSet('slit', v => v) },
+  fxWidth: { get: () => (cfg.fx.width - 1) / 15, set: fxSet('width', v => 1 + Math.round(v * 15)) },
+  fxDepth: { get: () => (cfg.fx.depth - 2) / 126, set: fxSet('depth', v => 2 + Math.round(v * 126)) },
+  fxSlope: { get: () => (cfg.fx.slope - 0.1) / 3.9, set: fxSet('slope', v => 0.1 + v * 3.9) },
+  fxMix: { get: () => cfg.fx.mix, set: fxSet('mix', v => v) },
+};
+// MIDI panic (hold 1 s): a safe known state, logged
+function midiPanic() {
+  setBlack(true);
+  setSpeed(DEF.speed);
+  setPalette('original');
+  cfg.weather.mode = 'auto'; cfg.weather.holds = {};
+  cfg.fx.mode = 'off'; cfg.master = 1;
+  persist(); renderWeather(); renderFx();
+  log('warn', 'MIDI panic: blackout on, speed ' + DEF.speed + ' px/s, palette Original, weather auto, FX off, master 1');
+}
+// clean full-window: no controls, the stage fills the window (browsers refuse real full screen from MIDI; F does that)
+function toggleClean() { flags.clean = !flags.clean; body.classList.toggle('clean', flags.clean); if (flags.clean !== flags.uiHidden) toggleUI(); }
+let midiNote = '', midiPicked = false;
+const midiDev = () => midi.devices[0] || '';
 const midi = new Midi({
   map: cfg.midi, onLog: log,
+  getValue: id => { const a = ACT[id]; const g = a && a.get ? a.get() : null; return g == null || !isFinite(g) ? null : Math.max(0, Math.min(1, g)); },
+  onPickup: (id, hw, app) => { midiNote = 'pickup ' + (MIDI_TARGETS.find(t => t.id === id) || { label: id }).label + ': move to ' + Math.round(app * 100) + '% (now ' + Math.round(hw * 100) + '%)'; renderMidiMon(); },
+  onMonitor: () => renderMidiMon(),
   onAction(id, v) {
-    if (id === 'black') return setBlack();
-    if (flags.blackout) return;
-    if (id === 'speed') setSpeed(sliderToSpeed(v));
-    else if (id === 'play') { if (flags.panic) setPanic(false); else pb.toggle(); renderPlay(); }
-    else if (id === 'reseed') reseed('midi');
-    else if (id === 'palNext') palStep(1);
-    else if (id === 'palPrev') palStep(-1);
-    else if (id === 'world') nextWorld();
-    else if (id === 'weather' && WORLDS[cur.world].data) scrubLevel(v);    // CC 4: the water level in a data world
-    else if (id === 'weather') { cfg.weather.mode = 'scrub'; weather.p = v * 0.9999; persist(); renderWeather(); }
-    else if (id === 'level') scrubLevel(v);
-    else if (id === 've') setVE(1 + Math.round(v * 19), false);
-    else if (id === 'bank') setBank(cfg.nashua.bank === 'L' ? 'R' : 'L');
-    else if (PARAMS.includes(id)) { cfg.weather.holds[id] = v; persist(); renderWeather(); }
+    // while blacked out only blackout and panic act
+    if (flags.blackout && id !== 'black' && id !== 'panic') { midiNote = id + ': blacked out (only Blackout and Panic act)'; return renderMidiMon(); }
+    const a = ACT[id];
+    if (!a) return;
+    let r;
+    try { r = a.fire ? a.fire() : a.set(v); } catch (e) { r = id + ': ' + (e && e.message || e); log('error', 'MIDI action ' + r); }
+    if (typeof r === 'string') { midiNote = r; renderMidiMon(); }
   },
-  onChange() { cfg.midi = { ...midi.map }; persist(); renderMidi(); },
+  onChange() {
+    cfg.midi = { ...midi.map };
+    // per-device maps are kept only once Enable has picked this device's map (wiring the ports calls this first)
+    const d = midiDev(); if (d && midiPicked) { cfg.midiDev = cfg.midiDev || {}; cfg.midiDev[d] = { map: cfg.midi, preset: midi.presetName }; }
+    persist(); renderMidi();
+  },
 });
+// presets: data/midi-maps/<name>.json; picked by port name on Enable unless this device already has a map here
+// loaded before access is granted, so a preset is in place before the first message can arrive or be learned
+const presets = {};
+const loadPresets = () => Promise.all(PRESETS.map(n => presets[n] ? null : fetch(new URL('../data/midi-maps/' + n + '.json', import.meta.url))
+  .then(r => (r.ok ? r.json() : Promise.reject(new Error(r.status)))).then(p => { presets[n] = p; })
+  .catch(e => log('warn', 'MIDI preset ' + n + ' not loaded: ' + (e && e.message || e)))));
+function applyPreset(name, why) {
+  const p = presets[name];
+  if (!p) return log('warn', 'MIDI preset ' + name + ' not available');
+  midi.setMap(mapOf(p), name);
+  log('info', 'MIDI preset ' + p.name + ' (' + why + '). ' + p.verify);
+}
+async function enableMidi() {
+  await loadPresets();
+  if (!(await midi.enable())) return renderMidi();
+  const d = midiDev(), saved = d && cfg.midiDev && cfg.midiDev[d];
+  if (saved && saved.map) { midi.setMap(saved.map, saved.preset || null); log('info', 'MIDI: the map learned for ' + d); }
+  else if (d) applyPreset(presetFor(d), 'picked by port name ' + d);
+  midiPicked = true;
+  if (d) { cfg.midiDev = cfg.midiDev || {}; cfg.midiDev[d] = { map: { ...midi.map }, preset: midi.presetName }; persist(); }
+  midiOut.enable(midi.access);
+  renderMidi();
+}
 function renderMidi() {
   $('m-enable').classList.toggle('on', !!midi.access);
   $('m-enable').textContent = midi.access ? 'MIDI on' : 'Enable MIDI';
-  $('m-dev').textContent = !midi.supported ? 'Web MIDI not available' : midi.access ? (midi.devices.length ? midi.devices.join(', ') : 'No MIDI inputs') : '';
+  $('m-dev').textContent = !midi.supported ? 'Web MIDI not available (Chrome or Edge needed)' : midi.access ? (midi.devices.length ? midi.devices.join(', ') : 'No MIDI inputs') : '';
+  $('m-preset').value = midi.presetName || '';
+  $('m-preset').disabled = $('m-reset').disabled = !midi.access;
+  $('m-out').classList.toggle('on', midiOut.on); $('m-out').textContent = midiOut.on ? 'MIDI out on' : 'MIDI out off';
+  $('m-out').disabled = !midi.access;
   $('m-map').replaceChildren(...MIDI_TARGETS.map(t => {
     const b = document.createElement('button');
-    b.textContent = midi.learn === t.id ? t.label + ': move a control' : t.label + (midi.map[t.id] ? ' ' + midi.map[t.id].replace(/:(\d+):/, (m, c) => ' ch' + (+c + 1) + ' ') : '');
+    const ks = [].concat(midi.map[t.id] || []).map(k => k.replace(/^(\w+):(\d+):/, (m, k2, c) => k2 + ' ch' + (+c + 1) + ' '));
+    b.textContent = midi.learn === t.id ? t.label + ': move a control' : t.label + (ks.length ? ' ' + ks.join(', ') : '');
+    b.title = ks.length ? ks.join(', ') : 'not bound';
     b.classList.toggle('on', midi.learn === t.id);
     b.disabled = !midi.access;
     b.onclick = () => midi.startLearn(t.id);
     b.oncontextmenu = e => { e.preventDefault(); midi.clear(t.id); };
     return b;
   }));
+  renderMidiMon();
 }
-$('m-enable').onclick = () => midi.enable();
+let monAt = 0, monTimer = 0;
+function renderMidiMon() {
+  const now = performance.now();
+  if (now - monAt < 100) { if (!monTimer) monTimer = setTimeout(() => { monTimer = 0; renderMidiMon(); }, 100); return; }
+  monAt = now;
+  $('m-mon').textContent = midi.monitor.map(m => 'ch' + m.ch + ' ' + m.kind + ' ' + m.num + ' ' + m.val + (m.port ? '   ' + m.port : '')).join('\n');
+  $('m-note').textContent = midiNote;
+}
+$('m-enable').onclick = () => enableMidi();
+$('m-preset').onchange = e => { if (e.target.value) applyPreset(e.target.value, 'chosen'); };
+$('m-reset').onclick = () => applyPreset(midi.presetName || presetFor(midiDev()), 'reset to preset');
+$('m-export').onclick = () => {
+  const blob = new Blob([JSON.stringify({ app: 'shanshui-av', device: midiDev(), preset: midi.presetName, map: midi.map }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'av-bindings_shanshui-av_v01.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+// MIDI out (AV standard section 6): off by default; scene data as CCs and passing features as notes
+const midiOut = new MidiOut({ onLog: log });
+$('m-out').onclick = () => { midiOut.setOn(!midiOut.on); renderMidi(); };
+$('m-outch').onchange = e => { midiOut.ch = +e.target.value - 1; };
+setInterval(() => { if (midiOut.on) midiOut.tick(midiScene()); }, 1000 / 60);
+// what MIDI out reads at the playhead; per pack and bank the terrain and density curves are worked out once
+let msPrep = null;
+function midiPrep(P, bank) {
+  const side = bank === 'L' ? 1 : -1, A = P.A['mean0_' + bank] || P.A.mean0_L, n = P.n;
+  let mt = 0; for (let k = 0; k < n; k++) if (isFinite(A[k])) mt = Math.max(mt, A[k]);
+  const terr = new Float32Array(n), dens = new Float32Array(n);
+  let md = 0;
+  for (let k = 0; k < n; k++) {
+    terr[k] = mt > 0 && isFinite(A[k]) ? Math.max(0, A[k]) / mt : 0;
+    const s = k * P.ds; let c = 0;
+    for (const b of P.buildings || []) if (b[2] === side && b[0] <= s + 50 && b[1] >= s - 50) c++;
+    dens[k] = c; md = Math.max(md, c);
+  }
+  if (md) for (let k = 0; k < n; k++) dens[k] /= md;
+  return { P, bank, terr, dens, features: featureNotes(P, side) };
+}
+let seedByte = { seed: null, v: 0 };
+function midiScene() {
+  const w = weather.values();
+  if (seedByte.seed !== cur.seed) { let h = 0; for (const ch of String(cur.seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; seedByte = { seed: cur.seed, v: (h % 128) / 127 }; }
+  const cc = { [OUT_CC.light]: w.light, [OUT_CC.rain]: w.rain, [OUT_CC.seed]: seedByte.v, [OUT_CC.play]: pb.playing ? 1 : 0 };
+  let s = null, features = null;
+  const P = isData() ? curPack() : null;
+  if (P) {
+    if (!msPrep || msPrep.P !== P || msPrep.bank !== cfg.nashua.bank) msPrep = midiPrep(P, cfg.nashua.bank);
+    s = sOf(P, pb.x + viewW() / 2, cfg.nashua.bank);
+    const k = Math.max(0, Math.min(P.n - 1, Math.round(s / P.ds)));
+    cc[OUT_CC.terrain] = msPrep.terr[k]; cc[OUT_CC.density] = msPrep.dens[k]; cc[OUT_CC.level] = levelGet();
+    features = msPrep.features;
+  }
+  const pi = palettes.palettes.findIndex(p => p.id === pal.target);
+  return { cc, s, features, prog: pi < 0 ? 0 : pi };
+}
 renderMidi();
 
 function syncInputs() {
@@ -745,6 +935,7 @@ function weatherTick() {
 
 // ---------- data world (nashua): bank, exaggeration, water level, ends, labels ----------
 const overlay = new ReachOverlay($('labels'));
+const section = new SectionInset($('section'), $('playhead'));
 const isData = () => !!(WORLDS[cur.world] && WORLDS[cur.world].data);
 const curPack = () => { const w = scene.peek(cur.key); return w && w.pack ? w.pack : null; };
 const nLevels = () => (curPack() ? curPack().levels.length : 5);
@@ -768,8 +959,60 @@ function setVE(v, now) {
   // a new exaggeration redraws the reach: debounced, then crossfaded at the same x
   veTimer = setTimeout(() => { if (isData() && cur.opts && cur.opts.ve !== cfg.nashua.ve) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'Vertical Exaggeration ' + cfg.nashua.ve + 'x' }); }, now ? 0 : 350);
 }
-function setLevel(i) { cfg.nashua.level = Math.max(0, Math.min(nLevels() - 1, i)); lvScrub = false; persist(); renderReach(); }
-function scrubLevel(v) { cfg.nashua.level = lvShown = Math.max(0, Math.min(1, v)) * (nLevels() - 1); renderReach(); persist(); }
+let morphTimer = 0;
+function setMorph(v) {
+  cfg.nashua.morph = Math.max(0, Math.min(1, v)); persist(); renderReach();
+  clearTimeout(morphTimer);
+  morphTimer = setTimeout(() => { const want = morphQ(cfg.nashua.morph), have = (cur.opts && cur.opts.morph) || 0; if (isData() && want !== have) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'morph ' + Math.round(want * 100) + '%' }); }, 250);
+}
+function setMode(m) { if (!MODES[m]) return; cfg.nashua.mode = m; persist(); renderReach(); toast('Mode: ' + m); }
+function setLevel(i) { if (cfg.nashua.time.on) setTime({ on: false }); cfg.nashua.level = Math.max(0, Math.min(nLevels() - 1, i)); lvScrub = false; persist(); renderReach(); }
+function scrubLevel(v) { if (cfg.nashua.time.on) setTime({ on: false }); cfg.nashua.level = lvShown = Math.max(0, Math.min(1, v)) * (nLevels() - 1); renderReach(); persist(); }
+
+// ---------- time scroll (worlds/nashua/gauge.js): the level follows a real daily record ----------
+let gauge = null, timeShownAt = 0;
+const TQ = new URLSearchParams(location.search).get('t');
+loadGauge().then(g => {
+  gauge = g;
+  const T = cfg.nashua.time;
+  if (TQ && /^\d{4}-\d{2}-\d{2}$/.test(TQ)) { T.on = true; T.d = dayOf(g, TQ); }
+  if (!(T.d >= 0 && T.d < g.qf.length)) T.d = dayOf(g, MARCH_1936) - 19;
+  $('r-time').max = g.qf.length - 1;
+  renderTime();
+}).catch(e => log('warn', 'time scroll: gauge record not loaded (' + (e && e.message || e) + ')'));
+// on, run, rate, iso (a date), frac (0..1 over the record)
+function setTime(o) {
+  const T = cfg.nashua.time;
+  if (o.on != null) T.on = o.on;
+  if (o.run != null) T.run = o.run;
+  if (o.rate != null) T.rate = o.rate;
+  if (gauge && o.iso) T.d = dayOf(gauge, o.iso);
+  if (gauge && o.frac != null) T.d = Math.round(o.frac * (gauge.qf.length - 1));
+  if (!T.on) T.run = false;
+  persist(); renderTime();
+}
+function timeTick(dt) {
+  const T = cfg.nashua.time;
+  if (!T.on || !gauge || !isData()) return;
+  const P = curPack(); if (!P) return;
+  if (T.run && !flags.blackout) { T.d += T.rate * dt; if (T.d >= gauge.qf.length - 1) T.d = 0; }
+  cfg.nashua.level = lvShown = lvOfQ(gauge, P, qAt(gauge, T.d));
+  const now = performance.now();
+  if (now - timeShownAt > 250) { timeShownAt = now; renderTime(); }
+}
+const timeText = () => (cfg.nashua.time.on && gauge && isData() ? timeFact(gauge, cfg.nashua.time.d) : null);
+function renderTime() {
+  const T = cfg.nashua.time;
+  $('r-time-on').classList.toggle('on', T.on); $('r-time-on').textContent = T.on ? 'Time on' : 'Time off';
+  $('r-time-run').classList.toggle('on', T.run); $('r-time-run').textContent = T.run ? 'Pause' : 'Run';
+  for (const b of $('r-time-rate').children) b.classList.toggle('on', +b.dataset.v === T.rate);
+  if (gauge) { $('r-time').value = Math.round(T.d); $('r-time-out').textContent = isoOf(gauge, T.d); }
+}
+$('r-time-on').onclick = () => setTime({ on: !cfg.nashua.time.on });
+$('r-time-run').onclick = () => setTime({ on: true, run: !cfg.nashua.time.run });
+$('r-time-1936').onclick = () => setTime({ on: true, run: true, iso: '1936-03-01' });
+for (const b of $('r-time-rate').children) b.onclick = () => setTime({ rate: +b.dataset.v });
+$('r-time').addEventListener('input', e => { cfg.nashua.time.d = +e.target.value; setTime({ on: true, run: false }); });
 let endsArmed = true, pingLogged = -Infinity;
 function endsTick() {
   if (!isData()) return;
@@ -800,26 +1043,35 @@ function reachTick() {
   const w = scene.peek(cur.key);
   // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
   const vs = lastView ? (lastView.H / WORLD_H) * cfg.zoom : cssScale();
-  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels);
+  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off');
+  const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
+  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || 10, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
   const now = performance.now();
   if (now - factAt < 250) return;
   factAt = now;
   const P = curPack();
   if (P && levelsBuilt !== P.hash) renderReach();
-  const t = isData() ? factLine(w, pb.x + viewW() / 2, lvShown, vs) : '';
+  const t = isData() ? factLine(w, pb.x + viewW() / 2, lvShown, vs, timeText()) : '';
   if ($('hud-facts').textContent !== t) $('hud-facts').textContent = t;
   if (!$('p-reach').hidden) { $('r-facts').textContent = t; $('r-level').parentElement.querySelector('output').textContent = lvShown.toFixed(2); }
 }
 const paintBank = bindSeg('r-bank', () => cfg.nashua.bank, v => setBank(v));
+const paintMode = bindSeg('r-mode', () => cfg.nashua.mode, v => setMode(v));
+bindCheck('r-sections', 'sections', cfg.nashua, () => renderReach());
+$('r-morph').addEventListener('input', e => setMorph(+e.target.value));
 const paintEnds = bindSeg('r-ends', () => cfg.nashua.ends, v => { cfg.nashua.ends = v; });
 $('r-ve').addEventListener('input', e => setVE(+e.target.value, false));
-$('r-level').addEventListener('input', e => { cfg.nashua.level = lvShown = +e.target.value; persist(); renderReach(); });
+$('r-level').addEventListener('input', e => { if (cfg.nashua.time.on) setTime({ on: false }); cfg.nashua.level = lvShown = +e.target.value; persist(); renderReach(); });
 bindCheck('r-labels', 'labels', cfg.nashua);
 bindCheck('r-outlabels', 'outLabels', cfg.nashua);
 bindCheck('r-outfacts', 'outFacts', cfg.nashua);
 let levelsBuilt = '';
 function renderReach() {
-  paintBank(); paintEnds();
+  paintBank(); paintEnds(); paintMode();
+  $('r-sections').checked = cfg.nashua.sections || cfg.nashua.mode === 'sections';
+  if (document.activeElement !== $('r-morph')) $('r-morph').value = cfg.nashua.morph;
+  $('r-morph').parentElement.querySelector('output').textContent = Math.round(morphQ(cfg.nashua.morph) * 100) + '%';
+  { const w = scene.peek(cur.key), miss = !!(w && w.designMissing); $('r-morph-note').hidden = !miss; $('r-morph-note').textContent = miss ? 'Design pack not loaded (local only): the morph stays at Existing Grade (before landform)' : ''; }
   $('r-off').hidden = isData();
   $('r-ve').value = cfg.nashua.ve; $('r-ve').parentElement.querySelector('output').textContent = cfg.nashua.ve + 'x';
   $('r-labels').checked = cfg.nashua.labels;
@@ -941,6 +1193,65 @@ log('info', 'v' + VERSION + ' ready, instance ' + INSTANCE + ', world ' + cur.wo
 requestAnimationFrame(tick);
 
 // test and console hooks
+// ---------- slit-scan and time-smear (GPU, after the scene; see render/slitscan.js) ----------
+// sources: the scroll itself, a video dropped on the stage or listed in media/ (local, never committed), or a camera
+// granted in this window. The output follows the mode on its own frames; it never asks for a camera.
+const FX_MODES = ['off', 'strip', 'smear', 'displace'];
+const fxVideo = document.createElement('video');
+fxVideo.muted = true; fxVideo.loop = true; fxVideo.playsInline = true; fxVideo.crossOrigin = 'anonymous';
+scene.video = fxVideo;
+let fxVideoName = '', fxCam = null;
+function setFxMode(m) { if (!FX_MODES.includes(m)) return; cfg.fx.mode = m; persist(); renderFx(); toast('FX: ' + m); }
+function fxUseVideo(url, name, file) {
+  if (fxCam) { fxCam.getTracks().forEach(t => t.stop()); fxCam = null; fxVideo.srcObject = null; }
+  fxVideo.src = url; fxVideo.play().catch(() => {});
+  fxVideoName = name; cfg.fx.source = 'video'; persist(); renderFx();
+  if (chan && file) chan.postMessage({ type: 'fxvideo', file, name });   // the output plays its own copy
+  log('info', 'FX source: ' + name);
+}
+async function fxCamera() {
+  try {
+    fxCam = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    fxVideo.removeAttribute('src'); fxVideo.srcObject = fxCam; fxVideo.play().catch(() => {});
+    fxVideoName = 'camera (this window only)'; cfg.fx.source = 'video'; persist(); renderFx();
+    if (chan) chan.postMessage({ type: 'fxvideo', file: null, name: 'camera' });
+  } catch (e) { log('warn', 'Camera not granted: ' + (e && e.name || e)); }
+}
+stage.addEventListener('dragover', e => { if ([...(e.dataTransfer.items || [])].some(i => i.type.startsWith('video/'))) e.preventDefault(); });
+stage.addEventListener('drop', e => {
+  const f = [...(e.dataTransfer.files || [])].find(x => x.type.startsWith('video/'));
+  if (!f) return;
+  e.preventDefault();
+  fxUseVideo(URL.createObjectURL(f), f.name, f);
+});
+$('f-media').onclick = async () => {
+  // tools/serve.mjs lists media/ as media/list.json; on a static host there is no media/ (it is never published)
+  const box = $('f-medialist');
+  try {
+    const r = await fetch('media/list.json', { cache: 'no-store' });
+    const list = r.ok ? await r.json() : [];
+    box.replaceChildren(...(list.length ? list : ['(no videos in media/)']).map(n => { const b = document.createElement('button'); b.textContent = n; if (list.length) b.onclick = () => fxUseVideo('media/' + encodeURIComponent(n), n, null); return b; }));
+  } catch { box.textContent = '(media/ is only on a local server)'; }
+};
+$('f-cam').onclick = fxCamera;
+const paintFxMode = bindSeg('f-mode', () => cfg.fx.mode, v => setFxMode(v));
+const paintFxSrc = bindSeg('f-src', () => cfg.fx.source, v => { cfg.fx.source = v; renderFx(); });
+const paintFxDir = bindSeg('f-dir', () => cfg.fx.dir, v => { cfg.fx.dir = +v; });
+const paintFxAxis = bindSeg('f-axis', () => cfg.fx.axis, v => { cfg.fx.axis = v; });
+bindRange('f-slit', 'slit', v => Math.round(v * 100) + '%', cfg.fx);
+bindRange('f-width', 'width', v => v + ' px', cfg.fx);
+bindRange('f-depth', 'depth', v => v + ' frames', cfg.fx);
+bindRange('f-slope', 'slope', f2, cfg.fx);
+bindRange('f-mix', 'mix', v => Math.round(v * 100) + '%', cfg.fx);
+bindCheck('f-freeze', 'freeze', cfg.fx);
+function renderFx() {
+  paintFxMode(); paintFxSrc(); paintFxDir(); paintFxAxis();
+  for (const k of ['slit', 'width', 'depth', 'slope', 'mix']) { const el = $('f-' + k); if (document.activeElement !== el) { el.value = cfg.fx[k]; el.dispatchEvent(new Event('input')); } }
+  $('f-freeze').checked = cfg.fx.freeze;
+  $('f-video').textContent = cfg.fx.source === 'video' ? (fxVideoName ? 'Video: ' + fxVideoName : 'No video yet: drop a file on the stage, or pick one from media/') : 'Source: the scroll';
+}
+renderFx();
+
 window.SSAV = {
   get seed() { return cur.seed; }, get key() { return cur.key; }, get x() { return pb.x; }, get playing() { return pb.playing; },
   get worldName() { return cur.world; }, setWorld, nextWorld, weather, renderWeather,
@@ -948,5 +1259,5 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  setBank, setVE, setLevel, scrubLevel, get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
+  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

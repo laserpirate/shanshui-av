@@ -11,3 +11,6 @@ data/local/
 media/
 __pycache__/
 STATE.md
+baked/
+precache.json
+sw-probe.js

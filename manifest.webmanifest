@@ -1,0 +1,11 @@
+{
+  "name": "AV Shan Shui Infinite Scrolls",
+  "short_name": "Shan Shui",
+  "start_url": "index.html?offline=1",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#07090e",
+  "theme_color": "#07090e",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
