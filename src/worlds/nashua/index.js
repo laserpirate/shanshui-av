@@ -251,6 +251,7 @@ function bridges(st, x0, x1) {
 // Jackson Mills dam at s = 0: headpond held by the crest gate, ogee spillway, falling water, white water at the toe
 function dam(st, x0, x1) {
   const P = st.pack, D = P.dam, VY = st.VY;
+  if (!D) return '';
   const xd = xOf(P, 0, st.bank), dir = st.bank === 'L' ? 1 : -1;   // +dir points downstream
   if (xd + 120 < x0 || xd - 120 >= x1) return '';
   if (!(xd >= x0 && xd < x1)) return '';   // anchored in the chunk that holds s = 0
@@ -324,7 +325,7 @@ function observatories(st, x0, x1) {
 // the lot: paving lines at the bank's mean height over its s range (left bank only)
 function lot(st, x0, x1) {
   const P = st.pack, L = P.lot;
-  if (L.side !== st.side) return '';
+  if (!L || L.side !== st.side) return '';
   let xa = xOf(P, L.s0, st.bank), xb = xOf(P, L.s1, st.bank);
   if (xa > xb) [xa, xb] = [xb, xa];
   xa = Math.max(xa, x0); xb = Math.min(xb, x1);

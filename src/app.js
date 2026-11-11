@@ -12,7 +12,7 @@ import { Midi, MIDI_TARGETS, PRESETS, presetFor, mapOf } from './ui/midi.js';
 import { MidiOut, OUT_CC, featureNotes } from './ui/midiout.js';
 import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
-import { ReachOverlay, factLine } from './ui/reach.js';
+import { ReachOverlay, TickOverlay, factLine } from './ui/reach.js';
 import { SectionInset } from './ui/section.js';
 import { xOf, sOf, reachW, HX } from './worlds/nashua/pack.js';
 import { MODES, MODE_ORDER, MODE_DEFAULT, LAYERS, layersOf } from './worlds/nashua/modes.js';
@@ -20,6 +20,7 @@ import { wsSync } from './wall.js';
 import { loadGauge, dayOf, isoOf, qAt, lvOfQ, timeFact, MARCH_1936 } from './worlds/nashua/gauge.js';
 import { sunElev, lightOfElev, doyOf, hhmm, FAST as DAY_FAST } from './worlds/nashua/sun.js';
 import { TagStream } from './worlds/nashua/tags.js';
+import { Hydro } from './ui/hydro.js';
 import { offline } from './offline.js';
 import { Ladder } from './core/ladder.js';
 
@@ -126,7 +127,9 @@ let epoch = 0;
 const modeLayers = () => layersOf(cfg.nashua.mode, cfg.nashua.sections || cfg.nashua.mode === 'sections');
 // morph is quantized to 5% steps: each step is a regenerated reach (pure function of bank, ve, morph)
 const morphQ = v => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
-const optsFor = world => WORLDS[world] && WORLDS[world].data ? (morphQ(cfg.nashua.morph) > 0 ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve, morph: morphQ(cfg.nashua.morph) } : { bank: cfg.nashua.bank, ve: cfg.nashua.ve }) : undefined;
+// the reach (?reach=merrimack for the second one) is per page, not saved: a reload without it is the Nashua
+let reach = new URLSearchParams(location.search).get('reach') === 'merrimack' ? 'merrimack' : 'nashua';
+const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve, ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 ? { morph: morphQ(cfg.nashua.morph) } : {}) } : undefined;
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
 cur.opts = optsFor(cur.world);
 let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
@@ -961,6 +964,8 @@ function weatherTick() {
 
 // ---------- data world (nashua): bank, exaggeration, water level, ends, labels ----------
 const overlay = new ReachOverlay($('labels'));
+// ?ticks=1: the distance rule along the bottom (ui/reach.js)
+const ticks = new URLSearchParams(location.search).get('ticks') === '1' ? new TickOverlay($('labels').parentElement) : null;
 const section = new SectionInset($('section'), $('playhead'));
 const isData = () => !!(WORLDS[cur.world] && WORLDS[cur.world].data);
 const curPack = () => { const w = scene.peek(cur.key); return w && w.pack ? w.pack : null; };
@@ -975,6 +980,12 @@ function setBank(b) {
   const s = P ? sOf(P, pb.x + viewW() / 2, old) : null;
   const keepX = P ? xOf(P, s, b) - viewW() / 2 : pb.x;
   setSeed(cur.seed, { world: cur.world, keepX, history: false, why: (b === 'L' ? 'left' : 'right') + ' bank' });
+}
+function setReach(r) {
+  r = r === 'merrimack' ? 'merrimack' : 'nashua';
+  if (r === reach) return;
+  reach = r; renderReach();
+  if (isData()) setSeed(cur.seed, { world: cur.world, keepX: 0, history: false, why: r === 'merrimack' ? 'Merrimack reach' : 'Nashua reach' });
 }
 let veTimer = 0;
 function setVE(v, now) {
@@ -997,6 +1008,8 @@ function scrubLevel(v) { if (cfg.nashua.time.on) setTime({ on: false }); cfg.nas
 
 // ---------- time scroll (worlds/nashua/gauge.js): the level follows a real daily record ----------
 let gauge = null, timeShownAt = 0;
+// ?hydro=1: the hydrograph strip under the fact line (ui/hydro.js)
+const hydro = new URLSearchParams(location.search).get('hydro') === '1' ? new Hydro($('hud')) : null;
 const TQ = new URLSearchParams(location.search).get('t');
 loadGauge().then(g => {
   gauge = g;
@@ -1093,6 +1106,7 @@ function reachTick() {
   // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
   const vs = lastView ? (lastView.H / WORLD_H) * cfg.zoom : cssScale();
   if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off');
+  if (ticks && lastView) ticks.update(w, { cssScale: vs, camX: pb.x, W: lastView.W }, isData() && cfg.fx.mode === 'off');
   const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
   section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || 10, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
   const now = performance.now();
@@ -1102,9 +1116,11 @@ function reachTick() {
   if (P && levelsBuilt !== P.hash) renderReach();
   const t = isData() ? factLine(w, pb.x + viewW() / 2, lvShown, vs, timeText()) : '';
   if ($('hud-facts').textContent !== t) $('hud-facts').textContent = t;
+  if (hydro) hydro.update(gauge, cfg.nashua.time.d, isData() && cfg.nashua.time.on);
   if (!$('p-reach').hidden) { $('r-facts').textContent = t; $('r-level').parentElement.querySelector('output').textContent = lvShown.toFixed(2); }
 }
 const paintBank = bindSeg('r-bank', () => cfg.nashua.bank, v => setBank(v));
+const paintReachSel = bindSeg('r-reach', () => reach, v => setReach(v));
 const paintMode = bindSeg('r-mode', () => cfg.nashua.mode, v => setMode(v));
 bindCheck('r-sections', 'sections', cfg.nashua, () => renderReach());
 $('r-morph').addEventListener('input', e => setMorph(+e.target.value));
@@ -1116,7 +1132,7 @@ bindCheck('r-outlabels', 'outLabels', cfg.nashua);
 bindCheck('r-outfacts', 'outFacts', cfg.nashua);
 let levelsBuilt = '';
 function renderReach() {
-  paintBank(); paintEnds(); paintMode();
+  paintBank(); paintReachSel(); paintEnds(); paintMode();
   $('r-sections').checked = cfg.nashua.sections || cfg.nashua.mode === 'sections';
   if (document.activeElement !== $('r-morph')) $('r-morph').value = cfg.nashua.morph;
   $('r-morph').parentElement.querySelector('output').textContent = Math.round(morphQ(cfg.nashua.morph) * 100) + '%';
@@ -1302,6 +1318,9 @@ function renderFx() {
 renderFx();
 
 window.SSAV = {
+  get reach() { return reach; }, setReach,
+  get ticks() { return ticks && { shown: ticks.on, n: ticks.items.length, at: ticks.items.filter(t => t.vis).map(t => ({ s: t.s, sx: t.sx })) }; },
+  get hydro() { return hydro && { shown: !hydro.cv.hidden, day: hydro.day, draws: hydro.draws, ms: hydro.ms, cursorX: hydro.cursorX }; },
   get seed() { return cur.seed; }, get key() { return cur.key; }, get x() { return pb.x; }, get playing() { return pb.playing; },
   get worldName() { return cur.world; }, setWorld, nextWorld, weather, renderWeather,
   get palette() { return pal.target; }, get flags() { return { ...flags }; }, get hist() { return hist.slice(); }, get histIdx() { return histIdx; },

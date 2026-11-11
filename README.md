@@ -31,6 +31,10 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?world=nashua` | The Nashua reach as a section; also `&bank=L\|R`, `&ve=1..20`, `&level=0..4`, `&ends=handover\|loop\|pingpong`, `&mode=nature\|built\|design\|sections`, `&morph=0..1` (needs the local design pack) |
 | `?t=YYYY-MM-DD` | nashua: the time scroll on, at that day of the East Pepperell record (an upstream proxy) |
 | `?daycycle=1&hour=HH` | nashua with the time scroll: the light follows the sun at the reach for the hour of the scroll's day (local standard time); held above 0.1 day/s |
+| `?reach=merrimack` | nashua: the second reach, 5 km of the Merrimack below the confluence (estimated bed, levels carried from the confluence) |
+| `?hydro=1` | nashua with the time scroll: a hydrograph under the fact line, a year either side of the scroll's day (East Pepperell, log axis, median and 1936 rules) |
+| `?ticks=1` | nashua, controller or output: a distance rule along the bottom, a tick every 100 m and a label every 500 m |
+| `&cap=0.8` (output) | this output's brightness ceiling, 0.1 to 1: the picture times cap, under the controller's master. Labels and a local video slit source are not capped |
 | `?tags=1` | nashua: post the tag stream for a score (`docs/nashua/score-tags.md`) |
 | `?quality=auto\|high\|medium\|low` | The quality ladder (auto: start rung from the GPU, down after 5 s under 24 fps) or a fixed rung |
 | `?offline=1` | Register the service worker so the app runs with the network off |

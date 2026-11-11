@@ -214,6 +214,131 @@ await test('print-scales', async () => {
   return { archD1000: { m: [0, +G.archd1000.mTo.toFixed(0)], crop: G.archd1000.crop }, archD500crop: G.archd500.crop, roll500in: +G.roll500.pageW.toFixed(1), roll1000in: +G.roll1000.pageW.toFixed(1), svgK: +k[1], pdfMediaBox: [+mb[1], +mb[2]], window: pdf.last.window };
 });
 
+// P5.5: the second reach from the same pipeline loads, draws, has its buildings, names its levels' source; the Nashua
+// is unchanged by it, and switching back and forth swaps the pack
+await test('second-reach', async () => {
+  const { ctx, p } = await open('?i=p5-r&world=nashua&seed=1&reach=merrimack');
+  await p.waitForTimeout(1500);
+  const m = await p.evaluate(() => { const P = SSAV.world().pack; return { reach: SSAV.reach, hash: P.hash, len: P.route_len_m, counts: P.counts, ds: P.ds, dam: !!P.dam, tiles: SSAV.scene.stats().tiles }; });
+  const f = await fact(p);
+  await p.keyboard.press('h'); await p.waitForTimeout(400);
+  const shot = await p.screenshot();
+  await p.keyboard.press('h');
+  const png = PNG.sync.read(shot); let lo = 255, hi = 0;
+  for (let i = 0; i < png.data.length; i += 4 * 97) { const v = png.data[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+  // the banks: rows 470 to 600 (above the water line, below most buildings) must carry ground, not bare paper
+  let ground = 0, of = 0;
+  for (let y = 470; y < 600; y += 2) for (let x = 0; x < png.width; x += 4) { const i = (y * png.width + x) * 4; of++; if (png.data[i] + png.data[i + 1] + png.data[i + 2] > 3 * 60) ground++; }
+  await p.evaluate(() => SSAV.setReach('nashua'));
+  await p.waitForFunction(() => SSAV.world() && SSAV.world().pack && !SSAV.world().pack.fact_note, null, { timeout: 30000 });
+  const back = await p.evaluate(() => ({ reach: SSAV.reach, hash: SSAV.world().pack.hash, dam: !!SSAV.world().pack.dam }));
+  await ctx.close();
+  assert(Number.isFinite(m.ds) && m.ds > 0, 'station step missing: ' + m.ds);
+  assert(ground / of > 0.3, 'no ground on the banks: ' + (ground / of).toFixed(3));
+  assert(m.reach === 'merrimack' && m.len > 4000 && !m.dam, 'merrimack pack: ' + JSON.stringify(m));
+  assert(f.includes('levels carried from the confluence'), 'fact note missing: ' + f);
+  assert(hi - lo > 60, 'picture looks blank: range ' + (hi - lo));
+  assert(back.reach === 'nashua' && back.dam && back.hash !== m.hash, 'back to the Nashua: ' + JSON.stringify(back));
+  return { ground: +(ground / of).toFixed(3), merrimack: { hash: m.hash, len_m: m.len, counts: m.counts, tiles: m.tiles }, range: hi - lo, nashua: back.hash };
+});
+
+// P5.6 own idea 1: ?hydro=1, the hydrograph under the fact line. Off without the flag; at the 1936 flood the cursor is
+// at the middle and on the tallest peak of the two years shown; it redraws once per day, not per frame
+await test('hydrograph', async () => {
+  const { ctx, p } = await open('?i=p5-h&world=nashua&seed=1&t=1936-03-19&hydro=1');
+  await p.waitForFunction(() => SSAV.hydro && SSAV.hydro.shown, null, { timeout: 20000 });
+  const a = await p.evaluate(() => SSAV.hydro);
+  const peak = await p.evaluate(() => { const c = document.getElementById('hud-hydro'), r = c.getBoundingClientRect(); return { w: r.width, h: r.height, top: r.top, left: r.left }; });
+  // the highest record pixel: scan the canvas for the topmost pale pixel below the text line
+  const top = await p.evaluate(() => {
+    const c = document.getElementById('hud-hydro'), x = c.getContext('2d'), d = x.getImageData(0, 0, c.width, c.height).data, k = c.width / 480;
+    for (let y = Math.round(30 * k); y < c.height; y++) for (let i = 0; i < c.width; i++) { const j = (y * c.width + i) * 4; if (d[j + 2] > 200 && d[j + 2] - d[j] > 20) return { x: i / k, y: y / k }; }
+    return null;
+  });
+  const before = a.draws;
+  await p.waitForTimeout(1500);
+  const still = await p.evaluate(() => SSAV.hydro.draws);
+  await p.evaluate(() => SSAV.setTime({ on: true, run: false, iso: '1936-03-25' }));
+  await p.waitForFunction(n => SSAV.hydro.draws > n, still, { timeout: 5000 });
+  const after = await p.evaluate(() => SSAV.hydro);
+  await ctx.close();
+  const { ctx: c2, p: p2 } = await open('?i=p5-h2&world=nashua&seed=1&t=1936-03-19');
+  await p2.waitForTimeout(800);
+  const none = await p2.evaluate(() => ({ h: SSAV.hydro, el: !!document.getElementById('hud-hydro') }));
+  await c2.close();
+  assert(peak.w === 480 && peak.h === 132, 'size ' + JSON.stringify(peak));
+  assert(Math.abs(a.cursorX - 240) < 1, 'cursor not at the middle: ' + a.cursorX);
+  assert(top && Math.abs(top.x - 240) < 6, 'the tallest point is not at the cursor: ' + JSON.stringify(top));
+  assert(still === before, 'redrew without a day change: ' + before + ' -> ' + still);
+  assert(after.day === a.day + 6, 'day after setTime: ' + a.day + ' -> ' + after.day);
+  assert(after.ms < 4, 'redraw ' + after.ms.toFixed(2) + ' ms');
+  assert(none.h === null && !none.el, 'hydrograph present without the flag');
+  return { cursorX: +a.cursorX.toFixed(2), peakAt: top, firstDrawMs: +a.ms.toFixed(2), redrawMs: +after.ms.toFixed(2), drawsIn1500ms: still - before };
+});
+
+// P5.6 own idea 2: ?ticks=1, the distance rule. Adjacent ticks are 100 m apart at the scale the fact line states,
+// the tick under the view centre is the s the fact line states, and the rule follows the scroll
+await test('distance-ticks', async () => {
+  const { ctx, p } = await open('?i=p5-k&world=nashua&seed=1&ticks=1');
+  await p.evaluate(() => { SSAV.pb.pause(); SSAV.pb.x = 1000; });
+  await p.waitForFunction(() => SSAV.ticks && SSAV.ticks.shown && SSAV.ticks.at.length > 3, null, { timeout: 10000 });
+  await p.waitForTimeout(600);
+  const t = await p.evaluate(() => SSAV.ticks), f = await fact(p);
+  const px100 = +/100 m \(328 ft\) = (\d+) px/.exec(f)[1];
+  const gaps = t.at.slice(1).map((q, i) => q.sx - t.at[i].sx);
+  const worst = Math.max(...gaps.map(g => Math.abs(g - px100)));
+  const s0 = +/^s ([\d.]+) m/.exec(f)[1], vw = await p.evaluate(() => SSAV.viewW());
+  const centre = await p.evaluate(() => innerWidth / 2);
+  // interpolate s at the view centre from the ticks, compare with the fact line
+  const a = t.at.filter(q => q.sx <= centre).pop(), b = t.at.find(q => q.sx > centre);
+  const sMid = a.s + (centre - a.sx) / (b.sx - a.sx) * 100;
+  const major = await p.evaluate(() => [...document.querySelectorAll('.reach-ticks .rt.major span')].filter(e => e.parentElement.style.display !== 'none').map(e => ({ text: e.textContent, px: parseFloat(getComputedStyle(e).fontSize) })));
+  await p.evaluate(() => { SSAV.pb.x = 1400; });
+  await p.waitForTimeout(400);
+  const t2 = await p.evaluate(() => SSAV.ticks);
+  await ctx.close();
+  assert(t.n === 25, 'tick count ' + t.n);
+  assert(worst < 0.6, 'tick spacing off by ' + worst.toFixed(2) + ' px against ' + px100);
+  assert(Math.abs(sMid - s0) < 0.6, 's at centre ' + sMid.toFixed(2) + ' vs fact line ' + s0);
+  assert(major.length && major.every(m => m.px >= 18 && /^\d+ m \(\d+ ft\)$/.test(m.text)), 'labels ' + JSON.stringify(major));
+  // 400 world px of scroll is 200 m (2 world px per m), so a tick moves 2 x px100 css px to the left
+  const mid = t.at[Math.floor(t.at.length / 2)], moved = t2.at.find(q => q.s === mid.s);
+  assert(moved && Math.abs((mid.sx - moved.sx) - 2 * px100) < 1.5, 'rule did not follow the scroll: ' + JSON.stringify({ mid, moved, px100 }));
+  return { px100, worstGapErrPx: +worst.toFixed(3), sCentre: +sMid.toFixed(2), sFact: s0, labels: major.map(m => m.text), vw };
+});
+
+// P5.6 own idea 3: &cap= on an output, the brightness ceiling. Two clock-mode outputs at speed 0 draw the same
+// picture; with cap=0.6 every pixel is 0.6 of the uncapped one (8-bit rounding aside) and fps does not drop
+await test('output-cap', async () => {
+  const t0 = Date.now();
+  const shot = async cap => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => consoleProblems.push({ url: p.url(), text: 'pageerror: ' + e.message }));
+    await p.goto(BASE + `output.html?world=nashua&seed=1&t0=${t0}&speed=0&light=1&fog=0.25${cap ? '&cap=' + cap : ''}`);
+    await p.waitForFunction(() => window.SSOUT && SSOUT.scene.stats().tiles >= 3, null, { timeout: 60000 });
+    await p.waitForTimeout(3000);
+    const fps = await p.evaluate(() => SSOUT.scene.fps), c = await p.evaluate(() => SSOUT.cap);
+    const png = PNG.sync.read(await p.screenshot());
+    await ctx.close();
+    return { png, fps, cap: c };
+  };
+  const A = await shot(0), B = await shot(0.6);
+  let maxA = 0, maxB = 0, worst = 0, n = 0, sumR = 0, bad = 0, all = 0;
+  for (let i = 0; i < A.png.data.length; i += 4) for (let ch = 0; ch < 3; ch++) {
+    const a = A.png.data[i + ch], b = B.png.data[i + ch];
+    if (a > maxA) maxA = a; if (b > maxB) maxB = b;
+    const e = Math.abs(b - a * 0.6); if (e > worst) worst = e; all++; if (e > 2) bad++;
+    if (a > 40) { sumR += b / a; n++; }
+  }
+  assert(A.cap === 1 && B.cap === 0.6, 'cap read ' + A.cap + ' ' + B.cap);
+  // the water moves between the two shots, so a few pixels differ; nearly all sit on the 0.6 line
+  assert(bad / all < 0.02, 'share off the 0.6 line by more than 2: ' + (bad / all).toFixed(4));
+  assert(maxB <= Math.ceil(maxA * 0.6) + 1, 'brightest ' + maxB + ' vs ' + maxA);
+  assert(B.fps >= A.fps - 3, 'fps ' + A.fps + ' -> ' + B.fps);
+  return { maxUncapped: maxA, maxCapped: maxB, meanRatio: +(sumR / n).toFixed(4), worstErr: worst, offLine: +(bad / all).toFixed(4), fps: [+A.fps.toFixed(1), +B.fps.toFixed(1)] };
+});
+
 await browser.close();
 const failed = results.filter(r => !r.pass);
 const summary = { date: new Date().toISOString(), base: BASE, pass: failed.length === 0 && consoleProblems.length === 0, tests: results.length, failed: failed.map(f => f.name), consoleProblems };
