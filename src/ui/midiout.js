@@ -8,6 +8,8 @@
 // the confluence are long notes (800 ms), CSOs and outfalls short ones (200 ms). Same reach and bank, same notes.
 export const OUT_CC = { terrain: 20, density: 21, level: 22, light: 23, rain: 24, seed: 25, play: 26 };
 const SCALE = [0, 3, 5, 7, 10];
+// a move from a to b passes p: landing exactly on p counts once, leaving it does not count again
+export const crossed = (a, b, p) => (a < p && b >= p) || (a > p && b <= p);
 
 export class MidiOut {
   constructor({ onLog = () => {} } = {}) {
@@ -44,7 +46,7 @@ export class MidiOut {
     // every feature passed since the last tick sounds, even when a hidden window's timers run slow (a jump of
     // more than 1 km is a world change or a jump, not travel, and plays nothing)
     if (sc.s != null && this.lastS != null && sc.features && Math.abs(sc.s - this.lastS) < 1000) {
-      for (const f of sc.features) if ((this.lastS - f.s) * (sc.s - f.s) < 0) this.note(f.note, f.vel, f.ms);
+      for (const f of sc.features) if (crossed(this.lastS, sc.s, f.s)) this.note(f.note, f.vel, f.ms);
     }
     this.lastS = sc.s;
     const now = performance.now();
