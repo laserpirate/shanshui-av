@@ -99,3 +99,29 @@ The Merrimack reach: 5008 m below the confluence, from the same DEM, land cover 
 ![`?hydro=1` at 1936-03-19 (the hydrograph only, 480 x 132 css px)](hydrograph_1936-03-19.png)
 
 <!-- end p5 strips -->
+
+<!-- p6 strips: made by tools/nashua/review-p6.mjs -->
+## P6 strips: before and after
+
+Made with `node tools/nashua/review-p6.mjs`. Seed 1, nashua-kit, left bank (the north bank, downstream to the right), day, Median Water, dry, fog 0.25, labels off, 360 px high, the whole reach plus 24 world px of paper at each end. Before: the `.p5` tag, with the filled hills, 2 world px per m, Vertical Exaggeration 10x. After: P6 at its defaults, no filled hills (one thin ridgeline of real ground, the near bank, the buildings in rows by distance), 8 world px per m, Vertical Exaggeration 2x. The after strips are four times as long because the horizontal scale is four times larger; the heights are one fifth because the exaggeration is one fifth. Building heights are estimated.
+
+| Strip | px | Reach | When | Scale | Pack | KB |
+| --- | --- | --- | --- | --- | --- | --- |
+| [p6_nashua_360p_bank-L_day_level-0_before.jpg](p6_nashua_360p_bank-L_day_level-0_before.jpg) | 2552 x 360 | Nashua, 2458.8 m | before | 2 px per m, 10x | 2cd2b856a894206a | 91 |
+| [p6_nashua_360p_bank-L_day_level-0_after.jpg](p6_nashua_360p_bank-L_day_level-0_after.jpg) | 10134 x 360 | Nashua, 2458.8 m | after | 8 px per m, 2x | 6f84a65ea6634724 | 232 |
+| [p6_merrimack_360p_bank-L_day_level-0_before.jpg](p6_merrimack_360p_bank-L_day_level-0_before.jpg) | 5172 x 360 | Merrimack, 5008 m | before | 2 px per m, 10x | cec345b089d01283 | 195 |
+| [p6_merrimack_360p_bank-L_day_level-0_after.jpg](p6_merrimack_360p_bank-L_day_level-0_after.jpg) | 20614 x 360 | Merrimack, 5008 m | after | 8 px per m, 2x | d6e8e688ca0912da | 540 |
+
+![Nashua before: 2 world px per m, Vertical Exaggeration 10x](p6_nashua_360p_bank-L_day_level-0_before.jpg)
+
+![Nashua after: 8 world px per m, Vertical Exaggeration 2x](p6_nashua_360p_bank-L_day_level-0_after.jpg)
+
+![Merrimack before: 2 world px per m, Vertical Exaggeration 10x](p6_merrimack_360p_bank-L_day_level-0_before.jpg)
+
+![Merrimack after: 8 world px per m, Vertical Exaggeration 2x](p6_merrimack_360p_bank-L_day_level-0_after.jpg)
+
+The controller at s 1110 m (the church behind the lot), labels on, the map inset on at its default size (400 px): north up, the stations, the dot at the playhead.
+
+![Controller with labels and the map inset](p6_nashua_720p_map-inset_labels.jpg)
+
+<!-- end p6 strips -->

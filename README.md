@@ -28,12 +28,13 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?i=<name>` | Instance: its own settings, stars and output channel, so two laptops or two outputs never mix |
 | `?palette=<id>` | Start on a palette from `palettes.json` |
 | `?world=derelict` | Start on the derelict world (shanshui is the default) |
-| `?world=nashua` | The Nashua reach as a section; also `&bank=L\|R`, `&ve=1..20`, `&level=0..4`, `&ends=handover\|loop\|pingpong`, `&mode=nature\|built\|design\|sections`, `&morph=0..1` (needs the local design pack) |
+| `?world=nashua` | The Nashua reach as a section, seen from the south bank looking north; also `&bank=L\|R`, `&hx=2..12` (world px per m, default 8), `&ve=1..20` (Vertical Exaggeration, default 2), `&level=0..4`, `&ends=pingpong\|handover\|loop` (default pingpong), `&mode=nature\|built\|design\|sections`, `&morph=0..1` (needs the local design pack). Clock-mode outputs take `&hx` and `&ve` too |
+| `?layers=a,b` | nashua, for tests and review: draw only these layers (for example `buildings`) |
 | `?t=YYYY-MM-DD` | nashua: the time scroll on, at that day of the East Pepperell record (an upstream proxy) |
 | `?daycycle=1&hour=HH` | nashua with the time scroll: the light follows the sun at the reach for the hour of the scroll's day (local standard time); held above 0.1 day/s |
 | `?reach=merrimack` | nashua: the second reach, 5 km of the Merrimack below the confluence (estimated bed, levels carried from the confluence) |
 | `?hydro=1` | nashua with the time scroll: a hydrograph under the fact line, a year either side of the scroll's day (East Pepperell, log axis, median and 1936 rules) |
-| `?ticks=1` | nashua, controller or output: a distance rule along the bottom, a tick every 100 m and a label every 500 m |
+| `?ticks=1` | nashua, controller or output: a distance rule along the bottom; at 6 px per m and up a tick every 25 m and a label every 100 m, below that a tick every 100 m and a label every 500 m |
 | `&cap=0.8` (output) | this output's brightness ceiling, 0.1 to 1: the picture times cap, under the controller's master. Labels and a local video slit source are not capped |
 | `?tags=1` | nashua: post the tag stream for a score (`docs/nashua/score-tags.md`) |
 | `?quality=auto\|high\|medium\|low` | The quality ladder (auto: start rung from the GPU, down after 5 s under 24 fps) or a fixed rung |
@@ -45,6 +46,16 @@ Export, To scale (nashua): Arch D or a 36 in roll at 1:500, 1:1000 or 1:2000 hor
 
 `output.html?i=<name>` is the output window for that instance (no UI, writes nothing).
 `output.html?wall=CxR&col=&row=` is one node of a wall; `&t0=<epoch ms>&speed=` runs it from the clock alone (WALL.md).
+
+Nashua on the controller (Reach panel, and the bar while a data world is on):
+
+| Control | Key | What |
+| --- | --- | --- |
+| Labels here / Labels on output | `L` (here) | Names and ids from the data only; off by default on the output |
+| Map | `I` | The map inset: the route in plan, north up, the stations, a dot at the playhead; click a station to go there. Sizes 240, 400 (default) or 600 px; "Map on output" is off by default |
+| Scale | | Horizontal world px per m, 2 to 12 (default 8); the fact line states 100 m in px |
+| Open pair | | Two output windows as a `wall=2x1`, columns 0 and 1 (allow popups) |
+| Copy pair links | | Two clock-mode links with one shared `t0`, 10 s ahead, for two machines (WALL.md) |
 
 ## MIDI
 

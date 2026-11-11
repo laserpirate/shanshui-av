@@ -28,7 +28,9 @@ for (const r of RUNS) {
   const page = await browser.newPage({ viewport: { width: W, height: r.h } });
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') problems.push(m.text().slice(0, 200)); });
   page.on('pageerror', e => problems.push('pageerror ' + e.message));
-  await page.goto(`${BASE}?i=review-${r.bank}&seed=1&world=nashua&bank=${r.bank}&level=${r.level}`);
+  // P6: pinned to the P1 scale (2 world px per m, 10x) so the sheet it writes stays what its text says; the P6
+  // strips at the new defaults are made by tools/nashua/review-p6.mjs
+  await page.goto(`${BASE}?i=review-${r.bank}&seed=1&world=nashua&bank=${r.bank}&level=${r.level}&hx=2&ve=10`);
   await page.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.world().pack, null, { timeout: 60000 });
   await page.evaluate(({ r, PAD }) => {
     document.body.classList.add('uihidden');

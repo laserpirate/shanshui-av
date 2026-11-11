@@ -39,8 +39,8 @@ for (const r of RUNS) {
   page.on('pageerror', e => problems.push('pageerror ' + e.message));
   await page.goto(`${BASE}?i=review-p5&seed=1&world=nashua${r.q}`);
   await page.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.world().pack, null, { timeout: 60000 });
-  const len = await page.evaluate(() => SSAV.world().pack.route_len_m);
-  const W = Math.ceil((len * 2 + 2 * PAD) * H / WORLD_H);
+  const { len, hx } = await page.evaluate(() => ({ len: SSAV.world().pack.route_len_m, hx: SSAV.world().pack.hx || 2 }));
+  const W = Math.ceil((len * hx + 2 * PAD) * H / WORLD_H);   // P6: world px per m from the pack (was 2)
   await page.setViewportSize({ width: W, height: H });
   await page.evaluate(({ r, PAD }) => {
     document.body.classList.add('uihidden');

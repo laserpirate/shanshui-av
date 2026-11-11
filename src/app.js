@@ -14,13 +14,14 @@ import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
 import { ReachOverlay, TickOverlay, factLine } from './ui/reach.js';
 import { SectionInset } from './ui/section.js';
-import { xOf, sOf, reachW, HX } from './worlds/nashua/pack.js';
+import { xOf, sOf, reachW, hxOf, clampHX, HX_MIN, HX_MAX, VE_DEF } from './worlds/nashua/pack.js';
 import { MODES, MODE_ORDER, MODE_DEFAULT, LAYERS, layersOf } from './worlds/nashua/modes.js';
 import { wsSync } from './wall.js';
 import { loadGauge, dayOf, isoOf, qAt, lvOfQ, timeFact, MARCH_1936 } from './worlds/nashua/gauge.js';
 import { sunElev, lightOfElev, doyOf, hhmm, FAST as DAY_FAST } from './worlds/nashua/sun.js';
 import { TagStream } from './worlds/nashua/tags.js';
 import { Hydro } from './ui/hydro.js';
+import { MapInset } from './ui/mapinset.js';
 import { offline } from './offline.js';
 import { Ladder } from './core/ladder.js';
 
@@ -43,10 +44,13 @@ const DEF = {
   // data world (nashua): bank in view, vertical exaggeration, water level position (0 = first named level),
   // what happens at the ends of the reach, labels in the controller and on the output, fact line on the output
   // mode: a list of layers (modes.js); sections: the live section toggle (X) on top of any mode
-  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false, mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false, dayCycle: false, hold: 21 } },
+  // hx: world px per m along the river (P6: 8, live 2 to 12); ve 2 and ends ping-pong since P6 (ADDENDUM-A, A1 and A6)
+  nashua: { bank: 'L', hx: 8, ve: 2, level: 0, ends: 'pingpong', labels: true, outLabels: false, outFacts: false, map: false, outMap: false, mapSize: 'm', mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false, dayCycle: false, hold: 21 } },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
+// P6 defaults replace a saved exaggeration and ends rule once (a settings file from before P6 has no hx)
+if (!(saved.cfg && saved.cfg.nashua && saved.cfg.nashua.hx)) { cfg.nashua.ve = DEF.nashua.ve; cfg.nashua.ends = DEF.nashua.ends; cfg.nashua.hx = DEF.nashua.hx; }
 let stars = Array.isArray(saved.stars) ? saved.stars.slice(0, 200) : [];
 let palStars = Array.isArray(saved.palStars) ? saved.palStars : [];
 let hist = Array.isArray(saved.hist) ? saved.hist.slice(-20) : [];
@@ -119,17 +123,20 @@ let epoch = 0;
   const q = new URLSearchParams(location.search), N = cfg.nashua;
   if (q.get('bank') === 'L' || q.get('bank') === 'R') N.bank = q.get('bank');
   if (q.get('ve') && isFinite(+q.get('ve'))) N.ve = Math.max(1, Math.min(20, Math.round(+q.get('ve'))));
+  if (q.get('hx') && isFinite(+q.get('hx'))) N.hx = clampHX(q.get('hx'));
   if (['handover', 'loop', 'pingpong'].includes(q.get('ends'))) N.ends = q.get('ends');
   if (q.get('level') && isFinite(+q.get('level'))) N.level = Math.max(0, +q.get('level'));
   if (MODES[q.get('mode')]) N.mode = q.get('mode');
   if (q.get('morph') && isFinite(+q.get('morph'))) N.morph = Math.max(0, Math.min(1, +q.get('morph')));
 }
-const modeLayers = () => layersOf(cfg.nashua.mode, cfg.nashua.sections || cfg.nashua.mode === 'sections');
+// ?layers=terrain,water: draw only these mode layers (the P6 proof that no terrain is filled above the bank)
+const LAYERS_Q = (new URLSearchParams(location.search).get('layers') || '').split(',').filter(l => LAYERS.includes(l));
+const modeLayers = () => (LAYERS_Q.length ? LAYERS_Q : layersOf(cfg.nashua.mode, cfg.nashua.sections || cfg.nashua.mode === 'sections'));
 // morph is quantized to 5% steps: each step is a regenerated reach (pure function of bank, ve, morph)
 const morphQ = v => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
 // the reach (?reach=merrimack for the second one) is per page, not saved: a reload without it is the Nashua
 let reach = new URLSearchParams(location.search).get('reach') === 'merrimack' ? 'merrimack' : 'nashua';
-const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve, ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 ? { morph: morphQ(cfg.nashua.morph) } : {}) } : undefined;
+const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 ? { morph: morphQ(cfg.nashua.morph) } : {}) } : undefined;
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
 cur.opts = optsFor(cur.world);
 let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
@@ -299,6 +306,38 @@ function openOutput() {
   setTimeout(() => { if (!out.connected || out.last < t) toast('No output window: allow popups for this page'); }, 4000);
 }
 
+// ---------- the pair (P6, A5): two windows or two computers as one long picture ----------
+// Open pair: two output windows as a 2 x 1 wall, columns 0 and 1, driven by this controller over the BroadcastChannel
+// (world, seed, reach and everything else travel in the frame state). Each opens half the screen wide; drag each to
+// its display and press F there.
+function pairUrl(col, extra = {}) {
+  const url = new URL('output.html', location.href);
+  if (INSTANCE !== 'main') url.searchParams.set('i', INSTANCE);
+  url.searchParams.set('wall', '2x1'); url.searchParams.set('col', String(col));
+  for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, String(v));
+  return url.href;
+}
+function openPair() {
+  const w = Math.floor((screen.availWidth || 2560) / 2), h = Math.round(w * 9 / 16);
+  for (const col of [0, 1]) window.open(pairUrl(col), '_blank', `popup,noopener,left=${col * w},top=0,width=${w},height=${h}`);
+  log('info', 'pair requested: two output windows, wall 2 x 1');
+  toast('Pair: two output windows (allow popups); drag each to its display, F for full screen');
+}
+// Copy pair links: for two computers, clock mode with one shared start t0 (10 s from now) and the current world,
+// seed, reach, bank, scale, exaggeration, palette, mode and speed. No server: each machine opens its link.
+function pairLinks(t0 = Date.now() + 10000) {
+  const o = { world: cur.world, seed: cur.seed, t0, speed: Math.round(cfg.speed), palette: pal.target };
+  if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}) });
+  return [pairUrl(0, o), pairUrl(1, o)];
+}
+async function copyPairLinks() {
+  const L = pairLinks(), text = 'left screen:  ' + L[0] + '\nright screen: ' + L[1];
+  log('info', 'pair links (clock mode, shared t0):\n' + text);
+  try { await navigator.clipboard.writeText(text); toast('Pair links copied: open the first on the left machine, the second on the right'); }
+  catch { toast('Pair links in the Log panel (the clipboard was not allowed)'); }
+  return L;
+}
+
 // ---------- frame state ----------
 let time0 = performance.now();
 function frameState(now) {
@@ -311,7 +350,7 @@ function frameState(now) {
   for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = modeLayers(); w.all = LAYERS; }
   return {
     level: lvShown,
-    reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts, time: timeText() },
+    reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts, map: cfg.nashua.outMap, mapSize: cfg.nashua.mapSize, time: timeText() },
     worlds, dir: pb.dir,
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
     u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign, master: cfg.master },
@@ -416,6 +455,7 @@ let drag = null;
 const cssScale = () => (canvas.clientHeight / WORLD_H) * cfg.zoom;
 stage.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
+  if (e.target.closest('.map-inset')) return;   // P6: the map takes its own clicks (a drag here would capture them)
   const onFrame = e.target.closest('#frame');
   drag = { x: e.clientX, frame: !!onFrame };
   stage.setPointerCapture(e.pointerId); stage.classList.add('drag');
@@ -488,7 +528,8 @@ function onKey(e) {
     case 'x': case 'X': cfg.nashua.sections = !cfg.nashua.sections; persist(); renderReach(); toast(cfg.nashua.sections ? 'Sections on' : 'Sections off'); break;
     case 'y': case 'Y': setTime({ on: !cfg.nashua.time.on, run: !cfg.nashua.time.on }); toast(cfg.nashua.time.on ? 'Time scroll on' : 'Time scroll off'); break;
     case 'u': case 'U': setTime({ on: true, run: true, iso: '1936-03-01' }); toast('March 1936'); break;
-    case 'l': case 'L': cfg.nashua.labels = !cfg.nashua.labels; persist(); renderReach(); toast(cfg.nashua.labels ? 'Labels on' : 'Labels off'); break;
+    case 'l': case 'L': setLabels('labels', !cfg.nashua.labels); break;
+    case 'i': case 'I': if (isData()) setMapInset(!cfg.nashua.map); break;
     case '1': case '2': case '3': case '4': case '5': case '6': setLevel(+k - 1); break;
     case '?': case '/': togglePanel('p-keys'); break;
     default: return;
@@ -515,6 +556,8 @@ $('b-palnext').onclick = () => palStep(1);
 $('b-pal').onclick = () => togglePanel('p-look');
 $('b-hold').onclick = () => setHold();
 $('b-out').onclick = openOutput;
+$('b-pair').onclick = () => openPair();
+$('b-pairlinks').onclick = () => copyPairLinks();
 $('s-out').onclick = openOutput;
 $('b-full').onclick = toggleFull;
 $('b-black').onclick = () => setBlack();
@@ -628,6 +671,10 @@ const ACT = {
   water: { get: () => (isData() ? levelGet() : param('water').get()), set: v => (isData() ? scrubLevel(v) : param('water').set(v)) },
   level: { get: levelGet, set: v => (isData() ? scrubLevel(v) : 'level: nashua only') },
   ve: { get: () => (isData() ? (cfg.nashua.ve - 1) / 19 : null), set: v => (isData() ? setVE(1 + Math.round(v * 19), false) : 'exaggeration: nashua only') },
+  hx: { get: () => (isData() ? (cfg.nashua.hx - HX_MIN) / (HX_MAX - HX_MIN) : null), set: v => (isData() ? setHX(HX_MIN + Math.round(v * (HX_MAX - HX_MIN)), false) : 'scale: nashua only') },
+  labels: { fire: () => (isData() ? setLabels('labels', !cfg.nashua.labels) : 'labels: nashua only') },
+  outLabels: { fire: () => (isData() ? setLabels('outLabels', !cfg.nashua.outLabels) : 'labels: nashua only') },
+  mapInset: { fire: () => (isData() ? setMapInset(!cfg.nashua.map) : 'map: nashua only') },
   bank: { fire: () => (isData() ? setBank(cfg.nashua.bank === 'L' ? 'R' : 'L') : 'bank: nashua only') },
   mode: { fire: () => (isData() ? setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]) : 'mode: nashua only') },
   morph: { get: () => (isData() ? cfg.nashua.morph : null), set: v => (isData() ? setMorph(v) : 'morph: nashua only') },
@@ -853,7 +900,7 @@ function viewForExport() {
 // to scale (data worlds only): the world's px per m, the exaggeration and the reach length go into the geometry
 function geom() {
   const scaled = E.format === 'scale' && isData() && curPack();
-  return frameGeom(scaled ? { ...E, hx: HX, ve: cfg.nashua.ve, reachW: reachW(curPack()) } : { ...E, format: E.format === 'scale' ? 'archd' : E.format }, viewForExport());
+  return frameGeom(scaled ? { ...E, hx: hxOf(curPack()), ve: cfg.nashua.ve, reachW: reachW(curPack()) } : { ...E, format: E.format === 'scale' ? 'archd' : E.format }, viewForExport());
 }
 function renderExport() {
   const g = geom();
@@ -934,6 +981,7 @@ function renderWorld() {
   $('hud-world').textContent = 'World: ' + cur.world;
   $('weather-off').hidden = worldOf(cur.world).weather;
   if ($('r-off')) $('r-off').hidden = !!worldOf(cur.world).data;
+  if ($('b-data')) $('b-data').hidden = !worldOf(cur.world).data;
 }
 document.querySelectorAll('#b-world button').forEach(b => b.onclick = () => setWorld(b.dataset.v));
 const paintCycle = bindSeg('w-cycle', () => cfg.weather.mode === 'scrub' ? '' : cfg.weather.mode, v => { cfg.weather.mode = v; renderWeather(); });
@@ -967,6 +1015,14 @@ const overlay = new ReachOverlay($('labels'));
 // ?ticks=1: the distance rule along the bottom (ui/reach.js)
 const ticks = new URLSearchParams(location.search).get('ticks') === '1' ? new TickOverlay($('labels').parentElement) : null;
 const section = new SectionInset($('section'), $('playhead'));
+// the map inset (ui/mapinset.js): click a station or the river to go there
+const mapInset = new MapInset($('labels').parentElement, (s, why) => {
+  const P = curPack(); if (!P) return;
+  pb.x = xOf(P, s, cfg.nashua.bank) - viewW() / 2; pb.pull = 0; pb.tween = null;
+  log('info', 'map: to s ' + Math.round(s) + ' m (' + why + ')');
+});
+// keep the inset above the controller bar (the bar wraps on narrow screens): measured on resize, never per frame
+if (window.ResizeObserver) new ResizeObserver(() => { mapInset.root.style.bottom = ($('bar').offsetHeight + 28) + 'px'; }).observe($('bar'));
 const isData = () => !!(WORLDS[cur.world] && WORLDS[cur.world].data);
 const curPack = () => { const w = scene.peek(cur.key); return w && w.pack ? w.pack : null; };
 const nLevels = () => (curPack() ? curPack().levels.length : 5);
@@ -996,11 +1052,35 @@ function setVE(v, now) {
   // a new exaggeration redraws the reach: debounced, then crossfaded at the same x
   veTimer = setTimeout(() => { if (isData() && cur.opts && cur.opts.ve !== cfg.nashua.ve) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'Vertical Exaggeration ' + cfg.nashua.ve + 'x' }); }, now ? 0 : 350);
 }
+// horizontal scale (world px per m): a new scale redraws the reach, debounced, keeping the same s at the view centre
+let hxTimer = 0;
+function setHX(v, now) {
+  v = clampHX(v);
+  if (v === cfg.nashua.hx && !now) return;
+  cfg.nashua.hx = v; persist(); renderReach();
+  clearTimeout(hxTimer);
+  hxTimer = setTimeout(() => {
+    if (!isData() || !cur.opts || cur.opts.hx === cfg.nashua.hx) return;
+    const P = curPack(), s = P ? sOf(P, pb.x + viewW() / 2, cfg.nashua.bank) : null;
+    const keepX = P ? xOf({ ...P, hx: cfg.nashua.hx }, s, cfg.nashua.bank) - viewW() / 2 : pb.x;
+    setSeed(cur.seed, { world: cur.world, keepX, history: false, why: 'scale ' + cfg.nashua.hx + ' px per m' });
+  }, now ? 0 : 350);
+}
 let morphTimer = 0;
 function setMorph(v) {
   cfg.nashua.morph = Math.max(0, Math.min(1, v)); persist(); renderReach();
   clearTimeout(morphTimer);
   morphTimer = setTimeout(() => { const want = morphQ(cfg.nashua.morph), have = (cur.opts && cur.opts.morph) || 0; if (isData() && want !== have) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'morph ' + Math.round(want * 100) + '%' }); }, 250);
+}
+// labels on the controller (key L) and on the output windows: two toggles, each a button, a check and a MIDI role
+function setLabels(key, v) {
+  cfg.nashua[key] = !!v; persist(); renderReach();
+  toast((key === 'labels' ? 'Labels here ' : 'Labels on the output ') + (v ? 'on' : 'off'));
+}
+// the plan inset (ui/mapinset.js): key I, a button, a MIDI role; size small, medium, large
+function setMapInset(v, size) {
+  cfg.nashua.map = !!v; if (size) cfg.nashua.mapSize = size;
+  persist(); renderReach();
 }
 function setMode(m) { if (!MODES[m]) return; cfg.nashua.mode = m; persist(); renderReach(); toast('Mode: ' + m); }
 function setLevel(i) { if (cfg.nashua.time.on) setTime({ on: false }); cfg.nashua.level = Math.max(0, Math.min(nLevels() - 1, i)); lvScrub = false; persist(); renderReach(); }
@@ -1108,7 +1188,9 @@ function reachTick() {
   if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off');
   if (ticks && lastView) ticks.update(w, { cssScale: vs, camX: pb.x, W: lastView.W }, isData() && cfg.fx.mode === 'off');
   const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
-  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || 10, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
+  if (SP) { const vw = viewW(); mapInset.update(w, { s: sOf(SP, pb.x + vw / 2, so.bank), sL: sOf(SP, pb.x, so.bank), sR: sOf(SP, pb.x + vw, so.bank) }, isData() && cfg.nashua.map && cfg.fx.mode === 'off', cfg.nashua.mapSize); }
+  else mapInset.update(null, null, false);
+  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || VE_DEF, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
   const now = performance.now();
   if (now - factAt < 250) return;
   factAt = now;
@@ -1126,10 +1208,14 @@ bindCheck('r-sections', 'sections', cfg.nashua, () => renderReach());
 $('r-morph').addEventListener('input', e => setMorph(+e.target.value));
 const paintEnds = bindSeg('r-ends', () => cfg.nashua.ends, v => { cfg.nashua.ends = v; });
 $('r-ve').addEventListener('input', e => setVE(+e.target.value, false));
+$('r-hx').addEventListener('input', e => setHX(+e.target.value, false));
 $('r-level').addEventListener('input', e => { if (cfg.nashua.time.on) setTime({ on: false }); cfg.nashua.level = lvShown = +e.target.value; persist(); renderReach(); });
-bindCheck('r-labels', 'labels', cfg.nashua);
-bindCheck('r-outlabels', 'outLabels', cfg.nashua);
 bindCheck('r-outfacts', 'outFacts', cfg.nashua);
+// label and map toggles: a labelled button each, in the Reach panel and on the controller bar
+for (const [id, key] of [['r-labels', 'labels'], ['b-labels', 'labels'], ['r-outlabels', 'outLabels'], ['b-outlabels', 'outLabels']]) $(id).onclick = () => setLabels(key, !cfg.nashua[key]);
+for (const id of ['r-map', 'b-map']) $(id).onclick = () => setMapInset(!cfg.nashua.map);
+$('r-outmap').onclick = () => { cfg.nashua.outMap = !cfg.nashua.outMap; persist(); renderReach(); };
+const paintMapSize = bindSeg('r-mapsize', () => cfg.nashua.mapSize, v => setMapInset(cfg.nashua.map, v));
 let levelsBuilt = '';
 function renderReach() {
   paintBank(); paintReachSel(); paintEnds(); paintMode();
@@ -1139,7 +1225,14 @@ function renderReach() {
   { const w = scene.peek(cur.key), miss = !!(w && w.designMissing); $('r-morph-note').hidden = !miss; $('r-morph-note').textContent = miss ? 'Design pack not loaded (local only): the morph stays at Existing Grade (before landform)' : ''; }
   $('r-off').hidden = isData();
   $('r-ve').value = cfg.nashua.ve; $('r-ve').parentElement.querySelector('output').textContent = cfg.nashua.ve + 'x';
-  $('r-labels').checked = cfg.nashua.labels;
+  $('r-hx').value = cfg.nashua.hx; $('r-hx').parentElement.querySelector('output').textContent = cfg.nashua.hx + ' px/m';
+  const tog = (id, on, a, b) => { const e = $(id); e.classList.toggle('on', !!on); e.setAttribute('aria-pressed', on ? 'true' : 'false'); if (a) e.textContent = on ? a : b; };
+  tog('r-labels', cfg.nashua.labels, 'Labels here: on', 'Labels here: off'); tog('b-labels', cfg.nashua.labels);
+  tog('r-outlabels', cfg.nashua.outLabels, 'Labels on output: on', 'Labels on output: off'); tog('b-outlabels', cfg.nashua.outLabels);
+  tog('r-map', cfg.nashua.map, 'Map here: on', 'Map here: off'); tog('b-map', cfg.nashua.map);
+  tog('r-outmap', cfg.nashua.outMap, 'Map on output: on', 'Map on output: off');
+  paintMapSize();
+  $('b-data').hidden = !isData();
   const P = curPack();
   $('r-level').max = nLevels() - 1;
   if (document.activeElement !== $('r-level')) $('r-level').value = cfg.nashua.level;
@@ -1319,7 +1412,7 @@ renderFx();
 
 window.SSAV = {
   get reach() { return reach; }, setReach,
-  get ticks() { return ticks && { shown: ticks.on, n: ticks.items.length, at: ticks.items.filter(t => t.vis).map(t => ({ s: t.s, sx: t.sx })) }; },
+  get ticks() { return ticks && { shown: ticks.on, n: ticks.items.length, step: ticks.step, at: ticks.items.filter(t => t.vis).map(t => ({ s: t.s, sx: t.sx })) }; },
   get hydro() { return hydro && { shown: !hydro.cv.hidden, day: hydro.day, draws: hydro.draws, ms: hydro.ms, cursorX: hydro.cursorX }; },
   get seed() { return cur.seed; }, get key() { return cur.key; }, get x() { return pb.x; }, get playing() { return pb.playing; },
   get worldName() { return cur.world; }, setWorld, nextWorld, weather, renderWeather,
@@ -1327,5 +1420,7 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get tags() { return tagStream ? tagStream.ring.slice() : null; }, tagScene: () => (tagStream ? tagStream.scene : null), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
+  view: () => viewForExport(), setLabels, setMapInset, pairLinks, openPair, get mapInset() { return { on: mapInset.on, draws: mapInset.draws, ms: mapInset.ms, dot: mapInset.dot, w: mapInset.g && mapInset.g.w, h: mapInset.g && mapInset.g.h, hits: mapInset.hits }; },
+  midiRoles: () => MIDI_TARGETS.map(t => t.id), midiAct: (id, v) => { const a = ACT[id]; return a ? (a.fire ? a.fire() : a.set(v)) : 'no role ' + id; },   // tests: a role as a MIDI binding fires it
+  setBank, setVE, setHX, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get tags() { return tagStream ? tagStream.ring.slice() : null; }, tagScene: () => (tagStream ? tagStream.scene : null), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

@@ -1,7 +1,7 @@
 // Labels and the fact line for data worlds (nashua), as DOM over the canvas, in the controller and (optionally)
 // the output window. Label text is names and ids from the data pack only. Nodes are built once per world and
 // moved with transforms each frame; nothing is rebuilt on mouse or frame events.
-import { xOf, YW, HX, levelAt, sOf, MORPH_LABELS } from '../worlds/nashua/pack.js';
+import { xOf, YW, hxOf, VE_DEF, levelAt, sOf, at as at0, MORPH_LABELS } from '../worlds/nashua/pack.js';
 
 const FT = 0.3048;
 export const mft = (m, nd = 1, sign = false) => {
@@ -13,7 +13,7 @@ export class ReachOverlay {
   constructor(root) { this.root = root; this.key = null; this.items = []; this.on = false; }
 
   _build(world) {
-    const P = world.pack, o = world.opts || {}, side = o.bank === 'R' ? -1 : 1, VY = HX * (o.ve || 10);
+    const P = world.pack, o = world.opts || {}, side = o.bank === 'R' ? -1 : 1, VY = hxOf(P) * (o.ve || VE_DEF);
     this.root.textContent = '';
     this.items = [];
     const add = (s, y, text, cls) => {
@@ -30,6 +30,16 @@ export class ReachOverlay {
     for (const f of P.outfalls) if (f.side === side) add(f.s, YW + 44, f.id, 'pipe');
     if (P.lot && P.lot.side === side) add((P.lot.s0 + P.lot.s1) / 2, YW - 120, P.lot.label, 'lot');
     for (const st of P.stations) add((st.s0 + st.s1) / 2, 40, st.id, 'st');
+    // P6: structures from the data (dikes) and buildings of a kind worth naming, by their kind and id from the source
+    // (the structures layer has no names: a church is "Religious", a mill "Light industrial")
+    for (const d of P.structures || []) if (d.side === side) add(d.s, YW - (at0(P, 'band0_' + o.bank, d.s) + d.height_m) * VY - 40, d.label, 'lm');
+    const prim = P.prim_codes || [];
+    for (const b of P.buildings) {
+      if (b[2] !== side || b[3] > 3 || b.length < 10) continue;
+      const k = prim[b[8]], ind = (k === 'Light' || k === 'Heavy' || k === 'Metals/Minerals Processing') && b[1] - b[0] >= 60;
+      if (k !== 'Religious' && !ind) continue;
+      add((b[0] + b[1]) / 2, YW - (Math.max(-0.5, b[4]) + b[5]) * VY - 36, (k === 'Religious' ? 'Religious' : k + ' industrial') + ' (structures layer ' + b[9] + ')', 'bl');
+    }
   }
 
   // view: {cssScale, camX, camY, W}; show: boolean
@@ -49,8 +59,11 @@ export class ReachOverlay {
   }
 }
 
-// ?ticks=1: a distance rule along the bottom of the view, a tick every 100 m of s and a label every 500 m
-// (metric first, feet in brackets). Built once per world like the labels, moved with transforms each frame.
+// ?ticks=1: a distance rule along the bottom of the view (metric first, feet in brackets). The step follows the
+// horizontal scale so ticks stay at least 150 world px apart: at 2 to 5 px per m a tick every 100 m and a label every
+// 500 m; at 6 px per m and up (the default 8) a tick every 25 m and a label every 100 m. Built once per world like
+// the labels, moved with transforms each frame.
+export const tickStep = P => (hxOf(P) >= 6 ? { step: 25, major: 100 } : { step: 100, major: 500 });
 export class TickOverlay {
   constructor(parent) {
     this.root = document.createElement('div');
@@ -63,8 +76,10 @@ export class TickOverlay {
     const P = world.pack, o = world.opts || {};
     this.root.textContent = '';
     this.items = [];
-    for (let s = 0; s <= P.route_len_m + 1e-6; s += 100) {
-      const major = Math.round(s) % 500 === 0;
+    const T = tickStep(P);
+    this.step = T.step;
+    for (let s = 0; s <= P.route_len_m + 1e-6; s += T.step) {
+      const major = Math.round(s) % T.major === 0;
       const d = document.createElement('div');
       d.className = 'rt' + (major ? ' major' : '');
       if (major) { const b = document.createElement('span'); b.textContent = s + ' m (' + Math.round(s / FT) + ' ft)'; d.appendChild(b); }
@@ -90,7 +105,7 @@ export class TickOverlay {
 // one line of facts at the playhead (view centre)
 export function factLine(world, x, lv, cssScale, time) {
   if (!world || !world.pack) return '';
-  const P = world.pack, o = world.opts || {}, ve = o.ve || 10;
+  const P = world.pack, o = world.opts || {}, ve = o.ve || VE_DEF;
   const s = sOf(P, x, o.bank);
   if (s < 0 || s > P.route_len_m) return 'outside the reach';
   const k = Math.max(0, Math.min(P.n - 1, Math.round(s / P.ds)));
@@ -104,7 +119,7 @@ export function factLine(world, x, lv, cssScale, time) {
     'Vertical Exaggeration ' + ve + 'x',
     'building heights estimated',
     'bed ' + (meas ? 'measured' : 'estimated'),
-    '100 m (328 ft) = ' + Math.round(100 * HX * cssScale) + ' px',
+    '100 m (328 ft) = ' + Math.round(100 * hxOf(P) * cssScale) + ' px',
     water,
     ...(P.fact_note ? [P.fact_note] : []),
     ...(time ? [time] : []),

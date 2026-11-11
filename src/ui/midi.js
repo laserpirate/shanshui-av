@@ -50,6 +50,11 @@ export const MIDI_TARGETS = [
   { id: 'star', label: 'Star seed' },
   { id: 'hide', label: 'Hide controls' },
   { id: 'palPick', label: 'Palette pick', cont: true },
+  // P6 (ADDENDUM-A): horizontal scale, the two label toggles, the map inset
+  { id: 'hx', label: 'Horizontal scale', cont: true },
+  { id: 'labels', label: 'Labels (controller)' },
+  { id: 'outLabels', label: 'Labels (output)' },
+  { id: 'mapInset', label: 'Map inset' },
 ];
 const BY_ID = new Map(MIDI_TARGETS.map(t => [t.id, t]));
 export const PRESETS = ['korg-nanokontrol', 'korg-nanokontrol2', 'generic'];

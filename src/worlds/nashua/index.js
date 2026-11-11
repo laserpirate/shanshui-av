@@ -6,15 +6,17 @@
 //   generate(state, c)       -> elements of chunk c: [{id, layer, depth, x, canv, c}], back to front
 // Every chunk is a pure function of (pack, chunk, seed, bank, ve). Ink jitter, texture strokes and trees come from
 // hashes of (seed, global grid index), never from a running generator, so chunks join exactly and regenerate the same.
-// Nothing is placed from the engine's random defaults: no pavilions, towers, boats or invented buildings.
-//   depth 1 far      the wide DEM ridges (700 to 1500 m and 1500 to 3000 m from the water edge)
-//   depth 2 midfar   bands 300 to 700 m and 120 to 300 m, with their buildings
-//   depth 3 mid      band 40 to 120 m, buildings, trees from canopy
-//   depth 4 ground   band 0 to 40 m (the bank), buildings, trees, the lot
-//   depth 5 near     the bed in section, bridges in section, the dam, pipes at the water line
+// Nothing is placed from the engine's random defaults: no pavilions, towers, boats, pines or invented buildings.
+// Since P6 (ADDENDUM-A, A1) there are no hills: no filled terrain behind the near bank. The buildings are the skyline.
+//   depth 1 far      one ridgeline: a thin line of the highest real ground 40 to 700 m behind the water edge, no fill
+//   depth 2 midfar   buildings 300 to 700 m and 120 to 300 m from the water edge (pale)
+//   depth 3 mid      buildings 40 to 120 m
+//   depth 4 ground   the bank (0 to 40 m, filled: the ground we look across at), trees on it from canopy, the lot,
+//                    buildings 0 to 40 m (dark), structures on the bank (the dike), pipes at the water line
+//   depth 5 near     the bed in section, bridges in section, the dam
 import { G, PAPER, NONE, pl, lamp, L as LK, brush } from '../derelict/ink.js';
 import { seedInt, hash01, mulberry32, hash, noise1, noise2 } from '../derelict/rng.js';
-import { HX, YW, VE_DEF, VE_MIN, VE_MAX, xOf, sOf, at, reachW } from './pack.js';
+import { YW, VE_DEF, VE_MIN, VE_MAX, xOf, sOf, at, reachW, hxOf } from './pack.js';
 
 export const CW = 512;
 export const meta = {
@@ -29,7 +31,8 @@ const BOTTOM = 712;
 export function init(seed, opts = {}, pack) {
   const bank = opts.bank === 'R' ? 'R' : 'L';
   const ve = Math.max(VE_MIN, Math.min(VE_MAX, +opts.ve || VE_DEF));
-  return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, VY: HX * ve, pack, W: reachW(pack) };
+  const hx = hxOf(pack);
+  return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, hx, VY: hx * ve, pack, W: reachW(pack) };
 }
 // one element per (chunk, depth layer, piece); pieces keep their order inside a layer, so tiles are unchanged
 export const elementId = (c, layer, sub = 0) => c * 64 + layer * 12 + sub + 1;
@@ -57,83 +60,54 @@ function skyline(st, name, xa, xb, amp, k) {
   return pts;
 }
 
-// one terrain band: paper fill (it hides what is behind), ridge line, texture strokes down the slope, mist at the foot
-// value before hue: each band is a wash one step darker than the band behind it (far pale, near dark), so the
-// bands separate by value alone; the mist at each foot lifts it back toward paper
-const BAND = [
-  // name, fill grey, ridge grey, ridge width, stroke grey, stroke alpha, spacing px, stroke length px, tremor, mist
-  { name: 'far1', f: 236, g: 200, w: 0.7, sg: 210, sa: 0.3, sp: 18, len: 22, amp: 1.2, mist: 1 },
-  { name: 'far0', f: 226, g: 180, w: 0.8, sg: 190, sa: 0.35, sp: 15, len: 26, amp: 1.4, mist: 1 },
-  { name: 'band3', f: 214, g: 150, w: 0.9, sg: 160, sa: 0.4, sp: 13, len: 28, amp: 1.5, mist: 0.9 },
-  { name: 'band2', f: 201, g: 118, w: 1.1, sg: 130, sa: 0.45, sp: 12, len: 30, amp: 1.6, mist: 0.8 },
-  { name: 'band1', f: 188, g: 80, w: 1.4, sg: 95, sa: 0.5, sp: 11, len: 30, amp: 1.7, mist: 0.6 },
-  { name: 'band0', f: 174, g: 38, w: 2.0, sg: 55, sa: 0.55, sp: 10, len: 30, amp: 1.8, mist: 0.45 },
-];
-export const BAND_FILL = Object.fromEntries(BAND.map(b => [b.name, b.f]));
-function band(st, B, k, xa, xb) {
+// the near bank (band 0, 0 to 40 m from the water edge): the ground we look across at, filled, with its top line.
+// A rise or a drop shows only where the ground has one, at its true height x ve. No texture strokes, no mist.
+export const BANK = { fill: 214, line: 38, w: 2.0, amp: 1.0 };
+function bank(st, xa, xb) {
   if (xb <= xa) return '';
-  const top = skyline(st, B.name, xa, xb, B.amp, k);
+  const top = skyline(st, 'band0', xa, xb, BANK.amp, 5);
   const base = YW + 3;
-  let o = pl([[xa - 0.6, base], [xa - 0.6, top[0][1]], ...top, [xb + 0.6, top[top.length - 1][1]], [xb + 0.6, base]], G(B.f, 1), NONE, 0);
-  // texture strokes ("cun"): anchored on a global grid, so a stroke belongs to exactly one chunk
-  const k0 = Math.ceil(xa / B.sp), k1 = Math.floor((xb - 1e-6) / B.sp);
-  for (let q = k0; q <= k1; q++) {
-    const h = hash(st.s, 300 + k, q);
-    const r = mulberry32(h);
-    if (r() < 0.18) continue;
-    const x = q * B.sp + (r() - 0.5) * B.sp * 0.8;
-    const y = yOf(st, B.name, x);
-    const depth = base - y;
-    if (depth < 6) continue;
-    const slope = (yOf(st, B.name, x + 6) - yOf(st, B.name, x - 6)) / 12;     // + : falls to the right
-    const L = Math.min(depth * 0.85, B.len * (0.35 + r() * 0.9));
-    const lean = Math.max(-0.9, Math.min(0.9, slope * 1.6)) + (r() - 0.5) * 0.4;
-    const y0 = y + 1.5 + r() * Math.min(10, depth * 0.15);
-    const p = [[x, y0], [x + lean * L * 0.45 + (r() - 0.5) * 2, y0 + L * 0.5], [x + lean * L * 0.8, y0 + L]];
-    o += brush(p, 0.5 + r() * B.w * 0.7, G(B.sg - r() * 20, B.sa * (0.5 + r() * 0.5)), r, { noi: 0.4 });
-  }
-  // the ridge, a constant-width line so chunks join without a seam
-  o += pl(top, NONE, G(B.g, 0.85), B.w);
-  // a second, broken ridge stroke on the near bands: the brush lifting off the paper
-  if (k >= 4) {
-    const seg = [];
-    for (const p of top) {
-      const on = noise1(st.s ^ (0x91 + k), p[0] / 37) > 0.42;
-      if (on) seg.push([p[0], p[1] + 1.2]);
-      else if (seg.length) { if (seg.length > 2) o += pl(seg.splice(0), NONE, G(B.g - 20, 0.6), B.w * 0.7); else seg.length = 0; }
-    }
-    if (seg.length > 2) o += pl(seg, NONE, G(B.g - 20, 0.6), B.w * 0.7);
-  }
-  // mist at the foot: stacked translucent paper bands toward the water line
-  if (B.mist > 0) for (let i = 0; i < 4; i++) {
-    const y = base - (4 - i) * 14 * B.mist - 4;
-    o += pl([[xa - 0.6, y], [xb + 0.6, y], [xb + 0.6, base], [xa - 0.6, base]], G(255, 0.13 * B.mist), NONE, 0);
-  }
+  let o = pl([[xa - 0.6, base], [xa - 0.6, top[0][1]], ...top, [xb + 0.6, top[top.length - 1][1]], [xb + 0.6, base]], G(BANK.fill, 1), NONE, 0);
+  o += pl(top, NONE, G(BANK.line, 0.9), BANK.w);
   return o;
 }
+// the one ridgeline: the highest real ground 40 to 700 m behind the water edge (bands 1 to 3), a thin line, no fill
+export const RIDGE = { grey: 150, w: 0.9, bands: [1, 2, 3] };
+export function ridgeH(pack, bk, s) { let h = -Infinity; for (const j of RIDGE.bands) h = Math.max(h, at(pack, 'band' + j + '_' + bk, s)); return h; }
+function ridge(st, xa, xb) {
+  if (xb <= xa) return '';
+  const n = Math.max(1, Math.ceil((xb - xa) / 4)), pts = [];
+  for (let i = 0; i <= n; i++) {
+    const x = xa + (xb - xa) * i / n;
+    pts.push([x, YW - ridgeH(st.pack, st.bank, sAt(st, x)) * st.VY + (noise1(st.s ^ 0x5a, x / 23) - 0.5) * 1.2]);
+  }
+  return pl(pts, NONE, G(RIDGE.grey, 0.8), RIDGE.w);
+}
 
-// trees on a band from the canopy share: global 6 px grid, so 3 m per slot; fixed ink size, not to scale
-function trees(st, bandIdx, k, xa, xb, tone, size) {
+// trees on the bank from the canopy share (band 0): a global grid of 3 m slots; fixed ink size, not to scale.
+// Broadleaf only: the canopy class does not say what the trees are, so no pines are drawn.
+function trees(st, xa, xb, tone, size) {
   let o = '';
-  const name = 'band' + bandIdx, cname = 'canopy' + bandIdx + '_' + st.bank;
-  const sp = 6;
+  const cname = 'canopy0_' + st.bank;
+  const sp = 3 * st.hx;
   for (let q = Math.ceil(xa / sp); q <= Math.floor((xb - 1e-6) / sp); q++) {
-    const r = mulberry32(hash(st.s, 500 + bandIdx, q));
+    const r = mulberry32(hash(st.s, 500, q));
     const x = q * sp + (r() - 0.5) * sp;
     const s = sAt(st, x);
     const p = at(st.pack, cname, s) * 0.62;
     if (r() > p) continue;
-    const y = yOf(st, name, x) + r() * 6;
+    const y = yOf(st, 'band0', x) + r() * 6;
     const h = size * (0.6 + r() * 0.7);
-    if (r() < 0.3) o += pine(x, y, h, tone, r); else o += leafy(x, y, h, tone, r);
+    o += leafy(x, y, h, tone, r, Math.max(0.35, 1 / st.ve));
   }
   return o;
 }
-function leafy(x, y, h, tone, r) {
+// h in world px (height x ve); ax scales the crown's width (1 / ve keeps the crown true in plan width)
+function leafy(x, y, h, tone, r, ax = 1) {
   let o = '';
-  const lean = (r() - 0.5) * h * 0.15;
-  o += brush([[x, y], [x + lean * 0.5, y - h * 0.5], [x + lean, y - h * 0.8]], 1 + h * 0.03, G(tone, 0.85), r, { noi: 0.3 });
-  const cx = x + lean, cy = y - h * 0.72, rx = h * (0.28 + r() * 0.12), ry = h * (0.3 + r() * 0.1);
+  const lean = (r() - 0.5) * h * 0.15 * ax;
+  o += brush([[x, y], [x + lean * 0.5, y - h * 0.5], [x + lean, y - h * 0.8]], 1 + h * 0.012, G(tone, 0.85), r, { noi: 0.3 });
+  const cx = x + lean, cy = y - h * 0.68, rx = h * (0.3 + r() * 0.12) * ax, ry = h * (0.3 + r() * 0.1);
   const crown = [];
   for (let i = 0; i <= 14; i++) { const a = i / 14 * Math.PI * 2, rr = 0.8 + r() * 0.35; crown.push([cx + Math.cos(a) * rx * rr, cy + Math.sin(a) * ry * rr]); }
   o += pl(crown, G(250, 1), G(tone + 30, 0.5), 0.5);
@@ -144,24 +118,24 @@ function leafy(x, y, h, tone, r) {
   }
   return o;
 }
-function pine(x, y, h, tone, r) {
-  let o = brush([[x, y], [x, y - h]], 1 + h * 0.025, G(tone, 0.85), r, { noi: 0.2, taper: false });
-  const tiers = 4 + (r() * 3 | 0);
-  for (let i = 0; i < tiers; i++) {
-    const t = 0.25 + i / tiers * 0.72, yy = y - h * t, w = h * 0.32 * (1 - t * 0.7) * (0.8 + r() * 0.4);
-    o += pl([[x - w, yy + w * 0.25], [x - w * 0.3, yy - 0.5], [x, yy - 1.5], [x + w * 0.3, yy - 0.5], [x + w, yy + w * 0.25]], G(250, 1), G(tone, 0.75), 1.1);
-  }
-  return o;
-}
-
-// buildings: massing at their base above ws(s), heights x ve; windows as lights by occupancy
+// buildings: massing at their base above ws(s), heights x ve; windows as lights by occupancy.
+// Rows by distance from the water edge (pack band 0 to 3; beyond 700 m not drawn: no ground is drawn under it),
+// value before hue: near dark, far pale, so depth comes from the massing.
+export const ROWS = [
+  // band: fill grey, line grey, line width
+  { f: 176, g: 30, w: 1.3 },     // 0 to 40 m
+  { f: 198, g: 80, w: 1.0 },     // 40 to 120 m
+  { f: 220, g: 130, w: 0.8 },    // 120 to 300 m
+  { f: 236, g: 170, w: 0.7 },    // 300 to 700 m
+];
+export const ROW_MAX_BAND = 3;
 const OCC_LIT = [0.3, 0.45, 0.12, 0.35, 0.4, 0.2];
 const OCC_KIND = [LK.breathe, LK.steady, LK.flicker, LK.steady, LK.steady, LK.steady];
-function buildings(st, bands, x0, x1, tone) {
+function buildings(st, row, x0, x1) {
   let o = '';
-  const P = st.pack, VY = st.VY;
+  const P = st.pack, VY = st.VY, R = ROWS[row];
   for (const b of P.buildings) {
-    if (b[2] !== st.side || !bands.includes(Math.min(3, b[3]))) continue;
+    if (b[2] !== st.side || b[3] !== row) continue;
     const xm = xOf(P, (b[0] + b[1]) / 2, st.bank);
     if (xm < x0 || xm >= x1) continue;
     let xa = xOf(P, b[0], st.bank), xb = xOf(P, b[1], st.bank);
@@ -169,11 +143,14 @@ function buildings(st, bands, x0, x1, tone) {
     if (xb - xa < 3) { xa = xm - 1.5; xb = xm + 1.5; }
     const base = YW - Math.max(-0.5, b[4]) * VY, top = base - b[5] * VY;
     const r = mulberry32(hash(st.s, 700, Math.round(b[0] * 10), b[2]));
-    const tn = tone(b[3]);
-    o += pl([[xa, base + 2], [xa, top], [xb, top], [xb, base + 2]], G([226, 234, 241, 246][Math.min(3, b[3])], 1), G(tn, 0.85), b[3] <= 1 ? 1.1 : 0.7);
-    o += pl([[xa - 0.8, top], [xb + 0.8, top]], NONE, G(tn - 20, 0.9), b[3] <= 1 ? 1.8 : 1);
+    const tn = R.g;
+    o += pl([[xa, base + 2], [xa, top], [xb, top], [xb, base + 2]], G(R.f, 1), G(tn, 0.9), R.w);
+    o += pl([[xa - 0.8, top], [xb + 0.8, top]], NONE, G(Math.max(0, tn - 20), 0.9), R.w * 1.4);
+    // the ground it stands on: a thin line at its base, a little wider than the building (a line, never a fill)
+    const gw = Math.max(6, (xb - xa) * 0.15);
+    o += pl([[xa - gw, base + 2], [xb + gw, base + 2]], NONE, G(tn, 0.7), Math.max(0.8, R.w));
     // floors every 3.5 m, windows every 3 m
-    const fh = 3.5 * VY, ww = Math.max(2, 3 * HX);
+    const fh = 3.5 * VY, ww = Math.max(2, 3 * st.hx);
     if (fh >= 8 && xb - xa >= 6) {
       const floors = Math.max(1, Math.floor(b[5] / 3.5));
       const cols = Math.max(1, Math.floor((xb - xa - 2) / ww));
@@ -226,7 +203,7 @@ function bridges(st, x0, x1) {
     const x = xOf(P, b.s, st.bank);
     if (x < x0 || x >= x1 || b.deck_h == null) continue;
     const rail = b.kind === 'rail bridge';
-    const w = (rail ? 8 : 14) * HX, yd = YW - b.deck_h * VY, th = Math.max(6, 1.2 * VY), yb = YW - at(P, 'bed', b.s) * VY;
+    const w = (rail ? 8 : 14) * st.hx, yd = YW - b.deck_h * VY, th = Math.max(6, 1.2 * VY), yb = YW - at(P, 'bed', b.s) * VY;
     const r = mulberry32(hash(st.s, 900, Math.round(b.s)));
     // pier
     o += pl([[x - 2.5, yd + th], [x - 3.5, yb + 4], [x + 3.5, yb + 4], [x + 2.5, yd + th]], G(150, 1), G(40, 0.9), 0.9);
@@ -255,7 +232,7 @@ function dam(st, x0, x1) {
   const xd = xOf(P, 0, st.bank), dir = st.bank === 'L' ? 1 : -1;   // +dir points downstream
   if (xd + 120 < x0 || xd - 120 >= x1) return '';
   if (!(xd >= x0 && xd < x1)) return '';   // anchored in the chunk that holds s = 0
-  const X = u => xd + dir * u * HX;
+  const X = u => xd + dir * u * st.hx;
   const ws0 = at(P, 'ws', 0);
   const yHead = YW - (D.headpond_m - ws0) * VY, yCrest = yHead + D.gate_m * VY, yBed = YW - at(P, 'bed', 0) * VY + 6;
   const r = mulberry32(hash(st.s, 950, 0));
@@ -298,6 +275,24 @@ function pipes(st, x0, x1, which = 'all') {
     o += pl([[x - rr * 1.6, y + rr * 1.5], [x - rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y + rr * 1.5]], G(200, 1), G(40, 0.9), 0.8);
     const ring = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * Math.PI * 2; ring.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
     o += pl(ring, G(25, 1), G(20, 1), 0.8);
+  }
+  return o;
+}
+
+// structures that are points only in the data (pack.structures, kind 'dike'): drawn at their station on the bank in
+// view as a levee in section, its height from the record (NID DAM_HEIGHT), crest 4 m, side slopes 1 in 2.5 (schematic:
+// the line of the levee is not in the data, so it is not drawn along the bank)
+function dikes(st, x0, x1) {
+  const P = st.pack;
+  if (!P.structures) return '';
+  let o = '';
+  for (const d of P.structures) {
+    if (d.kind !== 'dike' || d.side !== st.side) continue;
+    const x = xOf(P, d.s, st.bank);
+    if (x < x0 || x >= x1) continue;
+    const g = YW - at(P, 'band0_' + st.bank, d.s) * st.VY, h = d.height_m * st.VY, cw = 2 * st.hx, bw = (2 + 2.5 * d.height_m) * st.hx;
+    o += pl([[x - bw, g + 2], [x - cw, g - h], [x + cw, g - h], [x + bw, g + 2]], G(150, 1), G(25, 1), 1.6);
+    for (let i = 1; i < 6; i++) { const t = i / 6, y = g - h * t; o += pl([[x - bw + (bw - cw) * t, y], [x + bw - (bw - cw) * t, y]], NONE, G(70, 0.5), 0.6); }
   }
   return o;
 }
@@ -346,10 +341,10 @@ export function generate(st, c) {
   // per depth layer, the pieces in paint order, each with its mode layer
   const L = [[], [], [], [], []];
   if (tb > ta) {
-    L[0].push(['terrain', band(st, BAND[0], 0, ta, tb)], ['terrain', band(st, BAND[1], 1, ta, tb)]);
-    L[1].push(['terrain', band(st, BAND[2], 2, ta, tb)], ['buildings', buildings(st, [3], x0, x1, () => 160)], ['terrain', band(st, BAND[3], 3, ta, tb)], ['buildings', buildings(st, [2], x0, x1, () => 130)]);
-    L[2].push(['terrain', band(st, BAND[4], 4, ta, tb)], ['trees', trees(st, 1, 4, ta, tb, 95, 26)], ['buildings', buildings(st, [1], x0, x1, () => 85)]);
-    L[3].push(['terrain', band(st, BAND[5], 5, ta, tb)], ['hardscape', lot(st, x0, x1)], ['trees', trees(st, 0, 5, ta, tb, 45, 38)], ['buildings', buildings(st, [0], x0, x1, () => 40)], ['cso', pipes(st, x0, x1, 'cso')], ['infrastructure', pipes(st, x0, x1, 'outfall')], ['interventions', observatories(st, x0, x1)]);
+    L[0].push(['terrain', ridge(st, ta, tb)]);
+    L[1].push(['buildings', buildings(st, 3, x0, x1)], ['buildings', buildings(st, 2, x0, x1)]);
+    L[2].push(['buildings', buildings(st, 1, x0, x1)]);
+    L[3].push(['terrain', bank(st, ta, tb)], ['hardscape', lot(st, x0, x1)], ['trees', trees(st, ta, tb, 60, 12 * st.VY)], ['buildings', buildings(st, 0, x0, x1)], ['landmarks', dikes(st, x0, x1)], ['cso', pipes(st, x0, x1, 'cso')], ['infrastructure', pipes(st, x0, x1, 'outfall')], ['interventions', observatories(st, x0, x1)]);
     L[4].push(['terrain', bed(st, ta, tb)]);
   }
   L[4].push(['landmarks', bridges(st, x0, x1)], ['landmarks', dam(st, x0, x1)]);

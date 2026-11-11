@@ -9,8 +9,12 @@ const args = process.argv.slice(2);
 const BASE = args.find(a => a.startsWith('http')) || 'http://localhost:8093/';
 const opt = (k, d) => Number((args.find(a => a.startsWith('--' + k + '=')) || '=' + d).split('=')[1]);
 const SPEED = opt('speed', 600), SECS = opt('secs', 12);
+// --worlds=nashua,derelict picks worlds; --q=&hx=2 adds to the URL (P6: the scale)
+const WORLDS = ((args.find(a => a.startsWith('--worlds=')) || '').slice(9) || 'shanshui,derelict,nashua').split(',');
+const Q = (args.find(a => a.startsWith('--q=')) || '').slice(4);
+const OUT = (args.find(a => a.startsWith('--out=')) || '').slice(6) || 'bench-app.json';
 const RUNS = [];
-for (const world of ['shanshui', 'derelict', 'nashua']) for (const [h, cpu] of [[1080, 1], [2160, 1], [1080, 4]]) RUNS.push({ world, h, cpu });
+for (const world of WORLDS) for (const [h, cpu] of [[1080, 1], [2160, 1], [1080, 4]]) RUNS.push({ world, h, cpu });
 
 const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
 const out = [];
@@ -20,7 +24,7 @@ for (const r of RUNS) {
   page.on('pageerror', e => errs.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   if (r.cpu > 1) { const c = await page.context().newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: r.cpu }); }
-  await page.goto(`${BASE}?i=bench-${r.world}&seed=2026${r.world === 'shanshui' ? '' : '&world=' + r.world}${r.world === 'nashua' ? '&ends=pingpong&level=4' : ''}`);
+  await page.goto(`${BASE}?i=bench-${r.world}&seed=2026${r.world === 'shanshui' ? '' : '&world=' + r.world}${r.world === 'nashua' ? '&ends=pingpong&level=4' + Q : ''}`);
   await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2, null, { timeout: 60000 });
   await page.evaluate(sp => {
     document.body.classList.add('uihidden');
@@ -41,4 +45,4 @@ for (const r of RUNS) {
 }
 await browser.close();
 fs.mkdirSync('test-results', { recursive: true });
-fs.writeFileSync('test-results/bench-app.json', JSON.stringify({ date: new Date().toISOString(), speed: SPEED, secs: SECS, rows: out }, null, 1));
+fs.writeFileSync('test-results/' + OUT, JSON.stringify({ date: new Date().toISOString(), speed: SPEED, secs: SECS, q: Q, rows: out }, null, 1));

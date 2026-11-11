@@ -57,7 +57,8 @@ const median = a => { if (!a.length) return NaN; const b = Float64Array.from(a).
 // the look used by every measured nashua frame: dry, day, light fog, no wind
 const LOOK = () => { document.body.classList.add('uihidden'); SSAV.cfg.weather.mode = 'dry'; SSAV.cfg.weather.holds = { rain: 0, fog: 0.25, light: 1, wind: 0.2 }; SSAV.pb.pause(); SSAV.pb.k = 0; };
 // put s at the view centre
-const goS = (page, s) => page.evaluate(s => { const P = SSAV.world().pack, b = SSAV.opts.bank; SSAV.pb.x = (b === 'R' ? P.route_len_m - s : s) * 2 - SSAV.viewW() / 2; }, s);
+// (P6: the scale is the pack's hx, 8 px per m by default; 2 before P6)
+const goS = (page, s) => page.evaluate(s => { const P = SSAV.world().pack, b = SSAV.opts.bank; SSAV.pb.x = (b === 'R' ? P.route_len_m - s : s) * (P.hx || 2) - SSAV.viewW() / 2; }, s);
 
 // ---------------------------------------------------------------------------------------------
 await test('nashua-loads', async () => {
@@ -69,9 +70,9 @@ await test('nashua-loads', async () => {
   const L = lumOf(png); let s = 0, s2 = 0; for (const v of L) { s += v; s2 += v * v; } const m = s / L.length, sd = Math.sqrt(s2 / L.length - m * m);
   await ctx.close();
   assert(info.world === 'nashua' && info.hash, 'not the nashua world: ' + JSON.stringify(info));
-  assert(info.opts.bank === 'L' && info.opts.ve === 10, 'defaults: ' + JSON.stringify(info.opts));
+  assert(info.opts.bank === 'L' && info.opts.ve === 2 && info.opts.hx === 8, 'defaults (P6: 8 px per m, 2x): ' + JSON.stringify(info.opts));
   assert(sd > 10, 'frame looks blank, sd ' + sd.toFixed(1));
-  assert(/Vertical Exaggeration 10x/.test(info.facts) && /100 m \(328 ft\)/.test(info.facts), 'fact line: ' + info.facts);
+  assert(/Vertical Exaggeration 2x/.test(info.facts) && /100 m \(328 ft\)/.test(info.facts), 'fact line: ' + info.facts);
   return { sd: +sd.toFixed(1), mean: +m.toFixed(1), hash: info.hash, facts: info.facts };
 });
 
@@ -97,7 +98,7 @@ await test('nashua-determinism', async () => {
 await test('nashua-bank-flip', async () => {
   const { ctx, page } = await newPage(BASE, '?i=nt-bank&seed=1&world=nashua');
   await page.evaluate(LOOK); await goS(page, 1260); await settle(page);
-  const sAt = () => page.evaluate(() => { const P = SSAV.world().pack, b = SSAV.opts.bank, xc = SSAV.x + SSAV.viewW() / 2; return { bank: b, s: b === 'R' ? P.route_len_m - xc / 2 : xc / 2 }; });
+  const sAt = () => page.evaluate(() => { const P = SSAV.world().pack, b = SSAV.opts.bank, xc = SSAV.x + SSAV.viewW() / 2; return { bank: b, s: b === 'R' ? P.route_len_m - xc / P.hx : xc / P.hx }; });
   const a = await sAt();
   await page.keyboard.press('k'); await page.waitForFunction(() => SSAV.opts && SSAV.opts.bank === 'R' && !SSAV.fading, null, { timeout: 20000 }); await settle(page);
   const b = await sAt();
@@ -149,7 +150,7 @@ await test('nashua-pingpong-reseed', async () => {
   for (let i = 0; i < 64; i++) {
     await page.waitForTimeout(250);
     if (i % 6 === 5) await page.evaluate(() => SSAV.reseed('test'));
-    xs.push(await page.evaluate(() => { const w = SSAV.world(), P = w && w.pack; return { xc: SSAV.x + SSAV.viewW() / 2, W: P ? P.route_len_m * 2 : 4917.6, vw: SSAV.viewW(), world: SSAV.worldName }; }));
+    xs.push(await page.evaluate(() => { const w = SSAV.world(), P = w && w.pack; return { xc: SSAV.x + SSAV.viewW() / 2, W: P ? P.route_len_m * P.hx : 19670.4, vw: SSAV.viewW(), world: SSAV.worldName }; }));
   }
   await page.evaluate(() => SSAV.pb.pause());
   await ctx.close();
@@ -177,11 +178,53 @@ await test('nashua-labels', async () => {
   return { def, on, off, back, font };
 });
 
-await test('nashua-bands-separable', async () => {
-  // At 1280x720, for 160 columns across the frame, the visible face of each band is the run between its ridge and
-  // the next nearer ridge (band0: down to the water line). A run counts when it is at least 10 px tall; it is sampled
-  // 3 px in from both ends. The band value is the median of the run medians. A band is separable when it is seen in
-  // at least 10% of the columns and differs from each seen neighbour by at least 5 (of 255). Pass: 4 or more.
+// P6 (ADDENDUM-A A1): the hills are gone, so the filled bands this test measured are gone; the building rows took
+// over the depth. At 1280x720, buildings only (?layers=buildings, no bank in front), original palette: for every
+// building whose face centre is not covered by a nearer row's building, the median luminance of a 5 x 5 window at
+// the centre of its face (a window between the floor marks). A row's value is the median over its buildings. Pass:
+// at least 3 rows seen, each farther row at least 5 (of 255) paler than the row in front. The same rule on the rows
+// in the reverse order (the control) must fail.
+await test('nashua-rows-separable', async () => {
+  const { ctx, page } = await newPage(BASE, '?i=nt-rows&seed=1&world=nashua&palette=original&layers=buildings');
+  await page.evaluate(LOOK);
+  const vals = [[], [], [], []];
+  // stations where the rows are (from the pack, left bank: row 0 at s 9 and 2159 only; rows 2 and 3 at 1290 to
+  // 1450 and around 1847)
+  for (const s of [40, 250, 607, 1250, 1300, 1420, 1447, 1840]) {
+    await goS(page, s); await settle(page, 500); await page.waitForTimeout(600);
+    const pts = await page.evaluate(async () => {
+      const m = await import('./src/worlds/nashua/pack.js');
+      const P = SSAV.world().pack, o = SSAV.opts, v = SSAV.scene.lastFrame.v, cs = innerWidth / v.viewW, VY = P.hx * o.ve, side = o.bank === 'R' ? -1 : 1;
+      const B = P.buildings.filter(b => b[2] === side && b[3] <= 3).map(b => { let xa = m.xOf(P, b[0], o.bank), xb = m.xOf(P, b[1], o.bank); if (xa > xb) [xa, xb] = [xb, xa]; const base = m.YW - Math.max(-0.5, b[4]) * VY, top = base - b[5] * VY; return { row: b[3], xa, xb, base, top }; });
+      const out = [];
+      for (const b of B) {
+        const cx = (b.xa + b.xb) / 2, cy = b.top + (b.base - b.top) * 0.3;
+        const sx = (cx - SSAV.x) * cs, sy = (cy - v.camY) * cs;
+        if (sx < 10 || sx > innerWidth - 10 || sy < 10 || sy > innerHeight - 10 || (b.xb - b.xa) * cs < 14) continue;
+        if (B.some(n => n.row < b.row && cx >= n.xa - 2 && cx <= n.xb + 2 && cy >= n.top - 2)) continue;   // covered by a nearer row
+        out.push({ row: b.row, sx: Math.round(sx), sy: Math.round(sy) });
+      }
+      return out;
+    });
+    const png = PNG.sync.read(await page.screenshot()), L = lumOf(png);
+    for (const p of pts) { const a = []; for (let y = p.sy - 2; y <= p.sy + 2; y++) for (let x = p.sx - 2; x <= p.sx + 2; x++) a.push(L[y * png.width + x]); vals[p.row].push(median(a)); }
+    if (s === 1110) fs.writeFileSync(path.join(ROOT, 'test-results', 'nashua', 'rows-720.png'), PNG.sync.write(png));
+  }
+  await ctx.close();
+  // a row counts as seen with 2 or more buildings measured
+  const val = vals.map(a => (a.length >= 2 ? median(a) : null)), seen = val.map((v, k) => (v != null ? k : -1)).filter(k => k >= 0);
+  const steps = order => order.slice(1).every((k, i) => val[k] - val[order[i]] >= 5);
+  assert(!steps(seen.slice().reverse()), 'the control (reversed rows) passed: the rule is not informative ' + JSON.stringify(val));
+  assert(seen.length >= 3 && steps(seen), 'rows not separable near dark to far pale: ' + JSON.stringify({ val, n: vals.map(a => a.length) }));
+  return { value: val.map(v => (v == null ? null : +v.toFixed(1))), buildings: vals.map(a => a.length) };
+});
+
+await test('nashua-bands-separable-retired', async () => {
+  const { ctx, page } = await newPage(BASE, '?i=nt-band&seed=1&world=nashua');
+  await ctx.close();
+  return 'retired in P6: no filled bands (ADDENDUM-A A1); tests/p6.mjs a1-no-hills and nashua-rows-separable replace it';
+});
+async function retiredBands() {
   const { ctx, page } = await newPage(BASE, '?i=nt-band&seed=1&world=nashua');
   await page.evaluate(LOOK);
   const rows = [];
@@ -228,7 +271,8 @@ await test('nashua-bands-separable', async () => {
   const table = names.map((nm, k) => ({ band: nm, value: +val[k].toFixed(1), seen: +share[k].toFixed(2), separable: sep[k] }));
   assert(n >= 4, 'only ' + n + ' bands separable: ' + JSON.stringify(table));
   return { separable: n, table };
-});
+}
+void retiredBands;   // kept for the .p5 reference only (bands-separable on 8098); not run against P6
 
 await test('nashua-bridges-dam-visible', async () => {
   // At each bridge's s (and the dam at s 0), in a 40 x 40 px window at the deck (crest) the count of pixels at least
@@ -239,8 +283,8 @@ await test('nashua-bridges-dam-visible', async () => {
   const targets = await page.evaluate(() => { const P = SSAV.world().pack; return [{ name: P.dam.label, s: 0, h: P.dam.headpond_m - P.A.ws[0], dam: true }, ...P.bridges.map(b => ({ name: b.name + ' s ' + b.s, s: b.s, h: b.deck_h }))]; });
   const out = [];
   for (const t of targets) {
-    await page.evaluate(s => { const P = SSAV.world().pack; SSAV.pb.x = (s * 2) - SSAV.viewW() / (s < 50 ? 4 : 2); }, t.s); await settle(page, 400); await page.waitForTimeout(600);
-    const g = await page.evaluate(async t => { const m = await import('./src/worlds/nashua/pack.js'); const P = SSAV.world().pack, o = SSAV.opts, v = SSAV.scene.lastFrame.v, cs = innerWidth / v.viewW; return { sx: (m.xOf(P, t.s, o.bank) - SSAV.x) * cs, sy: (m.YW - t.h * m.HX * o.ve - v.camY) * cs }; }, t);
+    await page.evaluate(s => { const P = SSAV.world().pack; SSAV.pb.x = (s * P.hx) - SSAV.viewW() / (s < 50 ? 4 : 2); }, t.s); await settle(page, 400); await page.waitForTimeout(600);
+    const g = await page.evaluate(async t => { const m = await import('./src/worlds/nashua/pack.js'); const P = SSAV.world().pack, o = SSAV.opts, v = SSAV.scene.lastFrame.v, cs = innerWidth / v.viewW; return { sx: (m.xOf(P, t.s, o.bank) - SSAV.x) * cs, sy: (m.YW - t.h * P.hx * o.ve - v.camY) * cs }; }, t);
     const png = PNG.sync.read(await page.screenshot()), L = lumOf(png);
     const win = (cx, cy) => { const a = []; for (let y = Math.round(cy - 20); y < Math.round(cy + 20); y++) for (let x = Math.round(cx - 20); x < Math.round(cx + 20); x++) if (x >= 0 && y >= 0 && x < png.width && y < png.height) a.push(L[y * png.width + x]); return a; };
     const cx = t.dam ? Math.max(25, g.sx + 20) : g.sx;

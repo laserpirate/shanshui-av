@@ -181,12 +181,18 @@ await test('print-scales', async () => {
     return out;
   });
   const PT_PER_M = 72 / 0.0254;
+  // P6: world px per m and the vertical exaggeration come from the pack and the options (defaults 8 and 2x)
+  const { hx, ve } = await p.evaluate(() => ({ hx: SSAV.world().pack.hx || 2, ve: SSAV.opts.ve }));
   for (const [key, g] of Object.entries(G)) {
     const N = +key.replace(/\D/g, '');
-    assert(Math.abs(g.k * 2 - PT_PER_M / N) < 1e-9, key + ': ' + g.k * 2 + ' pt per m, stated ' + PT_PER_M / N);
-    assert(Math.abs(g.vN - N / 10) < 1e-9, key + ' vertical 1:' + g.vN);
+    assert(Math.abs(g.k * hx - PT_PER_M / N) < 1e-9, key + ': ' + g.k * hx + ' pt per m, stated ' + PT_PER_M / N);
+    assert(Math.abs(g.vN - N / ve) < 1e-9, key + ' vertical 1:' + g.vN + ' at ' + ve + 'x');
   }
-  assert(G.archd500.crop && !G.archd1000.crop && !G.archd2000.crop, 'Arch D crop flags ' + [G.archd500.crop, G.archd1000.crop, G.archd2000.crop]);
+  // the world band (700 world px) is cropped exactly when the printable height holds fewer world px than that. At 2 px
+  // per m only Arch D 1:500 cropped; at 8 px per m one world px is a quarter of the paper, so nothing crops here
+  const WORLD_BAND = 800 / 1.142;
+  for (const [key, g] of Object.entries(G)) assert(!!g.crop === (g.worldH < WORLD_BAND - 1e-6), key + ' crop ' + !!g.crop + ' with ' + g.worldH.toFixed(1) + ' world px of height');
+  if (hx === 2) assert(G.archd500.crop && !G.archd1000.crop && !G.archd2000.crop, 'Arch D crop flags at 2 px per m ' + [G.archd500.crop, G.archd1000.crop, G.archd2000.crop]);
   assert(!G.roll500.cut && G.roll500.pageW < 200 && Math.abs(G.roll500.mTo - G.roll1000.mTo) < 1, 'roll lengths ' + G.roll500.pageW + ', cut ' + G.roll500.cut);
   // files
   const exportAs = async (o, kind) => {
@@ -207,7 +213,7 @@ await test('print-scales', async () => {
   await ctx.close();
   assert(/width="36in" height="24in"/.test(s), 'SVG page size');
   assert(k && Math.abs(+k[1] - G.archd1000.k) < 1e-9, 'SVG scale ' + (k && k[1]) + ' vs stated ' + G.archd1000.k);
-  assert(s.includes('Scale 1:1000 horizontal, 1:100 vertical (Vertical Exaggeration 10x)') && s.includes('100 m'), 'SVG scale bar text');
+  assert(s.includes(`Scale 1:1000 horizontal, 1:${1000 / ve} vertical (Vertical Exaggeration ${ve}x)`) && s.includes('100 m'), 'SVG scale bar text');
   assert(/_1-1000_archD-landscape\.svg$/.test(svg.name) && /_1-500_roll36\.pdf$/.test(pdf.name), 'file names ' + svg.name + ' ' + pdf.name);
   assert(mb && Math.abs(+mb[1] - G.roll500.pageW * 72) < 0.5 && Math.abs(+mb[2] - 36 * 72) < 0.5, 'PDF MediaBox ' + (mb && mb[0]) + ' vs ' + G.roll500.pageW * 72);
   assert(/along the scroll 0 to \d+ m/.test(pdf.last.window), 'export window not logged: ' + pdf.last.window);
@@ -226,9 +232,12 @@ await test('second-reach', async () => {
   await p.keyboard.press('h');
   const png = PNG.sync.read(shot); let lo = 255, hi = 0;
   for (let i = 0; i < png.data.length; i += 4 * 97) { const v = png.data[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
-  // the banks: rows 470 to 600 (above the water line, below most buildings) must carry ground, not bare paper
+  // the banks: rows 470 to 600 (above the water line, below most buildings) must carry ground, not bare paper.
+  // P6: a pixel is ground when its RGB sum differs from the paper (median of the top 20 rows) by more than 30, the
+  // A1 rule; the P5 rule (brighter than 60) measured the old hill fill, which A1 removed.
+  const paper = [0, 1, 2].map(c => { const a = []; for (let y = 0; y < 20; y++) for (let x = 0; x < png.width; x += 8) a.push(png.data[(y * png.width + x) * 4 + c]); a.sort((u, v) => u - v); return a[a.length >> 1]; });
   let ground = 0, of = 0;
-  for (let y = 470; y < 600; y += 2) for (let x = 0; x < png.width; x += 4) { const i = (y * png.width + x) * 4; of++; if (png.data[i] + png.data[i + 1] + png.data[i + 2] > 3 * 60) ground++; }
+  for (let y = 470; y < 600; y += 2) for (let x = 0; x < png.width; x += 4) { const i = (y * png.width + x) * 4; of++; if (Math.abs(png.data[i] - paper[0]) + Math.abs(png.data[i + 1] - paper[1]) + Math.abs(png.data[i + 2] - paper[2]) > 30) ground++; }
   await p.evaluate(() => SSAV.setReach('nashua'));
   await p.waitForFunction(() => SSAV.world() && SSAV.world().pack && !SSAV.world().pack.fact_note, null, { timeout: 30000 });
   const back = await p.evaluate(() => ({ reach: SSAV.reach, hash: SSAV.world().pack.hash, dam: !!SSAV.world().pack.dam }));
@@ -283,28 +292,32 @@ await test('distance-ticks', async () => {
   await p.evaluate(() => { SSAV.pb.pause(); SSAV.pb.x = 1000; });
   await p.waitForFunction(() => SSAV.ticks && SSAV.ticks.shown && SSAV.ticks.at.length > 3, null, { timeout: 10000 });
   await p.waitForTimeout(600);
-  const t = await p.evaluate(() => SSAV.ticks), f = await fact(p);
-  const px100 = +/100 m \(328 ft\) = (\d+) px/.exec(f)[1];
+  const t = await p.evaluate(() => SSAV.ticks), f = await fact(p), hx = await p.evaluate(() => SSAV.world().pack.hx || 2);
+  const px100 = +/100 m \(328 ft\) = (\d+) px/.exec(f)[1], step = t.step || 100, pxStep = px100 * step / 100;
+  const len = await p.evaluate(() => SSAV.world().pack.route_len_m);
   const gaps = t.at.slice(1).map((q, i) => q.sx - t.at[i].sx);
-  const worst = Math.max(...gaps.map(g => Math.abs(g - px100)));
+  const worst = Math.max(...gaps.map(g => Math.abs(g - pxStep)));
   const s0 = +/^s ([\d.]+) m/.exec(f)[1], vw = await p.evaluate(() => SSAV.viewW());
   const centre = await p.evaluate(() => innerWidth / 2);
   // interpolate s at the view centre from the ticks, compare with the fact line
   const a = t.at.filter(q => q.sx <= centre).pop(), b = t.at.find(q => q.sx > centre);
-  const sMid = a.s + (centre - a.sx) / (b.sx - a.sx) * 100;
+  const sMid = a.s + (centre - a.sx) / (b.sx - a.sx) * step;
   const major = await p.evaluate(() => [...document.querySelectorAll('.reach-ticks .rt.major span')].filter(e => e.parentElement.style.display !== 'none').map(e => ({ text: e.textContent, px: parseFloat(getComputedStyle(e).fontSize) })));
   await p.evaluate(() => { SSAV.pb.x = 1400; });
   await p.waitForTimeout(400);
   const t2 = await p.evaluate(() => SSAV.ticks);
   await ctx.close();
-  assert(t.n === 25, 'tick count ' + t.n);
-  assert(worst < 0.6, 'tick spacing off by ' + worst.toFixed(2) + ' px against ' + px100);
+  // P6: the step follows the scale (25 m at the default 8 px per m, 100 m at 2 to 5 px per m)
+  assert(step === (hx >= 6 ? 25 : 100), 'tick step ' + step + ' at ' + hx + ' px per m');
+  assert(t.n === Math.floor(len / step + 1e-6) + 1, 'tick count ' + t.n);
+  // the fact line rounds 100 m to whole px, so the step is good to half a px times step/100
+  assert(worst < 0.6, 'tick spacing off by ' + worst.toFixed(2) + ' px against ' + pxStep);
   assert(Math.abs(sMid - s0) < 0.6, 's at centre ' + sMid.toFixed(2) + ' vs fact line ' + s0);
   assert(major.length && major.every(m => m.px >= 18 && /^\d+ m \(\d+ ft\)$/.test(m.text)), 'labels ' + JSON.stringify(major));
-  // 400 world px of scroll is 200 m (2 world px per m), so a tick moves 2 x px100 css px to the left
-  const mid = t.at[Math.floor(t.at.length / 2)], moved = t2.at.find(q => q.s === mid.s);
-  assert(moved && Math.abs((mid.sx - moved.sx) - 2 * px100) < 1.5, 'rule did not follow the scroll: ' + JSON.stringify({ mid, moved, px100 }));
-  return { px100, worstGapErrPx: +worst.toFixed(3), sCentre: +sMid.toFixed(2), sFact: s0, labels: major.map(m => m.text), vw };
+  // 400 world px of scroll is 400 / hx m, so a tick moves (400 / hx / 100) x px100 css px to the left
+  const mid = t.at.find(q => q.sx > centre), moved = t2.at.find(q => q.s === mid.s), want = 400 / hx / 100 * px100;
+  assert(moved && Math.abs((mid.sx - moved.sx) - want) < 1.5, 'rule did not follow the scroll: ' + JSON.stringify({ mid, moved, px100, want }));
+  return { hx, step, px100, worstGapErrPx: +worst.toFixed(3), sCentre: +sMid.toFixed(2), sFact: s0, labels: major.map(m => m.text), vw };
 });
 
 // P5.6 own idea 3: &cap= on an output, the brightness ceiling. Two clock-mode outputs at speed 0 draw the same

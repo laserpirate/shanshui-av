@@ -76,6 +76,7 @@
     <div class="kv" id="r-off" hidden>Only in the nashua world</div>
     <div class="row seg" id="r-reach"><button data-v="nashua" title="The Nashua from the dam to the confluence">Nashua</button><button data-v="merrimack" title="The Merrimack below the confluence">Merrimack</button></div>
     <div class="row seg" id="r-bank"><button data-v="L" title="Bank (K)">Left bank</button><button data-v="R" title="Bank (K)">Right bank</button></div>
+    <label class="sl">Horizontal scale <input type="range" id="r-hx" min="2" max="12" step="1" title="World px per metre along the river"><output></output></label>
     <label class="sl">Vertical Exaggeration <input type="range" id="r-ve" min="1" max="20" step="1" title=", and ."><output></output></label>
     <h4>Water level (1 to 6)</h4>
     <div id="r-levels" class="list rlevels"></div>
@@ -93,8 +94,12 @@
     <div class="row"><label class="chk"><input type="checkbox" id="r-sections"> Sections (X)</label></div>
     <h4>Ends of the reach</h4>
     <div class="row seg" id="r-ends"><button data-v="handover">Hand over</button><button data-v="loop">Loop</button><button data-v="pingpong">Ping-pong</button></div>
-    <div class="row"><label class="chk"><input type="checkbox" id="r-labels"> Labels (L)</label></div>
-    <div class="row"><label class="chk"><input type="checkbox" id="r-outlabels"> Labels on output</label><label class="chk"><input type="checkbox" id="r-outfacts"> Fact line on output</label></div>
+    <h4>Labels (names and ids from the data only)</h4>
+    <div class="row"><button id="r-labels" class="tog" title="Labels on this screen (L)">Labels here</button><button id="r-outlabels" class="tog" title="Labels on the output windows">Labels on output</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="r-outfacts"> Fact line on output</label></div>
+    <h4>Map (the route in plan, north up)</h4>
+    <div class="row"><button id="r-map" class="tog" title="Map inset on this screen (I)">Map here</button><button id="r-outmap" class="tog" title="Map inset on the output windows">Map on output</button></div>
+    <div class="row seg" id="r-mapsize"><button data-v="s">Small</button><button data-v="m">Medium</button><button data-v="l">Large</button></div>
     <div class="kv" id="r-facts"></div>
   </section>
 
@@ -206,9 +211,12 @@
   <div class="grp">
     <button id="b-hold" title="Hold (G)">Hold</button>
     <button id="b-out" title="Output window (O)">Output</button>
+    <button id="b-pair" title="Two output windows as one long picture (wall 2 x 1)">Open pair</button>
+    <button id="b-pairlinks" title="Two links for two computers, clock mode with a shared start">Copy pair links</button>
     <button id="b-full" title="Full screen (F)">Full</button>
     <button id="b-black" class="warn" title="Blackout (B)">Black</button>
   </div>
+  <div class="grp" id="b-data"><button id="b-labels" class="tog" title="Labels here (L)">Labels</button><button id="b-outlabels" class="tog" title="Labels on the output windows">Out labels</button><button id="b-map" class="tog" title="Map inset (I)">Map</button></div>
   <div class="grp next" id="b-next"></div>
 </div>
 
