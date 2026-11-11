@@ -4,6 +4,7 @@
 //   node tools/serve.mjs --port 8093 &   then   node tools/soak.mjs [minutes=30] [http://localhost:8093/] [--speed=1500] [--every=2] [--palevery=1] [--headed]
 //   nashua: --world=nashua [--ends=pingpong|loop|handover] (--heavy also holds the 1936 level)
 //   --fxevery=N cycles the slit-scan modes (off, strip, smear, displace) every N minutes
+//   --q=&ticks=1&hydro=1: extra query for the controller page (P5 flags)
 //   --midi: a fake nanoKONTROL, enabled, sweeping slit position, slit width, ink and the weather knob at 50 messages/s
 //   derelict: --world=derelict --heavy (downpour + flood + night held) --worldevery=5 (switch world every N min) --fpsmin=50 --out=soak-derelict.json
 // Pass: no console errors, no reloads, no context loss, fps (1 s average) min >= 45 and mean >= 58, heap growth first third to last third < 8 MB,
@@ -24,6 +25,7 @@ const WORLD = (args.find(a => a.startsWith('--world=')) || '--world=shanshui').s
 const HEAVY = args.includes('--heavy');
 const ENDS = (args.find(a => a.startsWith('--ends=')) || '--ends=pingpong').slice(7);
 const OUT = (args.find(a => a.startsWith('--out=')) || '--out=soak.json').slice(6);
+const XQ = (args.find(a => a.startsWith('--q=')) || '--q=').slice(4);   // extra controller query, e.g. --q="&ticks=1&hydro=1"
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -43,7 +45,7 @@ const watch = (p, tag) => {
   p.on('pageerror', e => problems.push({ t: Date.now(), tag, text: 'pageerror: ' + e.message }));
 };
 watch(page, 'controller');
-await page.goto(BASE + '?i=soak-' + WORLD + '&seed=2026' + (WORLD === 'shanshui' ? '' : '&world=' + WORLD) + (WORLD === 'nashua' ? '&ends=' + ENDS + (HEAVY ? '&level=4' : '') : ''));
+await page.goto(BASE + '?i=soak-' + WORLD + '&seed=2026' + (WORLD === 'shanshui' ? '' : '&world=' + WORLD) + (WORLD === 'nashua' ? '&ends=' + ENDS + (HEAVY ? '&level=4' : '') : '') + XQ);
 await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2);
 // output window
 const popP = ctx.waitForEvent('page');
