@@ -32,7 +32,10 @@ export function init(seed, opts = {}, pack) {
   const bank = opts.bank === 'R' ? 'R' : 'L';
   const ve = Math.max(VE_MIN, Math.min(VE_MAX, +opts.ve || VE_DEF));
   const hx = hxOf(pack);
-  return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, hx, VY: hx * ve, pack, W: reachW(pack) };
+  // spread (opts.spread, the app's default; ?spread=0 off): far footprints at their place on the smoothed route
+  // (fields 10, 11), not stacked on the station nearest to them; a pack without those fields draws as before
+  const k0 = opts.spread && pack && pack.buildings_fields && pack.buildings_fields[10] === 'sv0' ? 10 : 0;
+  return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, hx, VY: hx * ve, pack, W: reachW(pack), k0 };
 }
 // one element per (chunk, depth layer, piece); pieces keep their order inside a layer, so tiles are unchanged
 export const elementId = (c, layer, sub = 0) => c * 64 + layer * 12 + sub + 1;
@@ -72,7 +75,9 @@ function bank(st, xa, xb) {
   return o;
 }
 // the one ridgeline: the highest real ground 40 to 700 m behind the water edge (bands 1 to 3), a thin line, no fill
-export const RIDGE = { grey: 150, w: 0.9, bands: [1, 2, 3] };
+// ADDENDUM-B B10: from bands 1 and 2 only (40 to 300 m behind the water); band 3 is partly the 4 m wide DEM and kinks
+// at 8 px per m
+export const RIDGE = { grey: 150, w: 0.9, bands: [1, 2] };
 export function ridgeH(pack, bk, s) { let h = -Infinity; for (const j of RIDGE.bands) h = Math.max(h, at(pack, 'band' + j + '_' + bk, s)); return h; }
 function ridge(st, xa, xb) {
   if (xb <= xa) return '';
@@ -133,12 +138,12 @@ const OCC_LIT = [0.3, 0.45, 0.12, 0.35, 0.4, 0.2];
 const OCC_KIND = [LK.breathe, LK.steady, LK.flicker, LK.steady, LK.steady, LK.steady];
 function buildings(st, row, x0, x1) {
   let o = '';
-  const P = st.pack, VY = st.VY, R = ROWS[row];
+  const P = st.pack, VY = st.VY, R = ROWS[row], k0 = st.k0 || 0;
   for (const b of P.buildings) {
     if (b[2] !== st.side || b[3] !== row) continue;
-    const xm = xOf(P, (b[0] + b[1]) / 2, st.bank);
+    const xm = xOf(P, (b[k0] + b[k0 + 1]) / 2, st.bank);
     if (xm < x0 || xm >= x1) continue;
-    let xa = xOf(P, b[0], st.bank), xb = xOf(P, b[1], st.bank);
+    let xa = xOf(P, b[k0], st.bank), xb = xOf(P, b[k0 + 1], st.bank);
     if (xa > xb) [xa, xb] = [xb, xa];
     if (xb - xa < 3) { xa = xm - 1.5; xb = xm + 1.5; }
     const base = YW - Math.max(-0.5, b[4]) * VY, top = base - b[5] * VY;

@@ -38,7 +38,8 @@ export class ReachOverlay {
       if (b[2] !== side || b[3] > 3 || b.length < 10) continue;
       const k = prim[b[8]], ind = (k === 'Light' || k === 'Heavy' || k === 'Metals/Minerals Processing') && b[1] - b[0] >= 60;
       if (k !== 'Religious' && !ind) continue;
-      add((b[0] + b[1]) / 2, YW - (Math.max(-0.5, b[4]) + b[5]) * VY - 36, (k === 'Religious' ? 'Religious' : k + ' industrial') + ' (structures layer ' + b[9] + ')', 'bl');
+      const k0 = o.spread && b.length >= 12 ? 10 : 0;   // ?spread=1: where the generator draws it
+      add((b[k0] + b[k0 + 1]) / 2, YW - (Math.max(-0.5, b[4]) + b[5]) * VY - 36, (k === 'Religious' ? 'Religious' : k + ' industrial') + ' (structures layer ' + b[9] + ')', 'bl');
     }
   }
 

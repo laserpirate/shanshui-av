@@ -136,7 +136,10 @@ const modeLayers = () => (LAYERS_Q.length ? LAYERS_Q : layersOf(cfg.nashua.mode,
 const morphQ = v => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
 // the reach (?reach=merrimack for the second one) is per page, not saved: a reload without it is the Nashua
 let reach = new URLSearchParams(location.search).get('reach') === 'merrimack' ? 'merrimack' : 'nashua';
-const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 ? { morph: morphQ(cfg.nashua.morph) } : {}) } : undefined;
+// spread (P6 loop, the default from ADDENDUM-B B10): far footprints placed on the smoothed route, not stacked behind
+// the bends (worlds/nashua); ?spread=0 draws them at the nearest station as in .p6
+const SPREAD_Q = new URLSearchParams(location.search).get('spread') !== '0';
+const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, ...(SPREAD_Q ? { spread: 1 } : {}), ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 ? { morph: morphQ(cfg.nashua.morph) } : {}) } : undefined;
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
 cur.opts = optsFor(cur.world);
 let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
@@ -327,7 +330,7 @@ function openPair() {
 // seed, reach, bank, scale, exaggeration, palette, mode and speed. No server: each machine opens its link.
 function pairLinks(t0 = Date.now() + 10000) {
   const o = { world: cur.world, seed: cur.seed, t0, speed: Math.round(cfg.speed), palette: pal.target };
-  if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}) });
+  if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}), ...(SPREAD_Q ? {} : { spread: 0 }) });
   return [pairUrl(0, o), pairUrl(1, o)];
 }
 async function copyPairLinks() {

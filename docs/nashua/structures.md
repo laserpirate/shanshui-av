@@ -1,6 +1,6 @@
 # Structures along the reach (P6, A2)
 
-Made by `tools/nashua/structures.py` on 2026-11-11 from the public packs (Nashua 6f84a65ea6634724, Merrimack d6e8e688ca0912da) and the pack builder's coverage record. We stand on the south bank looking north: the north bank is the left bank (side +1, the default view), downstream to the right. Inside the oxbow (s 880 to 1420) the left bank faces south-west; it is still the left bank.
+Made by `tools/nashua/structures.py` on 2026-11-11 from the public packs (Nashua 142069fbabc9dc29, Merrimack a2df6eee9cae4101) and the pack builder's coverage record. We stand on the south bank looking north: the north bank is the left bank (side +1, the default view), downstream to the right. Inside the oxbow (s 880 to 1420) the left bank faces south-west; it is still the left bank.
 
 ## Structures the plans show
 

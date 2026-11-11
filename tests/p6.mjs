@@ -147,8 +147,10 @@ await test('a6-pack-holds', async () => {
     const worstOf = a => { let w = 0; for (let i = 1; i + 1 < P.n; i++) { const s1 = (a[i] - a[i - 1]) * VY / seg, s2 = (a[i + 1] - a[i]) * VY / seg; w = Math.max(w, Math.abs(s2 - s1)); } return w; };
     const worst = name => worstOf(P.A[name]);
     const bands = {}; for (const sd of ['L', 'R']) for (let j = 0; j < 4; j++) bands['band' + j + '_' + sd] = worst('band' + j + '_' + sd);
-    const ridge = Array.from(P.A.band1_L, (v, i) => Math.max(v, P.A.band2_L[i], P.A.band3_L[i]));
-    return { ds_m: P.ds, seg_px: seg, worst_band: Math.max(...Object.values(bands)), ...bands, ridge_corners_reported: worstOf(ridge), control_stepped: worstOf(Array.from(P.A.band0_L, v => Math.round(v * 2) / 2)) };
+    // ADDENDUM-B B10: the ridgeline is drawn from bands 1 and 2 only, so the drawn bands are 0 (the bank), 1 and 2
+    const ridge = Array.from(P.A.band1_L, (v, i) => Math.max(v, P.A.band2_L[i]));
+    const drawn = Object.entries(bands).filter(([k]) => !k.startsWith('band3')).map(([, v]) => v);
+    return { ds_m: P.ds, seg_px: seg, worst_band: Math.max(...drawn), ...bands, ridge_corners_reported: worstOf(ridge), control_stepped: worstOf(Array.from(P.A.band0_L, v => Math.round(v * 2) / 2)) };
   });
   await ctx.close();
   assert(r.control_stepped > 0.05, 'the control (stepped) did not exceed the limit: ' + r.control_stepped);
@@ -156,6 +158,8 @@ await test('a6-pack-holds', async () => {
   // 1 m as A6 says. The rule applies to each band, the resolution of the pack. The ridge is the highest of bands 1 to 3:
   // where two bands cross it turns a corner whatever the step (0.58 at 2 m, 0.47 at 1 m), so it is reported, not held
   // to the limit.
+  // ADDENDUM-B B10 (decided by chat): draw the ridgeline from bands 1 and 2 only, do not loosen the rule. Band 3
+  // (0.058 at 1 m) is no longer drawn and is reported; the limit stays 0.05 for every drawn band.
   assert(r.ds_m === 1, 'pack step ' + r.ds_m + ' m, A6 rebuild is at 1 m');
   assert(r.worst_band < 0.05, 'blocky at 8 px/m: ' + JSON.stringify(r));
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, +v.toFixed(4)]));
@@ -347,6 +351,36 @@ await test('a5-clock-drift', async () => {
   assert(k >= DRIFT_MIN * 5, 'too few samples ' + k);
   assert(worst < 2, 'clock-mode nodes drift apart by ' + worst.toFixed(2) + ' world px');
   return { minutes: DRIFT_MIN, samples: k, worst_world_px: +worst.toFixed(3), note: 'two windows on one machine share one clock; two machines add their clock offset' };
+});
+
+// ---------- loop 1: footprint widths and ?spread=1 ----------
+// Rules, set before the run: (a) at most 2 drawn footprints (bands 0 to 3) under 1 m along the reach (it was 53 of
+// 152); (b) the spread fields put fewer footprints into stacks (3 or more drawn on one side with centres within 2 m)
+// than the nearest-station fields; (c) at s 1847 the frame with ?spread=1 differs from the default in more than 1 %
+// of its pixels (more than 40 in the RGB sum), while two default frames differ in under 0.1 % (the control).
+// Spread is the default since ADDENDUM-B B10, so "default" below is ?spread=0 and "spread" is the app's default.
+await test('loop-spread', async () => {
+  const pk = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/nashua/existing/pack.json'), 'utf8'));
+  assert(pk.buildings_fields[10] === 'sv0' && pk.buildings_fields[11] === 'sv1', 'fields ' + pk.buildings_fields);
+  const drawn = pk.buildings.filter(b => b[3] <= 3), thin = drawn.filter(b => b[1] - b[0] < 1).length;
+  const stacked = k0 => { let n = 0; for (const side of [1, -1]) { const c = drawn.filter(b => b[2] === side).map(b => (b[k0] + b[k0 + 1]) / 2).sort((a, b) => a - b); let i = 0; while (i < c.length) { let j = i; while (j + 1 < c.length && c[j + 1] - c[i] <= 2) j++; if (j - i + 1 >= 3) n += j - i + 1; i = j + 1; } } return n; };
+  const st0 = stacked(0), st1 = stacked(10);
+  assert(thin <= 2, 'footprints under 1 m wide: ' + thin + ' of ' + drawn.length);
+  assert(st1 < st0, 'spread did not reduce the stacks: ' + st0 + ' -> ' + st1);
+  const shot = async q => {
+    const { ctx, p } = await open(BASE, '?i=p6-sp&world=nashua&seed=1&palette=original' + q);
+    await p.evaluate(() => { document.body.classList.add('uihidden'); SSAV.pb.pause(); SSAV.cfg.weather.mode = 'dry'; SSAV.cfg.weather.holds = { rain: 0, fog: 0, light: 1, wind: 0 }; SSAV.cfg.nashua.labels = false; SSAV.pb.x = 1847 * SSAV.world().pack.hx - SSAV.viewW() / 2; });
+    await settle(p); await p.waitForTimeout(500);
+    const png = PNG.sync.read(await p.screenshot({ type: 'png' }));
+    await ctx.close();
+    return png;
+  };
+  const diff = (a, b) => { let n = 0; for (let i = 0; i < a.data.length; i += 4) if (Math.abs(a.data[i] - b.data[i]) + Math.abs(a.data[i + 1] - b.data[i + 1]) + Math.abs(a.data[i + 2] - b.data[i + 2]) > 40) n++; return n / (a.width * a.height); };
+  const d0 = await shot('&spread=0'), d1 = await shot('&spread=0'), sp = await shot('');
+  const control = diff(d0, d1), moved = diff(d0, sp);
+  assert(control < 0.001, 'two default frames differ: ' + control);
+  assert(moved > 0.01, 'spread changed only ' + moved + ' of the frame');
+  return { under1m: thin + ' of ' + drawn.length, stackedFootprints: { nearestStation: st0, spread: st1 }, pixelShare: { spread: +moved.toFixed(4), control: +control.toFixed(5) } };
 });
 
 await browser.close();

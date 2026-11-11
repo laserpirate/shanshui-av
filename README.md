@@ -30,6 +30,7 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?world=derelict` | Start on the derelict world (shanshui is the default) |
 | `?world=nashua` | The Nashua reach as a section, seen from the south bank looking north; also `&bank=L\|R`, `&hx=2..12` (world px per m, default 8), `&ve=1..20` (Vertical Exaggeration, default 2), `&level=0..4`, `&ends=pingpong\|handover\|loop` (default pingpong), `&mode=nature\|built\|design\|sections`, `&morph=0..1` (needs the local design pack). Clock-mode outputs take `&hx` and `&ve` too |
 | `?layers=a,b` | nashua, for tests and review: draw only these layers (for example `buildings`) |
+| `?spread=0` | nashua: far footprints (more than 120 m behind the water) at their nearest station, as in `.p6`; the default places them on the route smoothed over 300 m so they do not stack behind the bends. Clock-mode outputs take it too |
 | `?t=YYYY-MM-DD` | nashua: the time scroll on, at that day of the East Pepperell record (an upstream proxy) |
 | `?daycycle=1&hour=HH` | nashua with the time scroll: the light follows the sun at the reach for the hour of the scroll's day (local standard time); held above 0.1 day/s |
 | `?reach=merrimack` | nashua: the second reach, 5 km of the Merrimack below the confluence (estimated bed, levels carried from the confluence) |
