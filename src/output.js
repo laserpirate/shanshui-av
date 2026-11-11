@@ -126,11 +126,16 @@ function tick() {
   } catch (e) { say('error', 'frame: ' + (e && e.message || e)); }
 }
 // clock mode: the view width of the whole wall in world px, so the nashua triangle wave turns at the wall's ends
+// The world is found by the key the last clock state used (it carries the reach, hx, ve and spread since .p6; a key
+// built here without them found nothing, so the reach was 0 and the node never turned: fixed in P7)
+let clockKey = '';
 function clockFs() {
   const W = innerWidth, H = innerHeight, wv = wall ? wallView(wall, W, H) : { VW: W, VH: H };
   const vw = wv.VW / (wv.VH / WORLD_H);
-  const top = scene.peek('clock:' + (Q.get('world') || 'shanshui') + ':' + (Q.get('seed') || '1'));
-  return clockState(vw, top && top.pack ? reachW(top.pack) : 0);
+  const top = clockKey ? scene.peek(clockKey) : null;
+  const fs = clockState(vw, top && top.pack ? reachW(top.pack) : 0);
+  clockKey = fs.worlds[0] ? fs.worlds[0].key : '';
+  return fs;
 }
 // data worlds: labels and fact line, only when the controller turns them on for the output (off by default)
 const overlay = new ReachOverlay($('labels'));

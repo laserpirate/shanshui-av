@@ -473,6 +473,29 @@ await test('b9-runoff', async () => {
   return { moved: +moved.toFixed(1), control: +control.toFixed(1), amounts: { dry, rain: +rainAmt.toFixed(2), flood: +floodAmt.toFixed(2), off: offAmt }, rastered: r1 - r0 };
 });
 
+// ---------- found in P7: a clock-mode nashua node turns at the reach ends (the pair links) ----------
+// Since .p6 the clock world's key carries hx, ve and spread, and the output looked it up without them, so it saw no
+// reach and ran on past the end. The rule: a node started long ago (t0 an hour back) shows a camera inside the reach.
+// It fails on the .p6 and .p7 output (--ref).
+async function clockX(base) {
+  const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
+  const p = await ctx.newPage();
+  p.on('pageerror', e => consoleProblems.push({ url: p.url(), text: 'pageerror: ' + e.message }));
+  await p.goto(base + `output.html?world=nashua&seed=1&t0=${Date.now() - 3600e3}&speed=60`);
+  await p.waitForFunction(() => window.SSOUT && SSOUT.msg && [...SSOUT.scene.worlds.values()].some(w => w.world.pack), null, { timeout: 60000 });
+  await p.waitForTimeout(500);
+  const r = await p.evaluate(() => { const w = [...SSOUT.scene.worlds.values()].find(w => w.world.pack).world, P = w.pack; return { x: SSOUT.msg.fs.worlds[0].x, span: P.route_len_m * P.hx }; });
+  await ctx.close();
+  return r;
+}
+await test('c1-clock-turns', async () => {
+  const rule = r => r.x >= 0 && r.x <= r.span;
+  const now = await clockX(BASE);
+  if (REF) { const old = await clockX(REF); assert(!rule(old), 'planted: the reference output passed (x ' + old.x.toFixed(0) + ' of ' + old.span.toFixed(0) + ')'); }
+  assert(rule(now), 'the clock camera x ' + now.x.toFixed(0) + ' is past the reach (' + now.span.toFixed(0) + ')');
+  return { x: Math.round(now.x), span: Math.round(now.span) };
+});
+
 await browser.close();
 const file = path.join(ROOT, 'test-results', 'p7.json');
 let prev = {}; try { prev = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
