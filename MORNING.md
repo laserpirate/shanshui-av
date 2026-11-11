@@ -1,84 +1,59 @@
-# MORNING
+# CHECKPOINT P1 · the nashua world · 2026-11-11
 
-AV Shan Shui Infinite Scrolls, overnight run of 2026-10-23 to 24: `shanshui-av-v0.3.0`, the derelict world. Tagged, live and verified.
+Live preview: **https://laserpirate.github.io/shanshui-av/next/?world=nashua**
+(the stock app is unchanged at https://laserpirate.github.io/shanshui-av/)
+Tag: `shanshui-av-v0.4.0-nashua.p1` on `feat/nashua` (the commit that adds this file; code as at d5973c4). Root of the site: byte-identical to `main` 1f009a1 (checked live, file by file).
 
-Live: https://laserpirate.github.io/shanshui-av/ (public, no password). Derelict: https://laserpirate.github.io/shanshui-av/?world=derelict
-Review sheet: https://github.com/laserpirate/shanshui-av/blob/main/docs/derelict/index.md
-Repo: https://github.com/laserpirate/shanshui-av
-Offline: `node tools/serve.mjs` in the repo, then http://localhost:8080/
+## What works
+- World `nashua` (W cycles shanshui → derelict → nashua; `?world=nashua`). The last reach as an unrolled section: far ridges, four bands from the water edge (0–40, 40–120, 120–300, 300–700 m), trees from the canopy layer, 172 buildings with lit windows by occupancy, the bed as a cut section (solid where measured, dashed where estimated), the Jackson Mills dam, two road and two rail bridges in section, CSOs, outfalls, the 90 Canal St lot, the confluence.
+- Water levels as data: Median, MHW, Minor Flood, 1% FEMA, 1936. Keys 1–6, the Reach panel, and CC 4 (the default weather knob scrubs the level in nashua). The level eases; a scrub is immediate.
+- Bank flip (K) keeps the same s at the view centre. Vertical Exaggeration 10x by default, 1–20 live (`,` `.`), redrawn with a crossfade.
+- Fact line at the playhead: s, bank, exaggeration, "building heights estimated", bed measured or estimated, a 100 m (328 ft) scale in px, the level name. Labels (L) on the controller; both off on the output by default.
+- Ends of the reach: hand over to shanshui (default), loop, or ping-pong.
+- Palette `nashua-kit` (the Core 3 kit) is the default in nashua, with the two water blues tinting the flood plane only. All other palettes work.
 
-## What shipped
+## Measured
+| check | target | result |
+| --- | --- | --- |
+| 1080p fps, RTX 3080 | 60 | nashua 60.0 (p95 16.7 ms); shanshui 60; derelict 60 (bench-app, 12 s at 600 px/s, heaviest weather, 1936 level) |
+| 4K fps | | nashua 60.0, shanshui 60, derelict 60 |
+| frames over 25 ms at CPU 4x | 0 | **not met in any world.** nashua 0–10 per 12 s (5 probe runs: 0, 1, 3, 5, 8; bench 10); the v0.3.0 build itself: derelict 1, 2, 4, 6; shanshui 0, 3. p95 16.8 ms everywhere. See open question 4. |
+| soak, 30 min, heaviest weather, output 1920x1080 | fps min ≥ 50, flat heap | **met**: fps min 51.4 (output 52.9), avg 60, heap −0.19 MB (output −0.24), 0 dips, 0 console problems, no context loss; 16 seeds, 25 palettes, ping-pong at both ends. The soak tool flags its own DOM rule (+73 nodes, rule < 60): only the seed history (cap 20 rows) and the log (cap 120 rows) grow, so it is bounded, not a leak. A first run was void: an orphaned soak overlapped it. |
+| bands separable at 720p | ≥ 4 | **6 of 6** (values 24.7 / 33.9 / 47.1 / 59.7 / 77.7 / 100 of 255, method frozen before tuning, tests/nashua.mjs) |
+| every bridge and the dam visible at its s | all | dam + 4 bridges: 112 / 825 / 1560 / 1206 / 523 dark px in the deck window (threshold 60) |
+| old worlds | 0 bytes | shanshui and derelict vs v0.3.0: **0 bytes**, equal tile hashes, 5 frames incl. night and rain (one fixed frame state in both builds) |
+| e2e, unchanged 24 | 24/24 | local 24/24 (clean console); on /next/ **24/24** and on the live root **24/24**, 0 console problems each (11 Nov 00:2x) |
+| nashua tests | 9/9 | **9/9**, 0 console problems (d5973c4) |
+| 50,000 px round trip | equal hashes | equal (7 tiles), start culled |
+| gate | 0 hits | 0 hits (syntax 51 files, 69 links, password grep, privacy grep 169 files, offline) |
+| live crawl /next/ | 0 broken | **0 broken**, 0 console errors (5 pages headed on the GPU, 44 requests, 31 linked files) |
 
-| Tag | What |
-| --- | --- |
-| `shanshui-av-v0.1.0` | Controls, seeds, palettes, export, output window, show tools. |
-| `shanshui-av-v0.2.0` | Perf (no GPU readback on the frame path, output in its own process), soak runner, Web MIDI learn. |
-| `shanshui-av-v0.3.0` | World: shanshui / derelict. A second generator: a derelict airport and drowned megacity edge, five depth layers, a planner with quiet stretches between dense passages, landmarks (control tower, airliner, parking structure, radar). Chunk-seeded (mulberry32), so travel back reproduces the landscape. Two-channel tiles: ink plus lights (steady, breathe, blink, flicker, chase, beacon) animated in the shader. Weather cycle dry, drizzle, downpour, flood, night (6 min auto, pin a phase, CC 4 scrubs), with rain, wind, water, fog and light sliders (grab holds, Follow releases) and MIDI targets. Fog, flood with reflections, and rain are drawn in the shader. 11 new palettes: Megacity arc 17 to 24, derelict-rust, -rain, -mono. Export: lights as accent circles in SVG/PDF, glow in PNG, rain in export off by default. Shanshui pixel-identical to v0.2.0. |
-
-Checks on the final commit (details in `DECISIONS.md`):
-- **e2e:** 24/24 with 0 console problems on localhost (15 from v0.2.0 plus 9 for worlds). The first full run on the final code failed `midi-learn` once: the test still expected no bindings before Enable, while CC 4 is now bound to weather by default. The test now checks that default; rerun passed.
-- **Shanshui vs v0.2.0:** 5 frames (seeds 1, 7, shanshui; palettes original, dark, kl4-look, gradient, kodama-water) compared with the v0.2.0 tag served from a worktree: 0 bytes differ.
-- **Derelict determinism:** 50,000 px out (the start is culled from memory) and back: every tile hash the same.
-- **Performance at heaviest weather** (downpour + flood + night): derelict 60 fps at 1080p and 4K, 60 fps at 1080p with the CPU slowed 4x, no frame over 25 ms. Shanshui unchanged at 60 / 60 / 59.6.
-- **30 min soak**, heaviest weather, reseed every 2 min, palette every 1 min, world switch every 5 min, output at 1920 x 1080: fps min 57.0 (output 57.2), avg 59.9, heap -3.75 MB first to last third, 0 dips under 50, 0 reloads, 0 console problems.
-- **Real GPU checks** (RTX 3080, headed Chromium): full screen non-blank, output window mirrors (correlation 0.95 to 0.99), blackout and panic from derelict at heaviest weather, all in e2e.
-- **Composition:** busy share 37 % -> 28 % (far megastructures, then far towers, then mid-far thinned). Control tower and airliner read at a glance at 1080p, so they were not changed.
-- **Gate:** node --check on all JS, links resolve, zero console errors in both worlds and the output, no external requests offline, no password strings (new grep).
-- **Live and offline:** after the tag, the gate and e2e 24/24 (0 console problems) ran against the live URL (`test-results/e2e-live-v0.3.0.json`, local). The gate against localhost blocked every non-local request; none were made.
-
-## Overnight calls
-
-One line each in `DECISIONS.md`, "Overnight calls". In short:
-- derelict keeps 12,000 px behind the view (travel back regenerates, so less memory costs nothing);
-- a derelict tile is final once generation is 2,000 px past both edges;
-- heaviest weather = downpour rain and wind, full flood, night, fog 0.8, held;
-- the output window takes weather from the controller and never runs its own cycle;
-- panic freezes the weather with the scroll;
-- the mirror test holds rain at 0 (streaks animate per frame);
-- far window lights brightened and a hot core added after the night test under-read at 720p;
-- MIDI CC 4 on channel 1 is bound to the weather cycle by default;
-- the gate greps for password-like strings.
-
-## Blocked
-
-Nothing blocked. No fallback was needed.
-
-## Notes
-
-- **Topo 23** (Kuala Lumpur) has no entry in `phylla-kodama-manifest.js`. The Kodama files were not touched.
-- Stilt houses and nets come from topo 22, as confirmed.
-- 300 dpi Arch D PNG is rastered in 2 blocks; a reflection whose source is in the other block is lost at the seam. 150 dpi is one block.
-- The soak's world switch every 5 min means it alternated 5 min derelict, 5 min shanshui.
-
-## Could not verify on real hardware
-
-Tested only on Polaris (RTX 3080) in Playwright's Chromium 130:
-- a real projector or second display, Keyboard Lock in branded Chrome full screen;
-- any other machine (integrated GPU, laptop on battery, Mac);
-- a real MIDI controller (fake input only), including CC 4 scrubbing the weather;
-- printing the derelict Arch D PDF on a plotter;
-- a headed 30 min soak on the show laptop (the soak ran headless on the real GPU).
-
-## Open questions
-
-1. Weather defaults: the cycle starts at dry on every load. Should shows start at a pinned phase (night reads best on a projector)?
-2. Is 28 % busy right, or do you want longer quiet stretches?
-3. Vector export has no reflections (flat water plane). Fine for print, or prefer PNG for derelict prints?
-4. Runway threshold numbers are invented 7-segment glyphs. Keep, or drop text-like marks entirely?
-5. The soak alternated worlds as asked; do you also want a 30 min derelict-only run before the show?
+## Not verified on real hardware
+- No projector, no wall, no Pi, no Mac. Only this Windows machine (RTX 3080, headed Chromium, ANGLE D3D11).
+- MIDI: the CC 4 → level mapping is tested with synthetic MIDI messages (midi-learn test), not a physical controller.
+- CPU 4x is Chromium's throttle, a proxy for a weak machine, not one.
 
 ## Where everything landed
-
-| Asset | Local | GitHub | Pages | Chat only |
+| what | local | GitHub | Pages | chat only |
 | --- | --- | --- | --- | --- |
-| App (index.html, output.html, src/, palettes.json, fonts/, vendor/) | repo | yes | yes | |
-| Derelict world `src/worlds/derelict/`, registry, shanshui wrapper, weather, derelict worker | repo | yes | yes | |
-| README.md, DECISIONS.md, SHOWNIGHT.md, MORNING.md | repo | yes | yes | |
-| tools/ (adds bench-app, review, strip; gate with password grep; soak with world options) and tests/e2e.mjs (24 tests, 9 new) | repo | yes | yes | |
-| docs/palettes/*.jpg (49 swatches, 11 new) | repo | yes | yes | |
-| docs/derelict/ review sheet (13 JPG, each under 220 KB, index.md) | repo | yes | yes | |
-| test-results/ (e2e, soak-derelict, bench-app, preflight, strips, exports) | repo folder, gitignored | no | no | |
-| scratch/ (smoke and composition helpers, screenshots) | repo folder, gitignored | no | no | |
-| Post-mortem | `Z:\_F26_Fall-2026\Claude_post-mortems\POSTMORTEM_10-AV_shanshui-av-derelict_v01.md` | no | no | |
+| code, tests, tools | `C:\_av\shanshui-av-nashua` (`feat/nashua`) | `feat/nashua` (pushed) | `/next/` | |
+| existing-conditions pack | `data\nashua\existing\` | yes | `/next/data/nashua/existing/` | |
+| design pack (landform) | `data\local\nashua\design\` (gitignored) | **no** | **no** | |
+| source paths | `tools\nashua\sources.local.json` (gitignored) | no | no | |
+| review sheet | `docs\nashua\` | yes | `/next/docs/nashua/index.md` | |
+| preview branch | | `pages-preview` (root = main + next/) | serves the whole site | |
+| STATE, CHECKPOINT, MORNING | repo (STATE gitignored) and `_handoffs\nashua\` | CHECKPOINT and MORNING yes | | |
 
-Repo folder: `Z:\_F26_Fall-2026\10_av\00_shan-shui\shanshui-av`. Kodama files and `_source\shan-shui-inf\` were not touched. The v0.2.0 worktree used for the pixel compare was removed.
+## Open questions (default taken; nothing waits on you)
+1. **Pages source.** To serve `/next/` without touching `main`, the Pages source moved from `main` to `pages-preview`, whose root is main's tree byte for byte plus `next/`. Default: keep it. Effect: a push to `main` reaches the root only after `node tools/deploy-next.mjs` runs. To revert: `gh api -X PUT repos/laserpirate/shanshui-av/pages -f "source[branch]=main" -f "source[path]=/"`.
+2. **Commit history on `main` carries a personal email** as the author on older commits (files are clean). Rewriting it needs a force push. Owner's call, skipped.
+3. **Promote `/next/` to root.** Owner's call, not done.
+4. **"No frame over 25 ms at CPU 4x".** The v0.3.0 show build does not meet it either; the throttle stalls the main thread in slices. Default: report the measured counts, keep the p95 (16.8 ms) as the working number, and keep reducing per-frame work in P4 (quality ladder). Say if you want a different measure.
+5. **Publishing the design pack** (landform sequence) for the morph in P2. Owner's call. Default: the morph runs only where the local pack is present; the preview shows the one-line "not loaded" fact.
+
+## Also found
+- The USGS gauge in Nashua (01096508) is the **Merrimack** at Nashua, not the Nashua River, and has no daily discharge. The Nashua River gauge is USGS 01096500 at East Pepperell, MA (daily discharge since 1935-10-01; 1936-03-20 daily mean 19,400 ft³/s, 549 m³/s). P5 uses it as a declared upstream proxy.
+- No `feat/midi` branch exists, locally or on origin: handoff 4 was never built. It is in P4.
+
+## Next: P2 (modes, morph, live section, slit-scan)
+Modes from the layer lists (nature, built, design, sections) with each element tagged by layer and filtered in the raster worker (no reload); the existing-to-design morph with the two labels verbatim; the live section inset at the playhead; GPU slit-scan and time-smear (strip, smear, time displacement) from the scroll itself and dropped video. Tag `.p2`.
