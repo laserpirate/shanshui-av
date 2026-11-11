@@ -2,6 +2,7 @@
 // on the real GPU. Samples every 30 s: fps (controller and output), JS heap after forced GC, DOM
 // nodes, element and tile counts, worlds, watchdog events.
 //   node tools/serve.mjs --port 8093 &   then   node tools/soak.mjs [minutes=30] [http://localhost:8093/] [--speed=1500] [--every=2] [--palevery=1] [--headed]
+//   nashua: --world=nashua [--ends=pingpong|loop|handover] (--heavy also holds the 1936 level)
 //   derelict: --world=derelict --heavy (downpour + flood + night held) --worldevery=5 (switch world every N min) --fpsmin=50 --out=soak-derelict.json
 // Pass: no console errors, no reloads, no context loss, fps (1 s average) min >= 45 and mean >= 58, heap growth first third to last third < 8 MB,
 // DOM nodes flat, elements and tiles bounded. Writes test-results/soak.json.
@@ -18,6 +19,7 @@ const opt = (k, d) => Number((args.find(a => a.startsWith('--' + k + '=')) || '=
 const EVERY = opt('every', 2), PAL_EVERY = opt('palevery', 1), WORLD_EVERY = opt('worldevery', 0), FPS_MIN = opt('fpsmin', 45);
 const WORLD = (args.find(a => a.startsWith('--world=')) || '--world=shanshui').slice(8);
 const HEAVY = args.includes('--heavy');
+const ENDS = (args.find(a => a.startsWith('--ends=')) || '--ends=pingpong').slice(7);
 const OUT = (args.find(a => a.startsWith('--out=')) || '--out=soak.json').slice(6);
 
 const browser = await chromium.launch({
@@ -32,7 +34,7 @@ const watch = (p, tag) => {
   p.on('pageerror', e => problems.push({ t: Date.now(), tag, text: 'pageerror: ' + e.message }));
 };
 watch(page, 'controller');
-await page.goto(BASE + '?i=soak-' + WORLD + '&seed=2026' + (WORLD === 'shanshui' ? '' : '&world=' + WORLD));
+await page.goto(BASE + '?i=soak-' + WORLD + '&seed=2026' + (WORLD === 'shanshui' ? '' : '&world=' + WORLD) + (WORLD === 'nashua' ? '&ends=' + ENDS + (HEAVY ? '&level=4' : '') : ''));
 await page.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2);
 // output window
 const popP = ctx.waitForEvent('page');

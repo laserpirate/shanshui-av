@@ -37,6 +37,12 @@ body.uihidden .ui { display: none !important; }
 #hud b { font-weight: 600; color: var(--acc); }
 #hud-stats, #hud-flags { white-space: pre; color: var(--dim); font-variant-numeric: tabular-nums; }
 #hud-flags:empty { display: none; }
+#hud-facts { contain: content; white-space: pre-wrap; font-size: var(--fs); font-variant-numeric: tabular-nums; }
+#hud-facts:empty { display: none; }
+.reach-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; contain: strict; }
+.reach-labels[hidden] { display: none; }
+.rl { position: absolute; left: 0; top: 0; font: 500 18px 'Plex Cond', sans-serif; color: #07090e; background: rgba(236, 238, 242, 0.88); padding: 2px 6px; white-space: nowrap; will-change: transform; }
+.rlevels button { display: block; width: 100%; text-align: left; margin: 0 0 4px; }
 
 #bar { position: fixed; left: var(--pad); right: var(--pad); bottom: var(--pad); display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
 .grp { display: flex; align-items: stretch; }

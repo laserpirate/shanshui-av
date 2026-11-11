@@ -42,7 +42,7 @@
      "#ECEAE0"
     ]
    ],
-   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): soil #090E08, cream #ECEAE0"
+   "source": "Kodama styleguide page: soil #090E08, cream #ECEAE0"
   },
   {
    "id": "grayscale",
@@ -95,7 +95,7 @@
    "period": 6000,
    "rate": 0.02,
    "editable": true,
-   "source": "default stops from phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support) (deep, summer, gold); edit in the Palette panel"
+   "source": "default stops from Kodama styleguide page (deep, summer, gold); edit in the Palette panel"
   },
   {
    "id": "kodama-core",
@@ -123,7 +123,7 @@
      "#ECEAE0"
     ]
    ],
-   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Core brand (soil, teal, gold, cream)"
+   "source": "Kodama styleguide page: Core brand (soil, teal, gold, cream)"
   },
   {
    "id": "kodama-lunar",
@@ -155,7 +155,7 @@
      "#F4F6F8"
     ]
    ],
-   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Lunar monochrome (moon-lo, pale, silver, moon) on studies ink #05070C"
+   "source": "Kodama styleguide page: Lunar monochrome (moon-lo, pale, silver, moon) on studies ink #05070C"
   },
   {
    "id": "kodama-water",
@@ -183,7 +183,7 @@
      "#7FF0D8"
     ]
    ],
-   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Water (deep, flow, glow) on studies ink #05070C"
+   "source": "Kodama styleguide page: Water (deep, flow, glow) on studies ink #05070C"
   },
   {
    "id": "kodama-spectrum",
@@ -222,7 +222,7 @@
    "drift": "time",
    "period": 6000,
    "rate": 0.01,
-   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Spectrum colour-breath (blue, violet, magenta, rose, coral), drifting over time"
+   "source": "Kodama styleguide page: Spectrum colour-breath (blue, violet, magenta, rose, coral), drifting over time"
   },
   {
    "id": "kodama-seasons",
@@ -257,7 +257,7 @@
    "drift": "x",
    "period": 20000,
    "rate": 0.01,
-   "source": "phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support): Seasons (winter, spring, summer, autumn), drifting with distance"
+   "source": "Kodama styleguide page: Seasons (winter, spring, summer, autumn), drifting with distance"
   },
   {
    "id": "kl4-look",
@@ -293,7 +293,7 @@
      "#9fc8f0"
     ]
    ],
-   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): kl-4 Look (bg, bed, low, mid, high, stream)"
+   "source": "Kodama Landforms page (same block in kl-1 to kl-8): kl-4 Look (bg, bed, low, mid, high, stream)"
   },
   {
    "id": "kl4-flat",
@@ -317,7 +317,7 @@
      "#e6deff"
     ]
    ],
-   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): kl-4 Flat (bg, ground, mono ramp to #e6deff)"
+   "source": "Kodama Landforms page (same block in kl-1 to kl-8): kl-4 Flat (bg, ground, mono ramp to #e6deff)"
   },
   {
    "id": "kl-kit",
@@ -353,7 +353,7 @@
      "#c4daf1"
     ]
    ],
-   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): Kit Gradient (K100, bed, low, mid, high, LB)"
+   "source": "Kodama Landforms page (same block in kl-1 to kl-8): Kit Gradient (K100, bed, low, mid, high, LB)"
   },
   {
    "id": "kl-grey",
@@ -385,7 +385,7 @@
      "#f2f2f2"
     ]
    ],
-   "source": "C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8): Greyscale K ramp (K100, K85, K60, K25, K05 from the file's KTAB)"
+   "source": "Kodama Landforms page (same block in kl-1 to kl-8): Greyscale K ramp (K100, K85, K60, K25, K05 from the file's KTAB)"
   },
   {
    "id": "arc-17",
@@ -796,6 +796,44 @@
    "light": "#FFFFFF",
    "beacon": "#FFFFFF",
    "source": "ink only, lights white"
+  },
+  {
+   "id": "nashua-kit",
+   "name": "Nashua Kit",
+   "group": "Nashua",
+   "cycle": true,
+   "type": "ramp",
+   "ground": "#07090E",
+   "paper": "grain",
+   "stops": [
+    [
+     0,
+     "#07090E"
+    ],
+    [
+     0.3,
+     "#3E466B"
+    ],
+    [
+     0.55,
+     "#8B8BA3"
+    ],
+    [
+     0.78,
+     "#B0B0C1"
+    ],
+    [
+     1,
+     "#DDDEE4"
+    ]
+   ],
+   "light": "#9FC8F0",
+   "beacon": "#9FC8F0",
+   "water": [
+    "#2E4A8C",
+    "#9FC8F0"
+   ],
+   "source": "Core 3 kit: indigo, three tints, two water blues, near-black ground"
   },
   {
    "id": "topo-01",

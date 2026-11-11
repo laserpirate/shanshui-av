@@ -8,10 +8,13 @@
 //   cull      world px kept behind the view
 import { meta as shanshui } from './shanshui/index.js';
 import { meta as derelict } from './derelict/index.js';
+import { meta as nashua } from './nashua/index.js';
 
+//   data      the world draws from a data pack (finite reach, levels, bank, exaggeration; see src/worlds/nashua/)
 export const WORLDS = {
   shanshui: { ...shanshui, kind: 0, worker: 'gen-worker.js', module: false, chunked: false, cull: 20000, weather: false },
   derelict: { ...derelict, kind: 1, worker: 'derelict-worker.js', module: true, chunked: true, cull: 12000, weather: true },
+  nashua: { ...nashua, kind: 1, worker: 'nashua-worker.js', module: true, chunked: true, cull: 12000, weather: true, data: true },
 };
 export const WORLD_NAMES = Object.keys(WORLDS);
 export const worldOf = name => WORLDS[name] || WORLDS.shanshui;

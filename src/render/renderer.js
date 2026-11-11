@@ -5,7 +5,7 @@
 // depth layer, a flood plane with rippled reflections, lights animated from their code, night, and
 // a rain pass. Kind 0 (shanshui) skips all of it: the same arithmetic as v0.2.0.
 import { WORLD_H, TILE_W, PAPER_TILE } from '../core/constants.js';
-import { LUT_W, LUT_H, buildLUT, driftOf, paperMode, lightOf, beaconOf, colorAt } from '../core/palettes.js';
+import { LUT_W, LUT_H, buildLUT, driftOf, paperMode, lightOf, beaconOf, waterOf, colorAt } from '../core/palettes.js';
 import { waterY } from '../core/weather.js';
 
 const VS = `#version 300 es
@@ -30,7 +30,11 @@ uniform vec2 uDriftA, uDriftB;
 uniform int uPaperA, uPaperB, uKind;
 uniform vec4 uWorld;
 uniform float uFog, uWaterY, uDay;
+uniform sampler2D uWater;   // data worlds: world y of the water surface along x (R32F), over uWaterX = (x0, width)
+uniform float uWaterOn;
+uniform vec2 uWaterX;
 uniform vec3 uLightA, uLightB, uBeaconA, uBeaconB;
+uniform vec4 uWatA0, uWatA1, uWatB0, uWatB1;   // optional water tint per palette (deep, lit); alpha 0 = none
 out vec4 o;
 float curve(float i) {
   i = clamp(i * uInk, 0.0, 1.0);
@@ -66,6 +70,7 @@ void main() {
   float i = curve(1.0 - lum);
   vec3 paper = texture(uPaper, vWorld / ${PAPER_TILE.toFixed(4)}).rgb;
   vec3 glowC = vec3(0.0), coreC = vec3(0.0);
+  float wmask = 0.0, wlit = 0.0;
   if (uKind == 1 && uHasTile > 0.5) {
     vec4 ax = auxAt(vUv);
     float depth = floor(ax.r * 255.0 / 50.0 + 0.5), code = floor(ax.b * 255.0 + 0.5);
@@ -75,21 +80,23 @@ void main() {
     i = i * (1.0 - hz) + hz * 0.3;
     float lg = texture(uAux, vUv).g * anim(code) * (1.0 - uFog * fw * 0.5);
     vec3 lc = lightCol(code);
-    float dy = vWorld.y - uWaterY;
+    float wy = uWaterOn > 0.5 ? texture(uWater, vec2(clamp((vWorld.x - uWaterX.x) / uWaterX.y, 0.0, 1.0), 0.5)).r : uWaterY;
+    float dy = vWorld.y - wy;
     float dSmooth = texture(uAux, vUv).r * 255.0 / 50.0;   // filtered, so the water edge against the near layer is smooth
     if (dy > 0.0 && dSmooth < 4.5) {
       // flood plane: the scene above, mirrored about the water line, rippled, fading with depth
       float rip = sin(vWorld.x * 0.05 + uTime * 1.6 + dy * 0.3) * (0.8 + dy * 0.03) + sin(vWorld.x * 0.011 - uTime * 0.6 + dy * 0.05) * 2.0;
-      vec2 ruv = (vec2(vWorld.x + rip, uWaterY - dy * 1.05) - uWorld.xy) / uWorld.zw;
+      vec2 ruv = (vec2(vWorld.x + rip, wy - dy * 1.05) - uWorld.xy) / uWorld.zw;
       float inside = step(0.0, ruv.y) * step(ruv.y, 1.0);
       ruv.x = clamp(ruv.x, 0.0, 1.0);
       float ri = inside * curve(1.0 - texture(uTile, ruv).r) * exp(-dy / 260.0);
-      vec2 guv = (vec2(vWorld.x + rip * 0.6, uWaterY - dy * 0.45) - uWorld.xy) / uWorld.zw;
+      vec2 guv = (vec2(vWorld.x + rip * 0.6, wy - dy * 0.45) - uWorld.xy) / uWorld.zw;
       float gin = step(0.0, guv.y) * step(guv.y, 1.0);
       guv.x = clamp(guv.x, 0.0, 1.0);
       float gcode = floor(auxAt(guv).b * 255.0 + 0.5);
       float cur = smoothstep(0.93, 1.0, sin(vWorld.y * 0.8 + sin(vWorld.x * 0.006 + uTime * 0.35) * 5.0 + vWorld.x * 0.002)) * 0.07 * exp(-dy / 120.0);
       i = 0.06 + ri * 0.55 + cur + 0.45 * exp(-dy / 1.5);
+      wmask = 1.0; wlit = clamp(ri * 1.4 + cur * 5.0, 0.0, 1.0);
       lg = gin * texture(uAux, guv).g * anim(gcode) * 0.55 * exp(-dy / 300.0);
       lc = lightCol(gcode);
     }
@@ -99,6 +106,12 @@ void main() {
   vec3 a = look(uLutA, uDriftA, uPaperA, i, paper);
   vec3 b = look(uLutB, uDriftB, uPaperB, i, paper);
   vec3 c = mix(a, b, uMix);
+  float wa = mix(uWatA0.a, uWatB0.a, uMix) * wmask;
+  if (wa > 0.0) {
+    vec3 ta = mix(uWatA0.rgb, uWatA1.rgb, wlit), tb = mix(uWatB0.rgb, uWatB1.rgb, wlit);
+    vec3 tw = uWatA0.a > 0.5 && uWatB0.a > 0.5 ? mix(ta, tb, uMix) : (uWatA0.a > 0.5 ? ta : tb);
+    c = mix(c, tw * (0.55 + 0.45 * dot(c, vec3(0.3333))), wa * 0.7);
+  }
   if (uKind == 1) c = c * mix(0.42, 1.0, uDay) + glowC * mix(1.8, 0.22, uDay) + coreC * mix(0.55, 0.04, uDay);
   o = vec4(c, uAlpha);
 }`;
@@ -183,6 +196,25 @@ export class Renderer {
     this.noAux = this._tex(gl.RGBA8, gl.RGBA, 1, 1, new Uint8Array([0, 0, 0, 255]), gl.NEAREST);
     this.plainPaper = this._tex(gl.RGBA8, gl.RGBA, 1, 1, new Uint8Array([240, 232, 214, 255]), gl.NEAREST, gl.REPEAT);
     this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    this.noWater = this._ftex(new Float32Array([0]), 1);
+  }
+
+  // R32F row texture, nearest (float linear filtering is an extension)
+  _ftex(data, n, old) {
+    const gl = this.gl;
+    const t = old || gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, n, 1, 0, gl.RED, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+  // water line texture for a data world at level lv; re-uploaded only when the line changes
+  waterTex(world, lv) {
+    const L = world.waterLine(lv);
+    if (!L) return null;
+    if (!world._wlTex || world._wlKey !== L.key) { world._wlTex = this._ftex(L.data, L.data.length, world._wlTex); world._wlKey = L.key; }
+    return { tex: world._wlTex, x0: L.x0, w: L.w };
   }
 
   _tex(ifmt, fmt, w, h, data, filter = gl_LINEAR, wrap) {
@@ -242,7 +274,7 @@ export class Renderer {
     }
     return world._paperTex;
   }
-  releaseWorld(world) { if (world._paperTex) this.deleteTexture(world._paperTex); world._paperTex = null; }
+  releaseWorld(world) { if (world._paperTex) this.deleteTexture(world._paperTex); world._paperTex = null; if (world._wlTex) this.deleteTexture(world._wlTex); world._wlTex = null; }
 
   lut(p, inkRange) {
     const key = p.id + ':' + (p._rev || 0);
@@ -272,7 +304,7 @@ export class Renderer {
     const { p, u } = this.main;
     gl.useProgram(p);
     gl.uniform2f(u.uView, W, H);
-    gl.uniform1i(u.uTile, 0); gl.uniform1i(u.uLutA, 1); gl.uniform1i(u.uLutB, 2); gl.uniform1i(u.uPaper, 3); gl.uniform1i(u.uAux, 4);
+    gl.uniform1i(u.uTile, 0); gl.uniform1i(u.uLutA, 1); gl.uniform1i(u.uLutB, 2); gl.uniform1i(u.uPaper, 3); gl.uniform1i(u.uAux, 4); gl.uniform1i(u.uWater, 5);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.lut(f.palA, f.inkRange));
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.lut(f.palB, f.inkRange));
     gl.uniform1f(u.uMix, f.mix);
@@ -285,6 +317,7 @@ export class Renderer {
     gl.uniform1f(u.uFog, wx.fog); gl.uniform1f(u.uWaterY, waterY(wx.water)); gl.uniform1f(u.uDay, wx.light);
     gl.uniform3fv(u.uLightA, lightOf(f.palA)); gl.uniform3fv(u.uLightB, lightOf(f.palB));
     gl.uniform3fv(u.uBeaconA, beaconOf(f.palA)); gl.uniform3fv(u.uBeaconB, beaconOf(f.palB));
+    { const wa = waterOf(f.palA), wb = waterOf(f.palB); gl.uniform4fv(u.uWatA0, wa[0]); gl.uniform4fv(u.uWatA1, wa[1]); gl.uniform4fv(u.uWatB0, wb[0]); gl.uniform4fv(u.uWatB1, wb[1]); }
     const s = f.scale, camY = f.camY;
     let first = true;
     for (const w of f.worlds) {
@@ -294,6 +327,12 @@ export class Renderer {
       first = false;
       const kind = w.world.meta ? w.world.meta.kind : 0;
       gl.uniform1i(u.uKind, kind);
+      // data worlds: the water surface along x from the named levels (else the weather's flat water line)
+      gl.activeTexture(gl.TEXTURE5);   // before waterTex: an upload binds to the active unit
+      const wl = kind === 1 && w.world.waterLine ? this.waterTex(w.world, f.level || 0) : null;
+      gl.uniform1f(u.uWaterOn, wl ? 1 : 0);
+      gl.bindTexture(gl.TEXTURE_2D, wl ? wl.tex : this.noWater);
+      if (wl) gl.uniform2f(u.uWaterX, wl.x0, wl.w);
       gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, this.noAux);
       gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.paperTexture(w.world));
       gl.uniform1f(u.uPaperMean, w.world.paper ? w.world.paper.mean : 0.92);
@@ -405,6 +444,7 @@ export class Renderer {
     const tex = this.tileTexture(grey);
     const aux = grey.aux ? this.auxTexture(grey.aux) : null;
     const fakeWorld = { meta: world.meta, tiles: new Map(), paper: world.paper, paperVersion: world.paperVersion, _paperTex: world._paperTex, _paperVersion: world._paperVersion };
+    if (world.waterLine) { fakeWorld.waterLine = lv => world.waterLine(lv); }
     // draw one quad with the raster as its tile
     const { p, u } = this.main;
     this.draw({ ...look, W, H, scale: W / rect.w, camY: rect.y, worlds: [{ world: fakeWorld, x: rect.x, alpha: 1 }], vignette: 0, rainOn: false }, tgt);
@@ -426,6 +466,7 @@ export class Renderer {
     const px = this.read(tgt);
     gl.deleteTexture(tex); if (aux) gl.deleteTexture(aux);
     if (fakeWorld._paperTex !== world._paperTex) gl.deleteTexture(fakeWorld._paperTex);
+    if (fakeWorld._wlTex) gl.deleteTexture(fakeWorld._wlTex);
     this.freeTarget(tgt);
     // flip to top-down
     const row = W * 4, out = new Uint8ClampedArray(px.length);

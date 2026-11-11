@@ -33,10 +33,10 @@ export class Scene {
   palette(id) { return this.byId.get(id) || this.byId.get('original'); }
   setPalette(p) { this.byId.set(p.id, p); }
 
-  world(key, seed, kind) {
+  world(key, seed, kind, opts) {
     let w = this.worlds.get(key);
     if (!w) {
-      const world = new World(seed, { key, onLog: this.onLog, world: kind });
+      const world = new World(seed, { key, onLog: this.onLog, world: kind, opts });
       this.renderer.attach(world);
       w = { world, lastUsed: performance.now() };
       this.worlds.set(key, w);
@@ -64,7 +64,7 @@ export class Scene {
     const rscale = Math.round(v.scale * 64) / 64;   // quantized so small resizes do not redraw every tile
     const list = [];
     for (const it of fs.worlds) {
-      const world = this.world(it.key, it.seed, it.world);
+      const world = this.world(it.key, it.seed, it.world, it.opts);
       this.worlds.get(it.key).lastUsed = now;
       world.update(it.x, v.viewW, fs.dir, rscale);
       list.push({ world, x: it.x, alpha: it.alpha });
@@ -88,6 +88,7 @@ export class Scene {
       inkRange: this.palettes.inkRange || 0.75,
       contrast: fs.u.contrast, ink: fs.u.ink, paperOn: fs.u.paper, vignette: fs.u.vignette ? 0.55 : 0, time: fs.time,
       weather: fs.weather || null,
+      level: fs.level || 0,
     };
   }
 

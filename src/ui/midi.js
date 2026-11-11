@@ -15,6 +15,9 @@ export const MIDI_TARGETS = [
   { id: 'water', label: 'Water', cont: true },
   { id: 'fog', label: 'Fog', cont: true },
   { id: 'light', label: 'Light', cont: true },
+  { id: 'level', label: 'Water level', cont: true },
+  { id: 've', label: 'Exaggeration', cont: true },
+  { id: 'bank', label: 'Bank' },
 ];
 
 export class Midi {

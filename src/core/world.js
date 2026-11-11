@@ -8,8 +8,9 @@ const base = new URL('../workers/', import.meta.url);
 let worldCount = 0;
 
 export class World {
-  constructor(seed, { key, onLog, world } = {}) {
+  constructor(seed, { key, onLog, world, opts } = {}) {
     this.seed = String(seed);
+    this.opts = opts || null;         // data worlds: {bank, ve}
     this.kind = worldOf(world).name;
     this.meta = worldOf(world);
     this.cull = this.meta.cull;
@@ -36,7 +37,17 @@ export class World {
     this.ras.onmessage = e => this._onRas(e.data);
     this.gen.onerror = e => this._fail('generator: ' + (e.message || 'error'));
     this.ras.onerror = e => this._fail('raster: ' + (e.message || 'error'));
-    this.gen.postMessage({ type: 'init', seed: this.seed });
+    this.gen.postMessage(this.opts ? { type: 'init', seed: this.seed, opts: this.opts } : { type: 'init', seed: this.seed });
+    if (this.meta.data) {             // data worlds keep the pack on the main thread too (water line, facts, labels)
+      import('../worlds/nashua/pack.js').then(m => m.loadPack().then(p => { if (!this.disposed) { this.pack = p; this._packMod = m; this.keepK = [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
+        .catch(e => this._fail('pack: ' + (e && e.message || e)));
+      this.waterLine = lv => {
+        if (!this.pack) return null;
+        const o = this.opts || {}, key = (+lv).toFixed(4) + ':' + o.bank + ':' + o.ve;
+        if (!this._wl || this._wl.key !== key) this._wl = { key, ...this._packMod.waterLine(this.pack, o, +lv) };
+        return this._wl;
+      };
+    }
     this.onTile = null;               // (tile, grey, scale) set by the renderer owner
     this.onTileDrop = null;           // (tile) to free textures
   }
@@ -123,7 +134,10 @@ export class World {
     // tiles
     const k0 = Math.floor(camX / TILE_W), k1 = Math.floor(camR / TILE_W);
     const lo = k0 - (dir < 0 ? 2 : 1), hi = k1 + (dir >= 0 ? 2 : 1);
+    // a finite reach keeps all its tiles resident when they fit in 96 MB (grey + aux), so turning back costs nothing
+    const keep = this.keepK && (this.keepK[1] - this.keepK[0] + 1) * TILE_W * WORLD_H * scale * scale * 5 < 96e6 ? this.keepK : null;
     for (const [k, t] of this.tiles) {
+      if (keep && k >= keep[0] && k <= keep[1]) continue;
       if (k < lo - 1 || k > hi + 1) { if (this.onTileDrop) this.onTileDrop(t); this.tiles.delete(k); }
     }
     if (!this.started) return;

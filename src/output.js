@@ -2,7 +2,8 @@
 // shanshui-av:<instance>) with its own Scene and workers; the same seed draws the same landscape.
 // F or double-click: full screen. Other show keys are sent to the controller.
 import { loadPalettes } from './core/palettes.js';
-import { Scene } from './core/scene.js';
+import { Scene, viewOf } from './core/scene.js';
+import { ReachOverlay, factLine } from './ui/reach.js';
 import { drawTestCard } from './ui/testcard.js';
 
 const INSTANCE = (new URLSearchParams(location.search).get('i') || 'main').replace(/[^\w-]/g, '').slice(0, 32) || 'main';
@@ -38,7 +39,21 @@ function tick() {
     const lag = Math.min(1, (Date.now() - msg.fs.t) / 1000);
     const fs = { ...msg.fs, worlds: msg.fs.worlds.map(w => ({ ...w, x: w.x + msg.fs.v * lag })) };
     if (!flags.panic) scene.frame(fs, { blackout: flags.blackout, panic: flags.panic });
+    reach(fs);
   } catch (e) { say('error', 'frame: ' + (e && e.message || e)); }
+}
+// data worlds: labels and fact line, only when the controller turns them on for the output (off by default)
+const overlay = new ReachOverlay($('labels'));
+let factAt = 0;
+function reach(fs) {
+  const top = fs.worlds[fs.worlds.length - 1], w = top ? scene.peek(top.key) : null;
+  const R = fs.reach || {}, data = !!(w && w.meta && w.meta.data);
+  const c = $('gl'), v = viewOf(c.clientWidth, c.clientHeight, fs.u.zoom, fs.u.yAlign);
+  overlay.update(w, { cssScale: v.scale, camX: top ? top.x : 0, camY: v.camY, W: c.clientWidth }, data && R.labels && !flags.blackout);
+  const f = $('facts'), on = data && R.facts && !flags.blackout;
+  if (f.hidden === on) f.hidden = !on;
+  const now = performance.now();
+  if (on && now - factAt > 250) { factAt = now; const t = factLine(w, top.x + v.viewW / 2, fs.level || 0, v.scale); if (f.textContent !== t) f.textContent = t; }
 }
 requestAnimationFrame(tick);
 setInterval(() => {

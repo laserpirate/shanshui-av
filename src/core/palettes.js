@@ -73,6 +73,8 @@ export function lightHex(p) {
 export const beaconHex = p => p.beacon || lightHex(p);
 export const lightOf = p => hexRgb(lightHex(p)).map(v => v / 255);
 export const beaconOf = p => hexRgb(beaconHex(p)).map(v => v / 255);
+// optional water tint [deep, lit] as two vec4s (alpha 1 when the palette declares one; 0 leaves the water as ramp value)
+export const waterOf = p => (p && Array.isArray(p.water) && p.water.length === 2) ? p.water.map(h => [...hexRgb(h).map(v => v / 255), 1]) : [[0, 0, 0, 0], [0, 0, 0, 0]];
 export const paperMode = p => ({ tint: 1, grain: 2 }[p.paper] || 0);
 export const isDark = p => { const g = hexRgb(p.ground); return 0.2126 * g[0] + 0.7152 * g[1] + 0.0722 * g[2] < 110; };
 

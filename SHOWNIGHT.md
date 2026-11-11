@@ -43,4 +43,4 @@ In full screen Chrome keeps Esc for the panic key; hold Esc 2 s to leave full sc
 
 ## Credit
 
-{Shan, Shui}* by Lingdong Huang (MIT). Changes by Marko Manriquez. About panel in the app.
+{Shan, Shui}* by Lingdong Huang (MIT). Changes by laserpirate. About panel in the app.

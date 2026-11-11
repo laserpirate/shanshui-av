@@ -11,6 +11,8 @@ import { KEYS } from './ui/keys.js';
 import { Midi, MIDI_TARGETS } from './ui/midi.js';
 import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
+import { ReachOverlay, factLine } from './ui/reach.js';
+import { xOf, sOf, reachW } from './worlds/nashua/pack.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -26,6 +28,9 @@ const DEF = {
   midi: {},
   exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150, lights: true, rain: false },
   weather: { mode: 'auto', period: 360, holds: {} },
+  // data world (nashua): bank in view, vertical exaggeration, water level position (0 = first named level),
+  // what happens at the ends of the reach, labels in the controller and on the output, fact line on the output
+  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
@@ -97,7 +102,17 @@ const pb = new Playback();
 pb.speed = cfg.speed; pb.dir = cfg.dir; pb.autoResume = cfg.show.resume; pb.resumeSecs = cfg.show.resumeS;
 
 let epoch = 0;
+{ // URL overrides for the data world
+  const q = new URLSearchParams(location.search), N = cfg.nashua;
+  if (q.get('bank') === 'L' || q.get('bank') === 'R') N.bank = q.get('bank');
+  if (q.get('ve') && isFinite(+q.get('ve'))) N.ve = Math.max(1, Math.min(20, Math.round(+q.get('ve'))));
+  if (['handover', 'loop', 'pingpong'].includes(q.get('ends'))) N.ends = q.get('ends');
+  if (q.get('level') && isFinite(+q.get('level'))) N.level = Math.max(0, +q.get('level'));
+}
+const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve } : undefined;
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
+cur.opts = optsFor(cur.world);
+let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
 cur.seed = cleanSeed(cur.seed);
 const keyOf = (world, seed) => (world === 'shanshui' ? '' : world + ':') + seed + '#' + (++epoch);
 cur.key = keyOf(cur.world, cur.seed);
@@ -107,6 +122,9 @@ const pal = { a: byId.has(saved.pal) ? saved.pal : 'original', b: null, t0: 0, d
 pal.target = pal.a;
 const Qpal = new URLSearchParams(location.search).get('palette');
 if (Qpal && byId.has(Qpal)) { pal.a = Qpal; pal.target = Qpal; }
+// the nashua world opens in its own palette (the kit), unless the URL names one
+const NASHUA_PAL = 'nashua-kit';
+if (!Qpal && cur.world === 'nashua' && byId.has(NASHUA_PAL)) { pal.a = NASHUA_PAL; pal.target = NASHUA_PAL; }
 
 const flags = { blackout: false, card: false, panic: false, hold: false, uiHidden: false };
 pushHist(tok(cur.world, cur.seed));
@@ -121,14 +139,14 @@ function pushHist(seed) {
   histIdx = hist.length - 1;
 }
 // a new seed, a world switch, or both: the new landscape generates behind the old one and crossfades in
-function setSeed(seed, { history = true, why = '', world = cur.world } = {}) {
+function setSeed(seed, { history = true, why = '', world = cur.world, keepX } = {}) {
   seed = cleanSeed(seed);
   if (!seed) return;
   if (!WORLDS[world]) world = 'shanshui';
   if (outgoing) { outgoing = null; fade = null; }
-  outgoing = { key: cur.key, seed: cur.seed, world: cur.world, x: pb.x };
-  cur.seed = seed; cur.world = world; cur.key = keyOf(world, seed);
-  pb.x = 0; pb.pull = 0; pb.tween = null;
+  outgoing = { key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, opts: cur.opts };
+  cur.seed = seed; cur.world = world; cur.key = keyOf(world, seed); cur.opts = optsFor(world);
+  pb.x = keepX !== undefined ? keepX : 0; pb.pull = 0; pb.tween = null;
   fade = { t0: 0, dur: cfg.show.fade, wait: performance.now() };
   if (history) pushHist(tok(world, seed));
   resetAuto();
@@ -138,7 +156,11 @@ function setSeed(seed, { history = true, why = '', world = cur.world } = {}) {
   log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
 function reseed(why) { setSeed(newSeed(), { why }); }
-function setWorld(w, why = 'world') { if (WORLDS[w] && w !== cur.world) setSeed(cur.seed, { world: w, why }); }
+function setWorld(w, why = 'world') {
+  if (!WORLDS[w] || w === cur.world) return;
+  setSeed(cur.seed, { world: w, why });
+  if (w === 'nashua' && byId.has(NASHUA_PAL) && pal.target !== NASHUA_PAL) setPalette(NASHUA_PAL, 'nashua default');
+}
 function nextWorld() { setWorld(WORLD_NAMES[(WORLD_NAMES.indexOf(cur.world) + 1) % WORLD_NAMES.length], 'world'); }
 function playTok(t, opts) { const e = untok(t); setSeed(e.seed, { ...opts, world: e.world }); }
 function histStep(d) {
@@ -238,7 +260,7 @@ if (chan) chan.onmessage = e => {
     if (m.key === 'b' || m.key === 'B') setBlack();
     else if (m.key === 'panic') setPanic(true);
     else if (m.key === 'Escape' && flags.panic) setPanic(false);
-    else if (['r', 'R', ' ', 'p', 'P', 'g', 'G', 't', 'T', 'Home', '[', ']', 'w', 'W'].includes(m.key)) onKey({ key: m.key, shiftKey: m.shift, target: document.body, preventDefault() {} });
+    else if (['r', 'R', ' ', 'p', 'P', 'g', 'G', 't', 'T', 'Home', '[', ']', 'w', 'W', 'k', 'K', 'l', 'L', ',', '.', '1', '2', '3', '4', '5', '6'].includes(m.key)) onKey({ key: m.key, shiftKey: m.shift, target: document.body, preventDefault() {} });
   }
 };
 function openOutput() {
@@ -257,12 +279,14 @@ function openOutput() {
 let time0 = performance.now();
 function frameState(now) {
   const worlds = [];
-  if (outgoing) worlds.push({ key: outgoing.key, seed: outgoing.seed, world: outgoing.world, x: outgoing.x, alpha: 1 });
+  if (outgoing) worlds.push({ key: outgoing.key, seed: outgoing.seed, world: outgoing.world, x: outgoing.x, alpha: 1, opts: outgoing.opts });
   let a = 1;
   if (fade && fade.t0) { const t = Math.min(1, (now - fade.t0) / (fade.dur * 1000)); a = t * t * (3 - 2 * t); }
   else if (fade) a = 0;
-  worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1 });
+  worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts });
   return {
+    level: lvShown,
+    reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts },
     worlds, dir: pb.dir,
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
     u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign },
@@ -281,6 +305,9 @@ function tick(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const v0 = pb.velocity;
     if (!flags.panic) { pb.step(dt, now); weather.step(dt); }
+    if (!lvScrub) lvShown += (cfg.nashua.level - lvShown) * Math.min(1, dt * 1.5);
+    if (Math.abs(cfg.nashua.level - lvShown) < 1e-4) lvShown = cfg.nashua.level;
+    endsTick();
     if (outgoing) outgoing.x += v0 * dt;
     // reseed fade starts when the new world covers the view (or after 4 s)
     if (fade && !fade.t0) {
@@ -304,6 +331,7 @@ function tick(now) {
     if (out.connected && now - out.last > 3500) { out.connected = false; log('warn', 'output window stopped answering'); }
     hudTick(now);
     frameTick();
+    reachTick();
   } catch (e) {
     if (!tick.errAt || now - tick.errAt > 2000) { log('error', 'frame: ' + (e && e.message || e)); tick.errAt = now; }
   }
@@ -420,6 +448,11 @@ function onKey(e) {
     case 't': case 'T': setCard(); break;
     case 'o': case 'O': openOutput(); break;
     case 'w': case 'W': nextWorld(); break;
+    case 'k': case 'K': setBank(cfg.nashua.bank === 'L' ? 'R' : 'L'); break;
+    case ',': setVE(cfg.nashua.ve - 1, true); break;
+    case '.': setVE(cfg.nashua.ve + 1, true); break;
+    case 'l': case 'L': cfg.nashua.labels = !cfg.nashua.labels; persist(); renderReach(); toast(cfg.nashua.labels ? 'Labels on' : 'Labels off'); break;
+    case '1': case '2': case '3': case '4': case '5': case '6': setLevel(+k - 1); break;
     case '?': case '/': togglePanel('p-keys'); break;
     default: return;
   }
@@ -521,7 +554,11 @@ const midi = new Midi({
     else if (id === 'palNext') palStep(1);
     else if (id === 'palPrev') palStep(-1);
     else if (id === 'world') nextWorld();
+    else if (id === 'weather' && WORLDS[cur.world].data) scrubLevel(v);    // CC 4: the water level in a data world
     else if (id === 'weather') { cfg.weather.mode = 'scrub'; weather.p = v * 0.9999; persist(); renderWeather(); }
+    else if (id === 'level') scrubLevel(v);
+    else if (id === 've') setVE(1 + Math.round(v * 19), false);
+    else if (id === 'bank') setBank(cfg.nashua.bank === 'L' ? 'R' : 'L');
     else if (PARAMS.includes(id)) { cfg.weather.holds[id] = v; persist(); renderWeather(); }
   },
   onChange() { cfg.midi = { ...midi.map }; persist(); renderMidi(); },
@@ -677,6 +714,7 @@ function renderWorld() {
   document.querySelectorAll('#b-world button').forEach(b => b.classList.toggle('on', b.dataset.v === cur.world));
   $('hud-world').textContent = 'World: ' + cur.world;
   $('weather-off').hidden = worldOf(cur.world).weather;
+  if ($('r-off')) $('r-off').hidden = !!worldOf(cur.world).data;
 }
 document.querySelectorAll('#b-world button').forEach(b => b.onclick = () => setWorld(b.dataset.v));
 const paintCycle = bindSeg('w-cycle', () => cfg.weather.mode === 'scrub' ? '' : cfg.weather.mode, v => { cfg.weather.mode = v; renderWeather(); });
@@ -703,6 +741,85 @@ function weatherTick() {
     el.parentElement.querySelector('output').textContent = v[k].toFixed(2);
   }
   $('w-phase').textContent = 'Phase ' + weather.phase;
+}
+
+// ---------- data world (nashua): bank, exaggeration, water level, ends, labels ----------
+const overlay = new ReachOverlay($('labels'));
+const isData = () => !!(WORLDS[cur.world] && WORLDS[cur.world].data);
+const curPack = () => { const w = scene.peek(cur.key); return w && w.pack ? w.pack : null; };
+const nLevels = () => (curPack() ? curPack().levels.length : 5);
+const viewW = () => (lastView ? lastView.viewW : 1245);
+function setBank(b) {
+  if (b !== 'L' && b !== 'R') return;
+  const P = curPack(), old = cfg.nashua.bank;
+  cfg.nashua.bank = b; persist(); renderReach();
+  if (!isData() || b === old) return;
+  // keep the same s at the view centre; the mirror puts downstream on the other side
+  const s = P ? sOf(P, pb.x + viewW() / 2, old) : null;
+  const keepX = P ? xOf(P, s, b) - viewW() / 2 : pb.x;
+  setSeed(cur.seed, { world: cur.world, keepX, history: false, why: (b === 'L' ? 'left' : 'right') + ' bank' });
+}
+let veTimer = 0;
+function setVE(v, now) {
+  v = Math.max(1, Math.min(20, Math.round(v)));
+  if (v === cfg.nashua.ve && !now) return;
+  cfg.nashua.ve = v; persist(); renderReach();
+  clearTimeout(veTimer);
+  // a new exaggeration redraws the reach: debounced, then crossfaded at the same x
+  veTimer = setTimeout(() => { if (isData() && cur.opts && cur.opts.ve !== cfg.nashua.ve) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'Vertical Exaggeration ' + cfg.nashua.ve + 'x' }); }, now ? 0 : 350);
+}
+function setLevel(i) { cfg.nashua.level = Math.max(0, Math.min(nLevels() - 1, i)); lvScrub = false; persist(); renderReach(); }
+function scrubLevel(v) { cfg.nashua.level = lvShown = Math.max(0, Math.min(1, v)) * (nLevels() - 1); renderReach(); persist(); }
+let endsArmed = true;
+function endsTick() {
+  if (!isData() || fade) return;
+  const P = curPack(); if (!P) return;
+  const W = reachW(P), vw = viewW(), xc = pb.x + vw / 2, v = pb.velocity;
+  const out = (xc > W && v > 0) || (xc < 0 && v < 0);
+  if (!out) { if (xc >= 0 && xc <= W) endsArmed = true; return; }
+  if (!endsArmed) return;
+  endsArmed = false;
+  const right = xc > W, mode = cfg.nashua.ends;
+  if (mode === 'pingpong') { setDir(-pb.dir); pb.k = 0; log('info', 'ping-pong at the ' + (right ? 'right' : 'left') + ' end'); }
+  else if (mode === 'loop') setSeed(cur.seed, { world: cur.world, keepX: right ? -vw / 2 : W - vw / 2, history: false, why: 'loop' });
+  else setSeed(cur.seed, { world: 'shanshui', history: false, why: 'end of the reach, hand over' });
+}
+let factAt = 0;
+function reachTick() {
+  const w = scene.peek(cur.key);
+  // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
+  const vs = lastView ? (lastView.H / WORLD_H) * cfg.zoom : cssScale();
+  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels);
+  const now = performance.now();
+  if (now - factAt < 250) return;
+  factAt = now;
+  const P = curPack();
+  if (P && levelsBuilt !== P.hash) renderReach();
+  const t = isData() ? factLine(w, pb.x + viewW() / 2, lvShown, vs) : '';
+  if ($('hud-facts').textContent !== t) $('hud-facts').textContent = t;
+  if (!$('p-reach').hidden) { $('r-facts').textContent = t; $('r-level').parentElement.querySelector('output').textContent = lvShown.toFixed(2); }
+}
+const paintBank = bindSeg('r-bank', () => cfg.nashua.bank, v => setBank(v));
+const paintEnds = bindSeg('r-ends', () => cfg.nashua.ends, v => { cfg.nashua.ends = v; });
+$('r-ve').addEventListener('input', e => setVE(+e.target.value, false));
+$('r-level').addEventListener('input', e => { cfg.nashua.level = lvShown = +e.target.value; persist(); renderReach(); });
+bindCheck('r-labels', 'labels', cfg.nashua);
+bindCheck('r-outlabels', 'outLabels', cfg.nashua);
+bindCheck('r-outfacts', 'outFacts', cfg.nashua);
+let levelsBuilt = '';
+function renderReach() {
+  paintBank(); paintEnds();
+  $('r-off').hidden = isData();
+  $('r-ve').value = cfg.nashua.ve; $('r-ve').parentElement.querySelector('output').textContent = cfg.nashua.ve + 'x';
+  $('r-labels').checked = cfg.nashua.labels;
+  const P = curPack();
+  $('r-level').max = nLevels() - 1;
+  if (document.activeElement !== $('r-level')) $('r-level').value = cfg.nashua.level;
+  if (P && levelsBuilt !== P.hash) {
+    levelsBuilt = P.hash;
+    $('r-levels').replaceChildren(...P.levels.map((L, i) => { const b = document.createElement('button'); b.className = 'main'; b.dataset.i = i; b.textContent = (i + 1) + '  ' + L.name; b.onclick = () => setLevel(i); return b; }));
+  }
+  $('r-levels').querySelectorAll('button').forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.i - cfg.nashua.level) < 0.02));
 }
 
 // ---------- render UI ----------
@@ -808,7 +925,7 @@ addEventListener('beforeunload', () => { persist(true); if (chan) chan.postMessa
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
 
 setSpeed(cfg.speed); setDir(cfg.dir);
-renderSeed(); renderPal(); renderPlay(); renderExport(); renderWorld(); renderWeather(); updateUrl(); layoutPanels();
+renderSeed(); renderPal(); renderPlay(); renderExport(); renderWorld(); renderWeather(); renderReach(); updateUrl(); layoutPanels();
 log('info', 'v' + VERSION + ' ready, instance ' + INSTANCE + ', world ' + cur.world + ', seed ' + cur.seed);
 requestAnimationFrame(tick);
 
@@ -820,4 +937,5 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
+  setBank, setVE, setLevel, scrubLevel, get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

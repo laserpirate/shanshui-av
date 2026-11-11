@@ -6,3 +6,8 @@ test-results/
 Thumbs.db
 scratch/
 .env
+tools/nashua/sources.local.json
+data/local/
+media/
+__pycache__/
+STATE.md

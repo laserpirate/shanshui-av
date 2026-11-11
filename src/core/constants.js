@@ -7,6 +7,6 @@ export const CULL = 20000;            // drop elements this far behind the view
 export const AHEAD = 3500;            // keep generation this far past the view edge
 export const READY_MARGIN = 2000;     // a tile is final once generation is this far past its right edge
 export const PAPER_TILE = 512 / (800 / WORLD_H); // upstream paper texture repeat, in world px (448)
-export const CREDIT = '{Shan, Shui}* by Lingdong Huang. Changes by Marko Manriquez.';
+export const CREDIT = '{Shan, Shui}* by Lingdong Huang. Changes by laserpirate.';
 export const UPSTREAM_URL = 'https://github.com/LingDong-/shan-shui-inf';
 export const UPSTREAM_SITE = 'https://lingdong-.github.io/shan-shui-inf/';

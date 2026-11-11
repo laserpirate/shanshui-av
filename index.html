@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>AV Shan Shui Infinite Scrolls</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="src/ui/style.css">
@@ -13,6 +14,7 @@
   <canvas id="still" width="960" height="540"></canvas>
   <canvas id="card"></canvas>
   <div id="frame" hidden><span id="frame-tag"></span></div>
+  <div id="labels" class="reach-labels" hidden></div>
   <div id="black"></div>
 </div>
 
@@ -20,6 +22,7 @@
   <div><b id="hud-seed">seed</b> <span id="hud-pal"></span> <span id="hud-world"></span></div>
   <div id="hud-stats"></div>
   <div id="hud-flags"></div>
+  <div id="hud-facts"></div>
 </div>
 
 <div id="panels" class="ui">
@@ -63,6 +66,21 @@
     <label class="sl">Water <input type="range" id="w-water" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-water-f">Cycle</button></div>
     <label class="sl">Fog <input type="range" id="w-fog" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-fog-f">Cycle</button></div>
     <label class="sl">Light <input type="range" id="w-light" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-light-f">Cycle</button></div>
+  </section>
+
+  <section id="p-reach" class="panel" hidden>
+    <h3>Reach</h3>
+    <div class="kv" id="r-off" hidden>Only in the nashua world</div>
+    <div class="row seg" id="r-bank"><button data-v="L" title="Bank (K)">Left bank</button><button data-v="R" title="Bank (K)">Right bank</button></div>
+    <label class="sl">Vertical Exaggeration <input type="range" id="r-ve" min="1" max="20" step="1" title=", and ."><output></output></label>
+    <h4>Water level (1 to 6)</h4>
+    <div id="r-levels" class="list rlevels"></div>
+    <label class="sl">Level <input type="range" id="r-level" min="0" max="4" step="0.01"><output></output></label>
+    <h4>Ends of the reach</h4>
+    <div class="row seg" id="r-ends"><button data-v="handover">Hand over</button><button data-v="loop">Loop</button><button data-v="pingpong">Ping-pong</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="r-labels"> Labels (L)</label></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="r-outlabels"> Labels on output</label><label class="chk"><input type="checkbox" id="r-outfacts"> Fact line on output</label></div>
+    <div class="kv" id="r-facts"></div>
   </section>
 
   <section id="p-show" class="panel" hidden>
@@ -114,7 +132,7 @@
     <h3>About</h3>
     <p class="kv"><b>AV Shan Shui Infinite Scrolls</b> <span id="ver"></span></p>
     <p class="kv">Original {Shan, Shui}* by Lingdong Huang:<br><a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">github.com/LingDong-/shan-shui-inf</a> (MIT)</p>
-    <p class="kv">Changes by Marko Manriquez:<br><a href="https://github.com/laserpirate/shanshui-av" target="_blank" rel="noopener">github.com/laserpirate/shanshui-av</a> (MIT)</p>
+    <p class="kv">Changes by laserpirate:<br><a href="https://github.com/laserpirate/shanshui-av" target="_blank" rel="noopener">github.com/laserpirate/shanshui-av</a> (MIT)</p>
     <p class="kv">Landscape engine unchanged from upstream. Font IBM Plex Sans Condensed (OFL).</p>
   </section>
 
@@ -142,9 +160,9 @@
     <button id="b-pal" title="Palette panel"><span id="b-pal-n">Original</span></button>
     <button id="b-palnext" title="Next palette (P)">&#9654;</button>
   </div>
-  <div class="grp seg" id="b-world"><label>World</label><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button></div>
+  <div class="grp seg" id="b-world"><label>World</label><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button><button data-v="nashua" title="World (W)">nashua</button></div>
   <div class="grp">
-    <button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-weather">Weather</button><button data-panel="p-show">Show</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log<span id="log-n"></span></button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button>
+    <button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-show">Show</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log<span id="log-n"></span></button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button>
   </div>
   <div class="grp">
     <button id="b-hold" title="Hold (G)">Hold</button>

@@ -16,9 +16,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = process.argv[2] || 'Z:/_F26_Fall-2026/0_C3-F26/02_Episode 2/C3-E2_landform-tutorial/00_src/All_Kodamas';
-const STYLE = 'phylla-kodama-styleguide.html (C3-E2_landform-tutorial/00_src/All_Kodamas/_support)';
-const KL = 'C3-E2_kl-1_v03.html (C3-E2/site/kodama-landforms, same block in kl-1 to kl-8)';
+const SRC = process.argv[2] || process.env.KODAMA_SRC;   // folder of the Kodama topo pages (local, never committed)
+if (!SRC) { console.error('usage: node tools/build-palettes.mjs <folder of the Kodama topo pages>'); process.exit(2); }
+const STYLE = 'Kodama styleguide page';
+const KL = 'Kodama Landforms page (same block in kl-1 to kl-8)';
 
 const BASE = [
   { id: 'original', name: 'Original', group: 'Core', cycle: true, type: 'ramp', raw: true, ground: '#ffffff', paper: 'tint',
@@ -80,6 +81,11 @@ const BASE = [
   { id: 'derelict-mono', name: 'Derelict Mono', group: 'Derelict', cycle: true, type: 'ramp', ground: '#0A0A0A', paper: 'none',
     stops: [[0, '#0A0A0A'], [0.2, '#2A2A2A'], [0.4, '#555555'], [0.6, '#8A8A8A'], [0.8, '#C8C8C8'], [1, '#F2F2F2']], light: '#FFFFFF', beacon: '#FFFFFF',
     source: 'ink only, lights white' },
+
+  // the nashua world's default: the Core 3 kit (water blues tint the flood plane)
+  { id: 'nashua-kit', name: 'Nashua Kit', group: 'Nashua', cycle: true, type: 'ramp', ground: '#07090E', paper: 'grain',
+    stops: [[0, '#07090E'], [0.3, '#3E466B'], [0.55, '#8B8BA3'], [0.78, '#B0B0C1'], [1, '#DDDEE4']], light: '#9FC8F0', beacon: '#9FC8F0', water: ['#2E4A8C', '#9FC8F0'],
+    source: 'Core 3 kit: indigo, three tints, two water blues, near-black ground' },
 ];
 
 const hex = n => '#' + n.toString(16).padStart(6, '0').toUpperCase();
