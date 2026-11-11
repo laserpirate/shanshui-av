@@ -3,7 +3,7 @@
 // F or double-click: full screen. Other show keys are sent to the controller.
 import { loadPalettes } from './core/palettes.js';
 import { Scene, viewOf } from './core/scene.js';
-import { ReachOverlay, factLine } from './ui/reach.js';
+import { ReachOverlay, TickOverlay, factLine } from './ui/reach.js';
 import { SectionInset } from './ui/section.js';
 import { sOf } from './worlds/nashua/pack.js';
 import { drawTestCard } from './ui/testcard.js';
@@ -40,6 +40,9 @@ if (wall) {
 }
 // sync: the LAN relay (?sync=ws://...), clock mode (?t0=), or the BroadcastChannel (default)
 const Q = new URLSearchParams(location.search);
+// &cap=0.1..1: this output's brightness ceiling, applied as the master dim (the picture times cap; never brighter than
+// the controller's master). For a projector too bright for the room, or to match the projectors of a wall.
+const CAP = Q.has('cap') ? Math.max(0.1, Math.min(1, +Q.get('cap') || 1)) : 1;
 const sync = Q.get('sync') ? wsSync(Q.get('sync'), 'output', m => onMsg(m), s => say('info', 'wall sync ' + s)) : null;
 // ?t0= alone is clock mode; with ?sync= it is the fallback when the relay drops
 const clock = Q.has('t0') && !sync, clockBackup = !!sync && Q.has('t0');
@@ -95,7 +98,7 @@ const shown = { x: 0, t: 0, key: null };
 function cardStatus() {
   const how = clock ? 'clock mode' : sync ? (fallback ? (clockBackup ? 'relay lost, clock mode' : 'relay lost, running on') : 'relay') : 'same machine';
   const fr = drift.v > 0 ? drift.max / (drift.v / 60) : 0;
-  return `${how}   offset ${sync ? sync.offset.toFixed(1) + ' ms' : '0 ms'}   drift ${drift.max.toFixed(1)} px (${fr.toFixed(2)} frames, worst of 10 s)   ${scene.fps.toFixed(0)} fps`;
+  return `${how}   offset ${sync ? sync.offset.toFixed(1) + ' ms' : '0 ms'}   drift ${drift.max.toFixed(1)} px (${fr.toFixed(2)} frames, worst of 10 s)   ${scene.fps.toFixed(0)} fps${CAP < 1 ? "   cap " + Math.round(CAP * 100) + " %" : ""}`;
 }
 if (wall) setInterval(() => { const cv = $('wallcard'); if (!cv.hidden) drawCard(cv, wall, cardStatus()); }, 500);
 function tick() {
@@ -116,6 +119,7 @@ function tick() {
     const rung = ladder.tick(performance.now(), scene.fps, !flags.blackout && !document.hidden);
     scene.q = rung.q;
     if (fs.fx && fs.fx.depth > rung.depth) fs.fx = { ...fs.fx, depth: rung.depth };
+    if (CAP < 1) fs.u = { ...fs.u, master: Math.min(fs.u.master == null ? 1 : fs.u.master, CAP) };
     if (!flags.panic) scene.frame(fs, { blackout: flags.blackout, panic: flags.panic });
     reach(fs);
   } catch (e) { say('error', 'frame: ' + (e && e.message || e)); }
@@ -129,6 +133,7 @@ function clockFs() {
 }
 // data worlds: labels and fact line, only when the controller turns them on for the output (off by default)
 const overlay = new ReachOverlay($('labels'));
+const ticks = new URLSearchParams(location.search).get('ticks') === '1' ? new TickOverlay($('labels').parentElement) : null;   // ?ticks=1 on this output
 const section = new SectionInset($('section'), $('playhead'));
 let factAt = 0;
 function reach(fs) {
@@ -141,6 +146,7 @@ function reach(fs) {
   const v = LF && LF.v ? { scale: LF.v.scale / q, viewW: LF.v.viewW, camY: LF.v.camY } : viewOf(c.clientWidth, c.clientHeight, fs.u.zoom, fs.u.yAlign);
   const camX = (top ? top.x : 0) + (LF ? LF.dx || 0 : 0);
   overlay.update(w, { cssScale: v.scale, camX, camY: v.camY, W: c.clientWidth }, data && R.labels && !flags.blackout && !fxOn);
+  if (ticks) ticks.update(w, { cssScale: v.scale, camX, W: c.clientWidth }, data && !flags.blackout && !fxOn);
   const P = data ? w.pack : null, o = (top && top.opts) || {};
   section.update(P, { s: P ? sOf(P, top.x + v.viewW / 2, o.bank) : 0, lv: fs.level || 0, ve: o.ve || 10, show: data && !flags.blackout && !fxOn && !!(top.layers && top.layers.includes('sections')), W: c.clientWidth });
   const f = $('facts'), on = data && R.facts && !flags.blackout;
@@ -169,4 +175,4 @@ addEventListener('resize', () => { if (flags.card) drawTestCard($('card')); });
 let idleT = 0;
 addEventListener('mousemove', () => { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => document.body.classList.add('idle'), 2000); });
 addEventListener('beforeunload', () => chan.postMessage({ type: 'bye' }));
-window.SSOUT = { scene, get msg() { return msg; }, flags, wall, get sync() { return sync; }, clock, drift, shown, get fallback() { return fallback; }, ladder, cardStatus };
+window.SSOUT = { scene, cap: CAP, get msg() { return msg; }, flags, wall, get sync() { return sync; }, clock, drift, shown, get fallback() { return fallback; }, ladder, cardStatus };

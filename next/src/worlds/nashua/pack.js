@@ -10,6 +10,9 @@ export const HX = 2;              // world px per m along the river (the finite 
 export const YW = 600;            // world y of the local water surface ws(s)
 export const VE_DEF = 10, VE_MIN = 1, VE_MAX = 20;
 export const PACK_URL = new URL('../../../data/nashua/existing/pack.json', import.meta.url).href;
+// a second reach from the same pipeline (tools/nashua/build-reach.py): the Merrimack below the confluence
+export const REACHES = { nashua: PACK_URL, merrimack: new URL('../../../data/nashua/merrimack/pack.json', import.meta.url).href };
+export const reachOf = v => (REACHES[v] ? v : 'nashua');
 export const DESIGN_URL = new URL('../../../data/local/nashua/design/pack.json', import.meta.url).href;
 
 const cache = new Map();
@@ -56,8 +59,9 @@ export function blendPacks(a, b, t) {
 // the pack a world draws: the existing pack, morphed toward the local design pack when opts.morph > 0 (the design
 // pack is fetched only then; it is never published, so on the preview it is missing and the morph stays at 0)
 export async function packFor(opts = {}) {
-  const p = await loadPack();
-  if (!(opts.morph > 0)) return { pack: p, designMissing: false };
+  const r = reachOf(opts.reach);
+  const p = await loadPack(REACHES[r]);
+  if (r !== 'nashua' || !(opts.morph > 0)) return { pack: p, designMissing: false };
   const d = await loadPack(DESIGN_URL).catch(() => null);
   return { pack: d ? blendPacks(p, d, opts.morph) : p, designMissing: !d };
 }

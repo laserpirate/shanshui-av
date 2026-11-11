@@ -371,6 +371,10 @@ def write(pack, A, out, preview=True):
     if preview: plot(pack, A, os.path.join(out, 'pack_preview.png'))
 
 
+# preview labels (build-reach.py sets its own)
+PLOT = {'L': 'side +1 left bank (lot bank)', 'R': 'side -1 right bank', 'x': 's, m along the route (dam 0, confluence %.1f)', 'marks': True}
+
+
 def plot(pack, A, path):
     import matplotlib
     matplotlib.use('Agg')
@@ -378,7 +382,7 @@ def plot(pack, A, path):
     s = A['s']
     fig, axs = plt.subplots(2, 1, figsize=(24, 10), sharex=True, dpi=100)
     tones = ['#07090e', '#3e466b', '#8b8ba3', '#b0b0c1']
-    for ax, nm, title in ((axs[0], 'L', 'side +1 left bank (lot bank)'), (axs[1], 'R', 'side -1 right bank')):
+    for ax, nm, title in ((axs[0], 'L', PLOT['L']), (axs[1], 'R', PLOT['R'])):
         for j in range(2):
             ax.plot(s, A['far%d_%s' % (j, nm)], color='#dddee4' if j else '#c4c6ca', lw=1.2, label='far %d' % j)
         for j in range(len(BANDS) - 1, -1, -1):
@@ -392,10 +396,10 @@ def plot(pack, A, path):
         for br in pack['bridges']:
             ax.axvline(br['s'], color='#07090e', lw=0.8, ls='--')
             ax.text(br['s'], ax.get_ylim()[1] if False else 70, br['name'], rotation=90, fontsize=8, va='top')
-        ax.axvline(0, color='#07090e', lw=1.2); ax.axvline(pack['nashua_len_m'], color='#2E4A8C', lw=1.2)
+        if PLOT['marks']: ax.axvline(0, color='#07090e', lw=1.2); ax.axvline(pack['nashua_len_m'], color='#2E4A8C', lw=1.2)
         ax.set_ylim(-8, 75); ax.set_ylabel('m above ws(s)'); ax.set_title(title, loc='left', fontsize=11)
         ax.legend(loc='upper right', fontsize=8, ncol=4)
-    axs[1].set_xlabel('s, m along the route (dam 0, confluence %.1f)' % pack['nashua_len_m'])
+    axs[1].set_xlabel(PLOT['x'] % pack['nashua_len_m'] if '%' in PLOT['x'] else PLOT['x'])
     fig.tight_layout()
     fig.savefig(path, metadata={'Software': None})
     plt.close(fig)
