@@ -52,6 +52,11 @@ body.clean { cursor: none; }
 .map-inset canvas { display: block; }
 .map-inset canvas + canvas { position: absolute; left: 0; top: 0; cursor: pointer; }
 .map-inset[hidden] { display: none; }
+/* ADDENDUM-B B1: the controller's inset floats above everything (the bar is z-index 10 or less), framed by a 10 px
+   edge to drag by, with a 44 px grip at its top-left corner */
+.map-inset.float { position: fixed; z-index: 1000; padding: 10px; background: var(--btn); border: 1px solid var(--bor); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45); cursor: move; }
+.map-inset.float canvas + canvas { left: 10px; top: 10px; }
+.map-grip { position: absolute; left: -1px; top: -1px; z-index: 2; min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; cursor: move; touch-action: none; }
 body.uihidden .map-inset { bottom: var(--pad); }
 .reach-ticks .rt { position: absolute; left: 0; bottom: 0; width: 0; height: 12px; border-left: 1px solid rgba(236, 238, 242, 0.85); will-change: transform; }
 .reach-ticks .rt.major { height: 22px; border-left-width: 2px; }
@@ -60,6 +65,7 @@ body.uihidden .map-inset { bottom: var(--pad); }
 .section-inset { position: absolute; right: 16px; top: 16px; pointer-events: none; }
 .playhead[hidden], .section-inset[hidden] { display: none; }
 .rl { position: absolute; left: 0; top: 0; font: 500 18px 'Plex Cond', sans-serif; color: #07090e; background: rgba(236, 238, 242, 0.88); padding: 2px 6px; white-space: nowrap; will-change: transform; }
+.rl[title] { pointer-events: auto; cursor: help; }   /* B8: the tooltip holds the source's name and id */
 .morph-ends { display: flex; justify-content: space-between; gap: 12px; }
 .morph-ends span { max-width: 48%; }
 .rlevels button { display: block; width: 100%; text-align: left; margin: 0 0 4px; }
@@ -72,6 +78,29 @@ button, a.btn { min-height: var(--h); min-width: var(--h); padding: 0 12px; colo
 button:focus-visible, input:focus-visible, a.btn:focus-visible { outline: 3px solid var(--acc); outline-offset: 1px; }
 button.on { background: var(--acc); color: var(--bg); border-color: var(--acc); }
 button.warn { border-color: var(--warn); }
+/* ADDENDUM-B B2: folded menus open upward from their button, one 44 px row per item */
+.fold { position: relative; display: flex; }
+.fold > .fold-b { margin-left: -1px; }
+.fold .menu { position: absolute; bottom: 100%; left: -1px; z-index: 20; display: flex; flex-direction: column; min-width: 100%; background: var(--btn); border: 1px solid var(--bor); }
+.fold .menu[hidden] { display: none; }
+.fold .menu button { justify-content: flex-start; margin: 0; border-width: 0 0 1px; }
+#bar .sp input { width: 100px; }
+/* ADDENDUM-B B6: the quick guide, one screen above everything; four columns, each scrolls on its own if it must */
+.guide { position: fixed; inset: 0; z-index: 1100; background: rgba(7, 9, 14, 0.72); display: flex; align-items: center; justify-content: center; }
+.guide[hidden] { display: none; }
+.guide-card { position: relative; width: min(1600px, calc(100vw - 32px)); height: min(900px, calc(100vh - 32px)); display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; padding: 56px 16px 16px; background: var(--bg); border: 1px solid var(--bor); color: var(--ink); font-size: 18px; overflow: auto; }
+.guide-col { overflow: auto; min-height: 0; }
+.guide-col h3 { margin: 0 0 8px; font-size: 20px; }
+.guide-col table { border-collapse: collapse; width: 100%; }
+.guide-col td { padding: 4px 8px 4px 0; vertical-align: top; border-bottom: 1px solid var(--bor); }
+.guide-col td:first-child { white-space: nowrap; font-weight: 600; }
+.guide-col a { color: var(--ink); }
+.guide-close { position: absolute; right: 8px; top: 8px; }
+/* ADDENDUM-B B5: the mini menu keeps Play, Speed, World, Labels, Map (and the menu and Guide buttons) */
+body.mini #bar > .grp:not(.mini-keep):not(.mini-part) { display: none; }
+body.mini #bar .mini-part > :not(.mini-keep) { display: none; }
+body.mini #bar .mini-part > .mini-keep { margin-left: 0; }
+#bar select { min-height: var(--h); padding: 0 8px; margin-left: -1px; color: var(--ink); background: var(--btn); border: 1px solid var(--bor); border-radius: 0; font-size: 18px; }
 button.warn.on { background: var(--warn); color: #000; }
 button:disabled { color: #5f6164; cursor: default; }
 .m { display: inline-block; min-width: 1em; text-align: center; }
@@ -130,6 +159,8 @@ input[type=color] { width: var(--h); height: var(--h); border: 1px solid var(--b
 #toast.on { opacity: 1; }
 body.hide #toast { opacity: 0; }
 
+/* ADDENDUM-B B2: the seed and palette arrows only on wide screens; the keys [ ] p P do the same */
+@media (max-width: 1439px) { #bar .wide { display: none; } }
 @media (max-width: 700px) {
   :root { --pad: 8px; }
   .sp input { width: 100px; }

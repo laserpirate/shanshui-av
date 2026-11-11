@@ -31,6 +31,23 @@ Names and ids exactly as the plan or the data gives them. Where the data has no 
 | Bridge, Broad St Pkwy | bridge | outside | 1:5000 plan v04; base layer bridge lines | no | upstream of the dam |
 | Bridge, Ferry St | bridge | outside | 1:5000 plan v04; base layer bridge lines | no | past the end of the route |
 
+## Landmarks drawn as glyphs (ADDENDUM-B B8)
+
+Each is drawn **schematic, at the surveyed position**: exaggerated so it reads at the default scale, at the station the data gives. The label word is the owner's; the source's name and id are here and in the label's tooltip only.
+
+| Label | Source name and id | Station s | Glyph | Note |
+| --- | --- | --- | --- | --- |
+| Dam | Jackson Mills dam (NID NH00121) | 0 m (0 ft) | a wide body (22 m of spillway face, wider than surveyed), the crest gate, the spillway face with falling water, the headpond 4.92 m above the tailwater |  |
+| Levee (approximate) | Nashua Flood Control Levee (NID NH03813); Merrimack reach (reach=merrimack), its own s | 2 m (7 ft) | a trapezoid embankment with a flat crest, 4.6 m from the inventory, side slopes 1 in 2.5 | a point in the inventory, drawn at the end of the route: approximate |
+| rail bridge | rail bridge, Nashua River | 362 m (1187 ft) | a bolder deck and pier with a footing; on the deck a boxcar (a train glyph is cheap: one box, a door, four wheels) | deck 14.4 m above the water from the ground at its two ends |
+| Factory | structures layer id 6000042 (Light industrial) | 606 m (1990 ft) | a long mill over s 342 to 871 with a sawtooth roof and rows of tall windows; a smokestack to 2.2 times the estimated height | Owner's call: the smokestack is not in the data (flagged, ADDENDUM-B B8) |
+| Canal St | road bridge, Nashua River | 870 m (2853 ft) | a bolder deck and pier with a footing; on the deck a car | deck 9.1 m above the water from the ground at its two ends |
+| Church | structures layer id 24170 (Religious) | 1110 m (3643 ft) | a nave with a gable, a steeple (tower and spire to 2.25 times the estimated height) and a cross, over its footprint | the steeple is not in the data |
+| CSO #9 | CSO #9 (assembly, CSO list) | 1262 m (4140 ft) | a pipe mouth 2.2 m across in a headwall set into the bank (no diameter in the data) | side +1 (left) |
+| CSO #6 | CSO #6 (assembly, CSO list) | 1691 m (5549 ft) | a pipe mouth 2.2 m across in a headwall set into the bank (no diameter in the data) | side -1 (right) |
+| rail bridge | rail bridge, Nashua River | 1706 m (5597 ft) | a bolder deck and pier with a footing; on the deck a boxcar (a train glyph is cheap: one box, a door, four wheels) | deck 8.2 m above the water from the ground at its two ends |
+| Bridge St | road bridge, Merrimack River | 2450 m (8038 ft) | a bolder deck and pier with a footing; on the deck a bus | deck 4.5 m above the water from the ground at its two ends |
+
 ## Building footprints within 400 m of the north bank, dam to confluence
 
 **45 drawn of 45 in range** (footprints whose centroid projects onto the route between s 0 and 2158.8 m on the left bank, at most 400 m from the water edge). Heights are estimated from footprint area (7, 10 or 14 m): no lidar first-return surface is in the Episode 2 GIS outputs, so no real heights.

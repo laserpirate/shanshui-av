@@ -16,7 +16,7 @@
 //   depth 5 near     the bed in section, bridges in section, the dam
 import { G, PAPER, NONE, pl, lamp, L as LK, brush } from '../derelict/ink.js';
 import { seedInt, hash01, mulberry32, hash, noise1, noise2 } from '../derelict/rng.js';
-import { YW, VE_DEF, VE_MIN, VE_MAX, xOf, sOf, at, reachW, hxOf } from './pack.js';
+import { YW, VE_DEF, VE_MIN, VE_MAX, xOf, sOf, at, reachW, hxOf, LANDMARK_IDS, MOUTH_W } from './pack.js';
 
 export const CW = 512;
 export const meta = {
@@ -149,6 +149,10 @@ function buildings(st, row, x0, x1) {
     const base = YW - Math.max(-0.5, b[4]) * VY, top = base - b[5] * VY;
     const r = mulberry32(hash(st.s, 700, Math.round(b[0] * 10), b[2]));
     const tn = R.g;
+    // ADDENDUM-B B8: the landmark buildings as glyphs over their own footprint
+    const lm = b.length >= 10 && LANDMARK_IDS[b[9]];
+    if (lm === 'Church') { o += church(st, xa, xb, base, b[5] * VY, R); continue; }
+    if (lm === 'Factory') { o += factory(st, xa, xb, base, b[5] * VY, R, r, b[6]); continue; }
     o += pl([[xa, base + 2], [xa, top], [xb, top], [xb, base + 2]], G(R.f, 1), G(tn, 0.9), R.w);
     o += pl([[xa - 0.8, top], [xb + 0.8, top]], NONE, G(Math.max(0, tn - 20), 0.9), R.w * 1.4);
     // the ground it stands on: a thin line at its base, a little wider than the building (a line, never a fill)
@@ -170,6 +174,72 @@ function buildings(st, row, x0, x1) {
       }
     }
   }
+  return o;
+}
+
+// ADDENDUM-B B8 glyphs: exaggerated, schematic, at the surveyed position (docs/nashua/structures.md). h in world px.
+// The church: a nave with a gable, a steeple at one end (tower, spire) and a cross; arched windows, a door.
+function church(st, xa, xb, base, h, R) {
+  const w = xb - xa, tn = R.g, fill = G(R.f, 1), line = G(tn, 0.95), lw = R.w * 1.6;
+  const xt = xa + w * 0.32, eave = base - h * 0.7, cx = (xa + xt) / 2;
+  let o = pl([[xt, base + 2], [xt, eave], [(xt + xb) / 2, base - h * 1.05], [xb, eave], [xb, base + 2]], fill, line, lw);
+  const tt = base - h * 1.55, sp = base - h * 2.25, ch = Math.max(10, h * 0.3);
+  o += pl([[xa, base + 2], [xa, tt], [xt, tt], [xt, base + 2]], fill, line, lw);
+  o += pl([[xa - 1, tt], [cx, sp], [xt + 1, tt]], fill, line, lw);
+  o += pl([[cx, sp], [cx, sp - ch]], NONE, line, lw * 1.3) + pl([[cx - ch * 0.32, sp - ch * 0.68], [cx + ch * 0.32, sp - ch * 0.68]], NONE, line, lw * 1.3);
+  const nw = Math.max(1, Math.floor((xb - xt) / Math.max(10, 4 * st.hx)));
+  for (let i = 0; i < nw; i++) {
+    const wx = xt + (i + 0.5) * (xb - xt) / nw, y0 = base - h * 0.15, y1 = base - h * 0.5, ww = Math.max(1, Math.min(4, (xb - xt) / nw * 0.2));
+    o += pl([[wx - ww, y0], [wx - ww, y1], [wx, y1 - ww * 1.2], [wx + ww, y1], [wx + ww, y0]], G(tn + 20, 0.6), NONE, 0);
+  }
+  const dw = Math.max(1, (xt - xa) * 0.2);
+  o += pl([[cx - dw, base + 2], [cx - dw, base - h * 0.28], [cx, base - h * 0.34], [cx + dw, base - h * 0.28], [cx + dw, base + 2]], G(tn, 0.8), NONE, 0);
+  return o;
+}
+// The factory: a long mill with a sawtooth roof, rows of tall windows lit by occupancy, and a smokestack. The stack is
+// not in the data (flagged for the owner in structures.md).
+function factory(st, xa, xb, base, h, R, r, occ) {
+  const tn = R.g, fill = G(R.f, 1), line = G(tn, 0.95), lw = R.w * 1.6;
+  const top = base - h, T = Math.max(40, 12 * st.hx), th = Math.min(h * 0.22, 3.5 * st.VY);
+  let o = pl([[xa, base + 2], [xa, top], [xb, top], [xb, base + 2]], fill, line, lw);
+  const saw = [[xa, top]];
+  for (let x = xa; x < xb - 1; x += T) saw.push([x, top - th], [Math.min(xb, x + T), top]);
+  o += pl(saw, fill, line, lw);
+  const floors = Math.max(1, Math.floor(h / (4.5 * st.VY))), fh = h / floors, ws = Math.max(14, 4 * st.hx);
+  for (let f = 0; f < floors; f++) {
+    const y0 = base - f * fh - fh * 0.2, y1 = base - (f + 1) * fh + fh * 0.2;
+    if (y0 - y1 < 3) continue;
+    for (let x = xa + ws * 0.7; x < xb - ws * 0.5; x += ws) {
+      o += pl([[x - 2, y0], [x - 2, y1], [x + 2, y1], [x + 2, y0]], G(tn + 20, 0.55), NONE, 0);
+      if (r() < OCC_LIT[occ] * 0.6) o += lamp(x, (y0 + y1) / 2, 1.2, OCC_KIND[occ], r(), 0.7);
+    }
+  }
+  const xs = xa + Math.min(160, (xb - xa) * 0.12), sb = Math.max(10, 3.5 * st.hx), stTop = base - h * 2.2;
+  o += pl([[xs - sb / 2, top + 1], [xs - sb * 0.35, stTop], [xs + sb * 0.35, stTop], [xs + sb / 2, top + 1]], fill, line, lw);
+  o += pl([[xs - sb * 0.42, stTop + 6], [xs + sb * 0.42, stTop + 6]], NONE, line, lw);
+  return o;
+}
+// Vehicles on the bridge decks, side on: u world px per m, not stretched by the Vertical Exaggeration
+function wheel(cx, cy, rr, ink) { const p = []; for (let i = 0; i <= 12; i++) { const a = i / 12 * Math.PI * 2; p.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); } return pl(p, G(20, 1), ink, 0.8); }
+function car(x, y, u, ink) {
+  const P = [[0, 0], [4.5, 0], [4.5, -0.75], [3.6, -0.85], [3.0, -1.45], [1.4, -1.45], [0.8, -0.85], [0, -0.75]];
+  let o = pl(P.map(([a, b]) => [x + (a - 2.25) * u, y - 0.3 * u + b * u]), G(70, 1), ink, 1);
+  o += pl([[x - 0.75 * u, y - 1.0 * u], [x - 0.35 * u, y - 1.38 * u], [x + 0.6 * u, y - 1.38 * u], [x + 0.95 * u, y - 1.0 * u]], G(200, 0.9), NONE, 0);
+  for (const a of [1.0, 3.5]) o += wheel(x + (a - 2.25) * u, y - 0.3 * u, 0.33 * u, ink);
+  return o;
+}
+function bus(x, y, u, ink) {
+  const L = 11, H = 3, a = x - L / 2 * u, b = x + L / 2 * u;
+  let o = pl([[a, y - 0.35 * u], [a, y - H * u], [b - 0.4 * u, y - H * u], [b, y - (H - 0.5) * u], [b, y - 0.35 * u]], G(90, 1), ink, 1.1);
+  for (let i = 0; i < 6; i++) { const wx = a + (0.8 + i * 1.6) * u; o += pl([[wx, y - 1.6 * u], [wx, y - 2.6 * u], [wx + 1.2 * u, y - 2.6 * u], [wx + 1.2 * u, y - 1.6 * u]], G(200, 0.9), NONE, 0); }
+  for (const k of [2.2, 8.8]) o += wheel(a + k * u, y - 0.35 * u, 0.5 * u, ink);
+  return o;
+}
+function train(x, y, u, ink) {
+  const L = 7, H = 3.4, a = x - L / 2 * u, b = x + L / 2 * u;
+  let o = pl([[a, y - 0.5 * u], [a, y - H * u], [b, y - H * u], [b, y - 0.5 * u]], G(60, 1), ink, 1.1);
+  o += pl([[a + 2.6 * u, y - 0.9 * u], [a + 2.6 * u, y - 2.9 * u], [a + 4.4 * u, y - 2.9 * u], [a + 4.4 * u, y - 0.9 * u]], NONE, G(150, 0.8), 0.8);
+  for (const k of [0.9, 1.9, 5.1, 6.1]) o += wheel(a + k * u, y - 0.45 * u, 0.42 * u, ink);
   return o;
 }
 
@@ -204,16 +274,23 @@ function bed(st, xa, xb) {
 function bridges(st, x0, x1) {
   let o = '';
   const P = st.pack, VY = st.VY;
+  // B8: the road bridges by s, the first carries a car, the second a bus; a rail bridge a boxcar (cheap, logged)
+  const roads = P.bridges.filter(b => b.kind === 'road bridge').sort((a, b) => a.s - b.s);
   for (const b of P.bridges) {
     const x = xOf(P, b.s, st.bank);
     if (x < x0 || x >= x1 || b.deck_h == null) continue;
     const rail = b.kind === 'rail bridge';
-    const w = (rail ? 8 : 14) * st.hx, yd = YW - b.deck_h * VY, th = Math.max(6, 1.2 * VY), yb = YW - at(P, 'bed', b.s) * VY;
+    const w = (rail ? 8 : 14) * st.hx, yd = YW - b.deck_h * VY, th = Math.max(10, 1.8 * VY), yb = YW - at(P, 'bed', b.s) * VY;
     const r = mulberry32(hash(st.s, 900, Math.round(b.s)));
-    // pier
-    o += pl([[x - 2.5, yd + th], [x - 3.5, yb + 4], [x + 3.5, yb + 4], [x + 2.5, yd + th]], G(150, 1), G(40, 0.9), 0.9);
-    // deck slab in section
-    o += pl([[x - w / 2, yd], [x + w / 2, yd], [x + w / 2 - 2, yd + th], [x - w / 2 + 2, yd + th], [x - w / 2, yd]], G(55, 1), G(20, 1), 1);
+    // B8: a bolder pier with a footing, a bolder deck
+    const pw = Math.max(5, 1.2 * st.hx);
+    o += pl([[x - pw, yd + th], [x - pw * 1.4, yb + 4], [x + pw * 1.4, yb + 4], [x + pw, yd + th]], G(150, 1), G(25, 1), 1.8);
+    o += pl([[x - pw * 2.2, yb + 4], [x - pw * 2.2, yb + 10], [x + pw * 2.2, yb + 10], [x + pw * 2.2, yb + 4]], G(120, 1), G(25, 1), 1.4);
+    o += pl([[x - w / 2, yd], [x + w / 2, yd], [x + w / 2 - 2, yd + th], [x - w / 2 + 2, yd + th], [x - w / 2, yd]], G(55, 1), G(15, 1), 2.4);
+    const ri = roads.indexOf(b), ink = G(15, 1);
+    if (rail) o += train(x, yd, st.hx * 0.85, ink);
+    else if (ri === 0) o += car(x - w * 0.12, yd, st.hx * 1.25, ink);
+    else if (ri === 1) o += bus(x, yd, st.hx * 0.95, ink);
     // parapets 1.1 m
     const ph = Math.max(5, 1.1 * VY);
     o += pl([[x - w / 2 + 1, yd], [x - w / 2 + 1, yd - ph]], NONE, G(30, 0.95), 1.4) + pl([[x + w / 2 - 1, yd], [x + w / 2 - 1, yd - ph]], NONE, G(30, 0.95), 1.4);
@@ -246,22 +323,23 @@ function dam(st, x0, x1) {
   o += pl([[X(-60), yHead], [X(-3), yHead], [X(-3), yBed], [X(-60), yBed]], G(244, 1), NONE, 0);
   for (let i = 0; i < 9; i++) { const y = yHead + 4 + i * (yBed - yHead) / 10; o += pl([[X(-58 + r() * 8), y], [X(-6 - r() * 10), y]], NONE, G(150, 0.4), 0.6); }
   o += pl([[X(-60), yHead], [X(-3), yHead]], NONE, G(40, 0.9), 1.4);
-  // the dam body in section: upstream face, crest, ogee face to the toe
-  const face = [];
-  for (let i = 0; i <= 16; i++) { const t = i / 16; face.push([X(t * 12), yCrest + (yBed - yCrest) * Math.pow(t, 1.85)]); }
-  o += pl([[X(-3), yBed + 20], [X(-3), yCrest], ...face, [X(16), yBed + 20]], G(150, 1), G(20, 1), 2.2);
-  for (let i = 0; i < 60; i++) { const u = -2.5 + r() * 14, y = yCrest + 4 + r() * (yBed - yCrest); o += pl([[X(u), y], [X(u) + 0.8, y + 0.8]], NONE, G(70, 0.7), 1); }
+  // the dam body in section: upstream face, crest, ogee face to the toe. B8: exaggerated wide (DW m of face, not
+  // surveyed), a bolder line, schematic at the surveyed position
+  const DW = 22, face = [];
+  for (let i = 0; i <= 20; i++) { const t = i / 20; face.push([X(t * DW), yCrest + (yBed - yCrest) * Math.pow(t, 1.85)]); }
+  o += pl([[X(-3), yBed + 20], [X(-3), yCrest], ...face, [X(DW + 4), yBed + 20]], G(150, 1), G(15, 1), 3.2);
+  for (let i = 0; i < 110; i++) { const u = -2.5 + r() * (DW + 2), y = yCrest + 4 + r() * (yBed - yCrest); o += pl([[X(u), y], [X(u) + 0.8, y + 0.8]], NONE, G(70, 0.7), 1); }
   // the crest gate, raised: a hinged plate from the crest up to the headpond
   o += pl([[X(-0.4), yCrest], [X(0.6), yHead]], NONE, G(15, 1), 3.2);
   // falling water over the gate and down the face
   for (let k = 0; k < 7; k++) {
     const off = 1.2 + k * 1.3, pts = [[X(0.6), yHead + k * 0.6]];
-    for (let i = 1; i <= 12; i++) { const t = i / 12; pts.push([X(t * 12) + dir * off, yCrest + (yBed - yCrest) * Math.pow(t, 1.85) - off * 0.6]); }
-    o += pl(pts, NONE, G(255, 0.9), 0.9);
+    for (let i = 1; i <= 12; i++) { const t = i / 12; pts.push([X(t * DW) + dir * off, yCrest + (yBed - yCrest) * Math.pow(t, 1.85) - off * 0.6]); }
+    o += pl(pts, NONE, G(255, 0.9), 1.2);
   }
   // white water at the toe
-  for (let i = 0; i < 26; i++) {
-    const u = 11 + r() * 12, y = YW - 2 - r() * Math.min(28, 1.2 * VY);
+  for (let i = 0; i < 34; i++) {
+    const u = DW - 1 + r() * 14, y = YW - 2 - r() * Math.min(28, 1.2 * VY);
     o += pl([[X(u) - 2, y], [X(u), y - 1.5], [X(u) + 2, y]], NONE, G(70 + r() * 80, 0.7), 0.8);
   }
   return o;
@@ -276,10 +354,12 @@ function pipes(st, x0, x1, which = 'all') {
     if (p.side !== st.side) continue;
     const x = xOf(P, p.s, st.bank);
     if (x < x0 || x >= x1) continue;
-    const rr = Math.max(2.5, (p.dia_in ? p.dia_in * 0.0254 : 1.2) / 2 * VY), y = YW - rr - 0.3 * VY;
-    o += pl([[x - rr * 1.6, y + rr * 1.5], [x - rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y + rr * 1.5]], G(200, 1), G(40, 0.9), 0.8);
+    // B8: a CSO (no diameter in the data) is exaggerated: a 2.2 m mouth in a headwall set into the bank
+    const cso = !p.dia_in, rr = Math.max(cso ? 8 : 2.5, (p.dia_in ? p.dia_in * 0.0254 : 2.2) / 2 * (cso ? Math.min(VY, 4 * st.hx) : VY)), y = YW - rr - 0.3 * VY;
+    if (cso) o += pl([[x - rr * 2.6, y + rr * 1.6], [x - rr * 2.1, y - rr * 1.9], [x + rr * 2.1, y - rr * 1.9], [x + rr * 2.6, y + rr * 1.6]], G(170, 1), G(25, 1), 1.6);
+    else o += pl([[x - rr * 1.6, y + rr * 1.5], [x - rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y + rr * 1.5]], G(200, 1), G(40, 0.9), 0.8);
     const ring = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * Math.PI * 2; ring.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
-    o += pl(ring, G(25, 1), G(20, 1), 0.8);
+    o += pl(ring, G(25, 1), G(20, 1), cso ? 2.2 : 0.8);
   }
   return o;
 }
@@ -296,7 +376,9 @@ function dikes(st, x0, x1) {
     const x = xOf(P, d.s, st.bank);
     if (x < x0 || x >= x1) continue;
     const g = YW - at(P, 'band0_' + st.bank, d.s) * st.VY, h = d.height_m * st.VY, cw = 2 * st.hx, bw = (2 + 2.5 * d.height_m) * st.hx;
-    o += pl([[x - bw, g + 2], [x - cw, g - h], [x + cw, g - h], [x + bw, g + 2]], G(150, 1), G(25, 1), 1.6);
+    // B8: a trapezoid embankment with a flat crest, a bolder outline; approximate (the label says so)
+    o += pl([[x - bw, g + 2], [x - cw, g - h], [x + cw, g - h], [x + bw, g + 2]], G(150, 1), G(15, 1), 2.6);
+    o += pl([[x - cw, g - h], [x + cw, g - h]], NONE, G(15, 1), 3.4);
     for (let i = 1; i < 6; i++) { const t = i / 6, y = g - h * t; o += pl([[x - bw + (bw - cw) * t, y], [x + bw - (bw - cw) * t, y]], NONE, G(70, 0.5), 0.6); }
   }
   return o;
@@ -339,9 +421,48 @@ function lot(st, x0, x1) {
   return o;
 }
 
+// ADDENDUM-B B7: past the mouth the section stops and the Merrimack runs to the horizon in forced perspective, not to
+// scale: the far bank from the north bank's height at the mouth down to a vanishing point on the water line, the near
+// bank's waterline rising to it, water between, the same ink. Drawn whole in the chunk that holds the mouth.
+// part 'far' (above the water, depth 4) or 'near' (below it, depth 5, so the water shader leaves it alone)
+function mouthView(st, x0, x1, part) {
+  const P = st.pack;
+  if (!P.mouth) return '';
+  const xm = xOf(P, P.route_len_m, st.bank), dir = st.bank === 'R' ? -1 : 1;
+  if (!(xm >= x0 && xm < x1)) return '';
+  // the vanishing point inside the last half screen at the default zoom (the scroll's centre stops at the mouth)
+  const D = 520, X = u => xm + dir * u, vp = [X(D), YW];
+  const g0 = Math.max(4 * st.VY, at(P, 'band0_' + st.bank, P.route_len_m) * st.VY), nearW = Math.min(110, BOTTOM - YW - 20);
+  let o = '';
+  if (part === 'far') {
+    o += pl([[xm, YW + 1], [xm, YW - g0], vp, [xm, YW + 1]], G(BANK.fill, 1), NONE, 0);
+    o += pl([[xm, YW - g0], vp, [X(MOUTH_W), YW]], NONE, G(BANK.line, 0.9), BANK.w);
+    for (const f of [0.35, 0.68]) o += pl([[xm, YW - g0 * f], vp], NONE, G(BANK.line + 60, 0.5), 0.7);
+  } else if (part === 'trees') {
+    // trees on the far bank, shrinking toward the vanishing point (the trees layer)
+    for (let k = 0; k < 9; k++) {
+      const t = 1 - Math.pow(1 - (k + 0.5) / 9, 1.6), x = X(D * t), y = YW - g0 * (1 - t), h = 60 * (1 - t) + 4;
+      o += pl([[x, y], [x, y - h]], NONE, G(BANK.line, 0.7), Math.max(0.5, 1.4 * (1 - t)));
+      const r = h * 0.28; o += pl([[x - r, y - h * 0.55], [x, y - h * 1.05], [x + r, y - h * 0.55], [x, y - h * 0.4], [x - r, y - h * 0.55]], G(235, 1), G(BANK.line + 40, 0.7), 0.6);
+    }
+  } else {
+    o += pl([[xm, YW + nearW], vp, [X(MOUTH_W), YW], [X(MOUTH_W), BOTTOM], [xm, BOTTOM]], G(BANK.fill, 1), NONE, 0);
+    o += pl([[xm, YW + nearW], vp], NONE, G(BANK.line, 0.9), BANK.w);
+    // flow lines on the water toward the vanishing point, and ripples closer together with distance
+    for (const f of [0.25, 0.5, 0.75]) o += pl([[xm, YW + nearW * f], vp], NONE, G(120, 0.45), 0.7);
+    for (let k = 1; k < 14; k++) {
+      const t = 1 - Math.pow(1 - k / 14, 1.8), x = X(D * t), y0 = YW + 2, y1 = YW + nearW * (1 - t) - 2;
+      if (y1 - y0 < 3) continue;
+      const a = y0 + (y1 - y0) * 0.3, b = y0 + (y1 - y0) * 0.55;
+      o += pl([[x, a], [x + dir * 6 * (1 - t), b]], NONE, G(120, 0.4), 0.6);
+    }
+  }
+  return o;
+}
+
 export function generate(st, c) {
-  const x0 = c * CW, x1 = x0 + CW, W = st.W;
-  if (x1 < -200 || x0 > W + 200) return [];
+  const x0 = c * CW, x1 = x0 + CW, W = st.W, M = st.pack.mouth ? MOUTH_W : 0;
+  if (x1 < -200 - M || x0 > W + 200 + M) return [];
   const ta = Math.max(x0, 0), tb = Math.min(x1, W);         // terrain only inside the reach
   // per depth layer, the pieces in paint order, each with its mode layer
   const L = [[], [], [], [], []];
@@ -353,6 +474,7 @@ export function generate(st, c) {
     L[4].push(['terrain', bed(st, ta, tb)]);
   }
   L[4].push(['landmarks', bridges(st, x0, x1)], ['landmarks', dam(st, x0, x1)]);
+  L[3].push(['terrain', mouthView(st, x0, x1, 'far')], ['trees', mouthView(st, x0, x1, 'trees')]); L[4].push(['terrain', mouthView(st, x0, x1, 'near')]);
   const out = [];
   for (let k = 0; k < 5; k++) {
     let sub = 0;

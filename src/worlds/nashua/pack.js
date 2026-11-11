@@ -18,6 +18,10 @@ export const PACK_URL = new URL('../../../data/nashua/existing/pack.json', impor
 // a second reach from the same pipeline (tools/nashua/build-reach.py): the Merrimack below the confluence
 export const REACHES = { nashua: PACK_URL, merrimack: new URL('../../../data/nashua/merrimack/pack.json', import.meta.url).href };
 export const reachOf = v => (REACHES[v] ? v : 'nashua');
+// ADDENDUM-B B8: landmarks drawn as glyphs, schematic, at the surveyed position (docs/nashua/structures.md).
+// Buildings by their structures-layer id; the label word is the owner's, the id goes only in the tooltip.
+export const LANDMARK_IDS = { 24170: 'Church', 6000042: 'Factory' };
+export const LANDMARK_WORDS = { dam: 'Dam', dike: 'Levee (approximate)' };
 export const DESIGN_URL = new URL('../../../data/local/nashua/design/pack.json', import.meta.url).href;
 
 const cache = new Map();
@@ -67,10 +71,34 @@ export async function packFor(opts = {}) {
   const r = reachOf(opts.reach);
   const p = await loadPack(REACHES[r]);
   const hx = clampHX(opts.hx || HX_DEF);
-  if (r !== 'nashua' || !(opts.morph > 0)) return { pack: { ...p, hx }, designMissing: false };
+  if (r !== 'nashua' || !(opts.morph > 0)) return { pack: { ...toMouth(p), hx }, designMissing: false };
   const d = await loadPack(DESIGN_URL).catch(() => null);
-  return { pack: { ...(d ? blendPacks(p, d, opts.morph) : p), hx }, designMissing: !d };
+  return { pack: { ...toMouth(d ? blendPacks(p, d, opts.morph) : p), hx }, designMissing: !d };
 }
+
+// ADDENDUM-B B7: the Nashua scroll ends at the confluence (the mouth, in S5). S6 and what lies past the mouth leave the
+// default reach: the stations, the map, the labels, the drawn objects. Beyond the mouth the generator draws the
+// Merrimack in forced perspective (not to scale). ?reach=merrimack still draws the Merrimack reach in section.
+const mouthCache = new WeakMap();
+export function toMouth(p) {
+  if (p.nashua_len_m == null || !(p.route_len_m > p.nashua_len_m)) return p;
+  if (mouthCache.has(p)) return mouthCache.get(p);
+  const E = p.nashua_len_m, inS = s => s <= E;
+  const q = {
+    ...p, route_len_m: E, full_len_m: p.route_len_m, mouth: true,
+    stations: p.stations.filter(st => st.s0 < E - 1),
+    bridges: p.bridges.filter(b => inS(b.s)),
+    cso: p.cso.filter(c => inS(c.s)),
+    outfalls: p.outfalls.filter(o => inS(o.s)),
+    structures: (p.structures || []).filter(d => inS(d.s)),
+    buildings: p.buildings.filter(b => b[0] <= E && (b.length < 12 || b[10] <= E)),
+    plan: p.plan ? { ...p.plan, pts: p.plan.pts.slice(0, Math.ceil(E / p.plan.step_m) + 1) } : p.plan,
+  };
+  mouthCache.set(p, q);
+  return q;
+}
+// the forced perspective past the mouth: world px it takes beyond the end of the scroll
+export const MOUTH_W = 1100;
 
 export const bankKey = bank => bank === 'R' ? 'R' : 'L';
 export const reachW = pack => pack.route_len_m * hxOf(pack);
@@ -102,6 +130,25 @@ export function waterLine(pack, { bank = 'L', ve = VE_DEF } = {}, lv = 0) {
     out[i] = YW - levelAt(pack, lv, s) * hxOf(pack) * ve;
   }
   return { data: out, x0, w };
+}
+
+// ADDENDUM-B B9: runoff sources for the shader, world px: [x0, x1, yTop, kind], kind 0 a CSO (a jet from the mouth, the
+// same mouth the generator draws), kind 1 the lot (sheet runoff down the bank face). The bank in view only; at most RUN_N.
+export const RUN_N = 4;
+export function runoffSources(pack, { bank = 'L', ve = VE_DEF } = {}) {
+  const side = bank === 'R' ? -1 : 1, hx = hxOf(pack), VY = hx * ve, out = [];
+  for (const c of pack.cso || []) {
+    if (c.side !== side) continue;
+    const x = xOf(pack, c.s, bank), rr = Math.max(8, 1.1 * Math.min(VY, 4 * hx));
+    out.push([x, x, YW - 0.3 * VY - 0.4 * rr, 0]);
+  }
+  const L = pack.lot;
+  if (L && L.side === side) {
+    let a = xOf(pack, L.s0, bank), b = xOf(pack, L.s1, bank);
+    if (a > b) [a, b] = [b, a];
+    out.push([a, b, YW - at(pack, 'mean0_' + bank, (L.s0 + L.s1) / 2) * VY, 1]);
+  }
+  return out.slice(0, RUN_N);
 }
 
 // the facts for the fact line at scroll position x (controller and optional output)

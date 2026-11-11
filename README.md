@@ -52,8 +52,12 @@ Nashua on the controller (Reach panel, and the bar while a data world is on):
 
 | Control | Key | What |
 | --- | --- | --- |
-| Labels here / Labels on output | `L` (here) | Names and ids from the data only; off by default on the output |
-| Map | `I` | The map inset: the route in plan, north up, the stations, a dot at the playhead; click a station to go there. Sizes 240, 400 (default) or 600 px; "Map on output" is off by default |
+| Labels here / Labels on output | `L` (here) | Names from the data, and the owner's words for the landmarks (Dam, Levee (approximate), Church, Factory, CSO #9, CSO #6); the source's name and id in the tooltip; off by default on the output |
+| Map | `I` | The map inset: the route in plan, north up, the stations, a dot at the playhead; click a station to go there. It floats over everything; drag it by its grip (✥) or its edge, it stays where it was left (per instance). Sizes 240, 400 (default) or 600 px; "Map on output" is off by default |
+| Rain | `N` | On the bar (derelict, nashua): on holds the rain at 0.85, off holds it at 0. MIDI role "Rain on / off" |
+| Flood | | On the bar (nashua): off is Median Water, on is the level picked beside it (MHW, Minor, FEMA 1 %, 1936; default Minor). The fact line names the level in full. MIDI role "Flood on / off" |
+| Runoff (with rain) | | Reach panel, on by default: flow from CSO #9 and CSO #6 and sheet runoff from the lot, drawn in the shader. Off when dry, running in rain, stronger at the flood levels |
+| The mouth | | The scroll ends at the confluence (S5); past the mouth the Merrimack runs to the horizon in forced perspective, not to scale (the fact line says so while it is in view). `?reach=merrimack` for the Merrimack in section |
 | Scale | | Horizontal world px per m, 2 to 12 (default 8); the fact line states 100 m in px |
 | Open pair | | Two output windows as a `wall=2x1`, columns 0 and 1 (allow popups) |
 | Copy pair links | | Two clock-mode links with one shared `t0`, 10 s ahead, for two machines (WALL.md) |
@@ -130,6 +134,8 @@ tools/              serve, gate, preflight, soak, bench, build-palettes
 tests/              e2e (Playwright, real GPU), smoke
 ```
 
+The bar (all worlds): **Full menu / Mini menu / Full screen** cycles the menu: the full bar, the mini menu (Play, Speed, World, Guide, Labels, Map and this button), and true full screen with the mini menu, hidden after 3 s and back on mouse move. The label names the next state; `F` still goes straight to full screen; the state is kept per instance. **Guide** opens a one-screen quick guide built from the app's own tables (keys, the bar, every URL parameter, how to open a pair); Escape closes it. Less used panels (Seed, Look, Export, Log, About, Keys) are under **More**, the pair under **Pair**. Below 1440 px wide the seed and palette arrows leave the bar (keys `[` `]` `P` `Shift+P`).
+
 ## Tests
 
 ```
@@ -151,6 +157,10 @@ node tests/midi.mjs              # fake Web MIDI: presets, every binding, pickup
 node tests/p4.mjs                # quality ladder, baked tiles = live tiles, offline and a release while installed,
                                  # baked at 720p under CPU 6x (a proxy, not a Pi)
 node tests/p5.mjs                # the time scroll, day cycle, tag stream, print to scale
+node tests/p6.mjs --ref=<.p5 url> # no hills, the scale, structures, the map inset, label toggles, the pair, spread
+node tests/p7.mjs --ref=<.p6 url> # ADDENDUM-B: floating map, the bar fits, Rain, Flood, menu cycle, guide drift,
+                                 # the mouth, landmark glyphs and labels, runoff (each rule fails on a planted picture)
+node tools/nashua/review-p7.mjs  # P7 review frames into docs/nashua/index.md
 node tools/capture.mjs --out=C:/_av/captures   # 20 s WebM per mode (local only, never committed)
 node tools/soak.mjs 30 --world=nashua --heavy --fxevery=5      # slit-scan modes cycling; --midi sweeps a fake nanoKONTROL
 node tools/bake.mjs --world=nashua --seed=1   # bake tiles for a weak machine (?baked=1)

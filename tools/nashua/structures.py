@@ -87,6 +87,33 @@ def main():
           'Names and ids exactly as the plan or the data gives them. Where the data has no name, the kind comes from the source (the structures layer\'s primary occupancy) and a question is logged in DECISIONS.', '',
           '| Name or id | Kind | Station s | Source | Drawn | Note |', '| --- | --- | --- | --- | --- | --- |']
     for r in rows: md.append('| %s | %s | %s | %s | %s | %s |' % (r[0], r[1], fm(r[2]) if r[2] is not None else 'outside', r[3], r[4], r[5]))
+    # ADDENDUM-B B8: the landmarks drawn as exaggerated glyphs. The label words are the owner's; the source's name and
+    # id are here and in the label's tooltip only. tests/p7.mjs checks this table against LANDMARK_IDS in pack.js.
+    byid = {b[9]: b for b in PK['buildings'] if len(b) > 9}
+    G = []
+    G.append(('Dam', PK['dam']['label'], 0.0, 'a wide body (22 m of spillway face, wider than surveyed), the crest gate, the spillway face with falling water, the headpond %.2f m above the tailwater' % PK['dam']['head_m'], ''))
+    for d in (MK.get('structures') or []) + (PK.get('structures') or []):
+        G.append(('Levee (approximate)', d['label'] + '; Merrimack reach (reach=merrimack), its own s', d['s'], 'a trapezoid embankment with a flat crest, %.1f m from the inventory, side slopes 1 in 2.5' % d['height_m'], 'a point in the inventory, drawn at the end of the route: approximate'))
+        break
+    for i, word in ((24170, 'Church'), (6000042, 'Factory')):
+        b = byid.get(i)
+        if not b: continue
+        k = prim[b[8]]
+        if word == 'Church':
+            G.append((word, 'structures layer id %s (%s)' % (i, k), (b[0] + b[1]) / 2, 'a nave with a gable, a steeple (tower and spire to 2.25 times the estimated height) and a cross, over its footprint', 'the steeple is not in the data'))
+        else:
+            G.append((word, 'structures layer id %s (%s industrial)' % (i, k), (b[0] + b[1]) / 2, 'a long mill over s %.0f to %.0f with a sawtooth roof and rows of tall windows; a smokestack to 2.2 times the estimated height' % (b[0], b[1]),
+                      'Owner\'s call: the smokestack is not in the data (flagged, ADDENDUM-B B8)'))
+    for c in PK['cso']:
+        G.append((c['id'], c['id'] + ' (assembly, CSO list)', c['s'], 'a pipe mouth 2.2 m across in a headwall set into the bank (no diameter in the data)', 'side %s' % ('+1 (left)' if c['side'] == 1 else '-1 (right)')))
+    roads = sorted([b for b in PK['bridges'] if b['kind'] == 'road bridge'], key=lambda b: b['s'])
+    for b in sorted(PK['bridges'], key=lambda b: b['s']):
+        veh = 'a boxcar (a train glyph is cheap: one box, a door, four wheels)' if b['kind'] == 'rail bridge' else ('a car' if roads.index(b) == 0 else 'a bus' if roads.index(b) == 1 else 'no vehicle')
+        G.append((b['name'], b['kind'] + ', ' + b['river'], b['s'], 'a bolder deck and pier with a footing; on the deck ' + veh, 'deck %.1f m above the water from the ground at its two ends' % b['deck_h'] if b.get('deck_h') is not None else ''))
+    md += ['', '## Landmarks drawn as glyphs (ADDENDUM-B B8)', '',
+           'Each is drawn **schematic, at the surveyed position**: exaggerated so it reads at the default scale, at the station the data gives. The label word is the owner\'s; the source\'s name and id are here and in the label\'s tooltip only.', '',
+           '| Label | Source name and id | Station s | Glyph | Note |', '| --- | --- | --- | --- | --- |']
+    for g in sorted(G, key=lambda g: g[2]): md.append('| %s | %s | %s | %s | %s |' % (g[0], g[1], fm(g[2]), g[3], g[4]))
     md += ['', '## Building footprints within 400 m of the north bank, dam to confluence', '',
            '**%d drawn of %d in range** (footprints whose centroid projects onto the route between s 0 and %.1f m on the left bank, at most 400 m from the water edge). '
            'Heights are estimated from footprint area (7, 10 or 14 m): no lidar first-return surface is in the Episode 2 GIS outputs, so no real heights.' % (len(drawn), len(inr), NAS), '']

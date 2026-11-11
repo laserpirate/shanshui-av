@@ -92,6 +92,7 @@
     <h4>Mode (M)</h4>
     <div class="row seg" id="r-mode"><button data-v="nature">nature</button><button data-v="built">built</button><button data-v="design">design</button><button data-v="sections">sections</button></div>
     <div class="row"><label class="chk"><input type="checkbox" id="r-sections"> Sections (X)</label></div>
+    <div class="row"><label class="chk" title="Flow from the CSOs and sheet runoff from the lot: runs while it rains, stronger at the flood levels"><input type="checkbox" id="r-runoff"> Runoff (with rain)</label></div>
     <h4>Ends of the reach</h4>
     <div class="row seg" id="r-ends"><button data-v="handover">Hand over</button><button data-v="loop">Loop</button><button data-v="pingpong">Ping-pong</button></div>
     <h4>Labels (names and ids from the data only)</h4>
@@ -187,36 +188,37 @@
 </div>
 
 <div id="bar" class="ui">
-  <div class="grp">
-    <button id="b-play" title="Play / pause (Space)"><span class="m">&#9654;</span><span class="t">Play</span></button>
+  <div class="grp mini-part">
+    <button id="b-play" class="mini-keep" title="Play / pause (Space)"><span class="m">&#9654;</span><span class="t">Play</span></button>
     <button id="b-stop" title="Stop (Home)"><span class="m">&#9632;</span>Stop</button>
     <button id="b-dir" title="Direction (D)"><span class="m" id="b-dir-m">&#8594;</span>Dir</button>
   </div>
-  <div class="grp sp"><label for="b-speed">Speed</label><input type="range" id="b-speed" min="0" max="1" step="0.001" aria-label="speed"><output id="b-speed-o"></output></div>
+  <div class="grp sp mini-keep"><label for="b-speed">Speed</label><input type="range" id="b-speed" min="0" max="1" step="0.001" aria-label="speed"><output id="b-speed-o"></output></div>
   <div class="grp">
-    <button id="b-back" title="Previous seed ([)">&#9664;</button>
+    <button id="b-back" class="wide" title="Previous seed ([)">&#9664;</button>
     <button id="b-reseed" title="Reseed (R)">Reseed</button>
-    <button id="b-fwd" title="Next seed (])">&#9654;</button>
+    <button id="b-fwd" class="wide" title="Next seed (])">&#9654;</button>
     <button id="b-star" title="Star seed (S)"><span class="m">&#9734;</span>Star</button>
+    <button id="b-palprev" class="wide" title="Previous palette (Shift+P)">&#9664;</button>
+    <button id="b-pal" title="Palette panel (P next, Shift+P previous)"><span id="b-pal-n">Original</span></button>
+    <button id="b-palnext" class="wide" title="Next palette (P)">&#9654;</button>
   </div>
-  <div class="grp">
-    <button id="b-palprev" title="Previous palette (Shift+P)">&#9664;</button>
-    <button id="b-pal" title="Palette panel"><span id="b-pal-n">Original</span></button>
-    <button id="b-palnext" title="Next palette (P)">&#9654;</button>
+  <div class="grp seg mini-keep" id="b-world" role="group" aria-label="World"><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button><button data-v="nashua" title="World (W)">nashua</button></div>
+  <div class="grp" id="b-wx"><button id="b-rain" class="tog" title="Rain held on or held at zero (N)">Rain</button></div>
+  <!-- ADDENDUM-B B2: the less used panels and the pair fold into menus that open above the bar (same ids) -->
+  <div class="grp mini-part">
+    <button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button>
+    <div class="fold"><button class="fold-b" id="b-more" aria-haspopup="true" aria-expanded="false" title="More panels">More<span id="log-n"></span></button><div class="menu" hidden><button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log</button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button></div></div>
+    <button id="b-guide" class="mini-keep" title="Quick guide: keys, buttons, URL parameters, a pair">Guide</button>
   </div>
-  <div class="grp seg" id="b-world"><label>World</label><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button><button data-v="nashua" title="World (W)">nashua</button></div>
-  <div class="grp">
-    <button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log<span id="log-n"></span></button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button>
-  </div>
-  <div class="grp">
+  <div class="grp mini-part">
     <button id="b-hold" title="Hold (G)">Hold</button>
     <button id="b-out" title="Output window (O)">Output</button>
-    <button id="b-pair" title="Two output windows as one long picture (wall 2 x 1)">Open pair</button>
-    <button id="b-pairlinks" title="Two links for two computers, clock mode with a shared start">Copy pair links</button>
-    <button id="b-full" title="Full screen (F)">Full</button>
+    <div class="fold"><button class="fold-b" id="b-pairmenu" aria-haspopup="true" aria-expanded="false" title="Two screens as one long picture">Pair</button><div class="menu" hidden><button id="b-pair" title="Two output windows as one long picture (wall 2 x 1)">Open pair</button><button id="b-pairlinks" title="Two links for two computers, clock mode with a shared start">Copy pair links</button></div></div>
+    <button id="b-full" class="mini-keep" title="Menu: full, mini, full screen (F goes straight to full screen)">Full</button>
     <button id="b-black" class="warn" title="Blackout (B)">Black</button>
   </div>
-  <div class="grp" id="b-data"><button id="b-labels" class="tog" title="Labels here (L)">Labels</button><button id="b-outlabels" class="tog" title="Labels on the output windows">Out labels</button><button id="b-map" class="tog" title="Map inset (I)">Map</button></div>
+  <div class="grp mini-part" id="b-data"><button id="b-flood" class="tog" title="Flood: off is Median Water, on is the level picked beside it">Flood</button><select id="b-floodlv" aria-label="flood level" title="Flood level"><option value="1" title="Mean High Water">MHW</option><option value="2" title="Minor Flood">Minor</option><option value="3" title="FEMA 1 % flood">FEMA 1 %</option><option value="4" title="1936 flood">1936</option></select><button id="b-labels" class="tog mini-keep" title="Labels here (L)">Labels</button><button id="b-outlabels" class="tog" title="Labels on the output windows">Out labels</button><button id="b-map" class="tog mini-keep" title="Map inset (I)">Map</button></div>
   <div class="grp next" id="b-next"></div>
 </div>
 

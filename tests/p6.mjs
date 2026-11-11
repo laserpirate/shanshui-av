@@ -64,9 +64,12 @@ async function stationFrames(base, reach, { ref = false, plant = false } = {}) {
   const { ctx, p } = await open(base, q);
   await p.evaluate(() => { document.body.classList.add('uihidden'); SSAV.pb.pause(); SSAV.cfg.weather.mode = 'dry'; SSAV.cfg.weather.holds = { rain: 0, fog: 0, light: 1, wind: 0.2 }; SSAV.cfg.nashua.labels = false; });
   const out = [];
-  const len = await p.evaluate(() => SSAV.world().pack.route_len_m);
+  // P7 (B7): the Nashua pack now ends at the mouth. The stations stay where P6 froze them (eighths of the full route);
+  // the one past the mouth is no longer in the reach and is skipped
+  const [len, end] = await p.evaluate(() => { const P = SSAV.world().pack; return [P.full_len_m || P.route_len_m, P.route_len_m]; });
   for (let i = 0; i < 8; i++) {
     const s = len * (i + 0.5) / 8;
+    if (s > end) continue;
     await p.evaluate(s => { const P = SSAV.world().pack; SSAV.pb.x = s * (P.hx || 2) - SSAV.viewW() / 2; }, s);
     await settle(p); await p.waitForTimeout(500);
     const png = PNG.sync.read(await p.screenshot({ type: 'png' }));
@@ -92,7 +95,8 @@ await test('a1-no-hills', async () => {
   fs.mkdirSync(path.join(ROOT, 'test-results'), { recursive: true });
   const planted = await stationFrames(BASE, 'nashua', { plant: true });
   const caught = planted.filter(r => r.fails).length;
-  assert(caught === 8, `the planted fill was caught at ${caught} of 8 stations`);
+  // every station drawn (8 on the Merrimack, 7 on the Nashua since the P7 mouth; see stationFrames)
+  assert(caught === planted.length && caught >= 7, `the planted fill was caught at ${caught} of ${planted.length} stations`);
   let ref = null;
   if (REF) {
     ref = await stationFrames(REF, 'nashua', { ref: true });
@@ -198,13 +202,14 @@ await test('a2-structures', async () => {
   await p.waitForTimeout(800);
   const labels = await p.evaluate(() => [...document.querySelectorAll('#labels .rl')].map(d => d.textContent));
   await ctx.close();
-  // the dike is on the right bank (side -1): its label is in the right bank view
-  const r = await open(BASE, '?i=p6-a2c&world=nashua&seed=1&bank=R');
+  // the dike is on the right bank (side -1): its label is in the right bank view. P7 (B7): past the mouth it left the
+  // Nashua reach, so it is read in the Merrimack reach; (B8) labels are the owner's words, the id is in the tooltip
+  const r = await open(BASE, '?i=p6-a2c&world=nashua&seed=1&bank=R&reach=merrimack');
   await r.p.evaluate(() => { SSAV.pb.pause(); SSAV.setLabels('labels', true); });
   await r.p.waitForTimeout(800);
-  const labelsR = await r.p.evaluate(() => [...document.querySelectorAll('#labels .rl')].map(d => d.textContent));
+  const labelsR = await r.p.evaluate(() => [...document.querySelectorAll('#labels .rl')].map(d => d.textContent + ' | ' + d.title));
   await r.ctx.close();
-  assert(labels.some(t => t === 'Religious (structures layer ' + church[9] + ')') && labels.some(t => t.startsWith('Light industrial')) && labelsR.some(t => t.startsWith('Nashua Flood Control Levee (NID NH03813)')), 'labels ' + JSON.stringify(labels.slice(0, 30)) + ' R ' + JSON.stringify(labelsR.slice(0, 30)));
+  assert(labels.includes('Church') && labels.includes('Factory') && labelsR.some(t => t.startsWith('Levee (approximate) | Nashua Flood Control Levee (NID NH03813)')), 'labels ' + JSON.stringify(labels.slice(0, 30)) + ' R ' + JSON.stringify(labelsR.slice(0, 30)));
   return { drawn_of_in_range: m[1] + '/' + m[2], mill_span_m: [mill[0], mill[1]], church: { id: church[9], s: (church[0] + church[1]) / 2 }, dike: { s: dike.s, side: dike.side, position: dike.position }, pixel_share_with_vs_without_buildings: out };
 });
 
@@ -228,6 +233,7 @@ await test('a3-labels', async () => {
   assert(o0 === false && o1 === true && o2 === false, 'output toggle ' + [o0, o1, o2]);
   const txt = await p.evaluate(() => document.getElementById('r-labels').textContent + ' | ' + document.getElementById('r-outlabels').textContent);
   // sizes: the buttons at least 44 px high, their text at least 18 px
+  await p.click('#b-pairmenu'); await p.waitForTimeout(100);   // P7 (B2): the pair buttons are in the Pair menu
   const sz = await p.evaluate(() => ['b-labels', 'b-outlabels', 'b-map', 'r-labels', 'r-outlabels', 'r-map', 'r-outmap', 'b-pair', 'b-pairlinks'].map(id => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return [id, Math.round(r.height), parseFloat(getComputedStyle(e).fontSize)]; }));
   assert(sz.every(([, h, f]) => h >= 44 && f >= 18), 'sizes ' + JSON.stringify(sz));
   // the MIDI roles: listed as targets (Learn can bind them) and each one acts as a binding would fire it
@@ -254,12 +260,14 @@ await test('a4-map', async () => {
   await p.click('#b-map'); await p.waitForTimeout(400);
   const m = await p.evaluate(() => SSAV.mapInset);
   assert(m.on && m.w === 400, 'shown at 400 px: ' + JSON.stringify(m));
-  // the dot follows the playhead: at s 165 (S1) and s 2309 (S6) it sits on those stations' marks
+  // the dot follows the playhead: at s 165 (S1) and s 2004.5 (S5, the last station since P7 B7) it sits on those
+  // stations' marks
   const at = async s => { await p.evaluate(s => { SSAV.pb.pause(); SSAV.pb.x = s * 8 - SSAV.viewW() / 2; }, s); await p.waitForTimeout(350); return p.evaluate(() => SSAV.mapInset.dot); };
   const hits = m.hits;
-  const d1 = await at(165), d6 = await at(2309);
+  assert(hits.length === 5, 'stations on the map: ' + hits.length);
+  const d1 = await at(165), d6 = await at(2004.5);
   const near = (d, h) => Math.hypot(d[0] - (h.x0 + 14 - 8), d[1] - (h.y1 - 22 + 18 * 0.8));
-  const e1 = near(d1, hits[0]), e6 = near(d6, hits[5]);
+  const e1 = near(d1, hits[0]), e6 = near(d6, hits[4]);
   assert(e1 < 3 && e6 < 3, 'dot off its station: ' + [e1, e6]);
   // a click on S4 goes there
   const h4 = hits[3], box = await p.evaluate(() => { const r = document.querySelector('.map-inset canvas + canvas').getBoundingClientRect(); return { x: r.left, y: r.top }; });
@@ -285,6 +293,7 @@ await test('a4-map', async () => {
 await test('a5-pair', async () => {
   const { ctx, p } = await open(BASE, '?i=p6-a5&world=nashua&seed=7&reach=merrimack');
   await p.evaluate(() => { window.__opened = []; window.open = (u, n, f) => { window.__opened.push([u, f]); return null; }; });
+  await p.click('#b-pairmenu');   // P7 (B2): Open pair is in the Pair menu
   await p.click('#b-pair');
   const opened = await p.evaluate(() => window.__opened);
   const L = await p.evaluate(() => SSAV.pairLinks(1700000000000));

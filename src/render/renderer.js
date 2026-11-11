@@ -35,6 +35,9 @@ uniform float uWaterOn;
 uniform vec2 uWaterX;
 uniform vec3 uLightA, uLightB, uBeaconA, uBeaconB;
 uniform vec4 uWatA0, uWatA1, uWatB0, uWatB1;   // optional water tint per palette (deep, lit); alpha 0 = none
+uniform vec4 uRun[4];      // ADDENDUM-B B9 runoff sources, world px: x0, x1, yTop, kind (0 a CSO jet, 1 sheet runoff)
+uniform int uRunN;
+uniform float uRunAmt, uRunDir;   // amount (0 dry or off, 1 rain, up to 1.75 in flood); +1 when downstream is +x
 out vec4 o;
 float curve(float i) {
   i = clamp(i * uInk, 0.0, 1.0);
@@ -64,6 +67,40 @@ float anim(float code) {
 float fogW(float d) { return d < 0.5 ? 0.0 : d < 1.5 ? 0.8 : d < 2.5 ? 0.58 : d < 3.5 ? 0.36 : d < 4.5 ? 0.18 : 0.02; }
 vec4 auxAt(vec2 uv) { ivec2 sz = textureSize(uAux, 0); return texelFetch(uAux, clamp(ivec2(uv * vec2(sz)), ivec2(0), sz - 1), 0); }
 vec3 lightCol(float code) { return code >= 159.5 ? mix(uBeaconA, uBeaconB, uMix) : mix(uLightA, uLightB, uMix); }
+// ADDENDUM-B B9: runoff, drawn here from uniforms so no tile is re-rastered. Above the water: a jet falling from each
+// CSO mouth, and streaks running down the bank face under the lot. In the water: a turbid plume from each source,
+// drifting downstream, fading with depth and distance. Returns ink 0 to 1.
+float runoffInk(float dy) {
+  float ink = 0.0, x = vWorld.x, y = vWorld.y;
+  for (int k = 0; k < 4; k++) {
+    if (k >= uRunN) break;
+    vec4 r = uRun[k];
+    float cx = 0.5 * (r.x + r.y), hw = 0.5 * (r.y - r.x);
+    if (dy < 0.0) {
+      if (y < r.z || x < r.x - 40.0 || x > r.y + 40.0) continue;
+      float fall = y - r.z;
+      if (r.w < 0.5) {
+        float w = 4.0 + fall * 0.2 * min(uRunAmt, 1.5);
+        float band = 1.0 - smoothstep(w * 0.5, w * 0.5 + 1.2, abs(x - cx - uRunDir * fall * 0.18));
+        float dash = 0.5 + 0.5 * sin(y * 0.5 - uTime * 16.0 + floor(x * 0.5) * 1.7);
+        ink += band * (0.45 + 0.55 * dash);
+      } else {
+        float inx = step(r.x, x) * step(x, r.y);
+        float ln = smoothstep(0.8, 1.0, sin(x * 0.8 + sin(x * 0.043) * 4.0));
+        float dash = smoothstep(0.0, 0.9, sin(y * 0.3 - uTime * 10.0 + x * 1.37));
+        ink += inx * ln * dash * 0.85;
+      }
+    } else {
+      float dx = (x - cx) * uRunDir, off = max(0.0, abs(x - cx) - hw);
+      float along = mix(0.45, 1.0, smoothstep(-hw - 80.0, hw * 0.2 + 40.0, dx));
+      float reach = (r.w < 0.5 ? 220.0 : 90.0) * (0.6 + 0.4 * uRunAmt);
+      float p = exp(-off / (reach + dy * 1.5)) * exp(-dy / (45.0 + 35.0 * uRunAmt)) * along;
+      float bil = 0.6 + 0.4 * sin(x * 0.035 - uTime * 0.9 * uRunDir + dy * 0.09) * sin(dy * 0.13 + uTime * 0.6 + x * 0.01);
+      ink += p * bil * (r.w < 0.5 ? 0.85 : 0.55);
+    }
+  }
+  return clamp(ink * min(uRunAmt, 1.75), 0.0, 1.0);
+}
 void main() {
   float lum = uHasTile > 0.5 ? texture(uTile, vUv).r : 1.0;
   if (vWorld.y < 0.0 || vWorld.y > ${WORLD_H.toFixed(4)}) lum = 1.0;
@@ -99,6 +136,11 @@ void main() {
       wmask = 1.0; wlit = clamp(ri * 1.4 + cur * 5.0, 0.0, 1.0);
       lg = gin * texture(uAux, guv).g * anim(gcode) * 0.55 * exp(-dy / 300.0);
       lc = lightCol(gcode);
+    }
+    if (uRunN > 0 && uRunAmt > 0.001) {
+      float ro = runoffInk(dy);
+      i = mix(i, dy > 0.0 ? 0.6 : 0.8, ro);
+      wlit *= 1.0 - 0.6 * ro;
     }
     glowC = lc * lg;
     coreC = mix(lc, vec3(1.0), 0.35) * smoothstep(0.25, 0.75, lg);   // a hot core so small lamps still read
@@ -341,6 +383,11 @@ export class Renderer {
       gl.uniform1f(u.uWaterOn, wl ? 1 : 0);
       gl.bindTexture(gl.TEXTURE_2D, wl ? wl.tex : this.noWater);
       if (wl) gl.uniform2f(u.uWaterX, wl.x0, wl.w);
+      // B9: runoff sources of this world (data worlds), only while there is runoff
+      const ro = kind === 1 && (f.runoff || 0) > 0.001 && w.world.runoff ? w.world.runoff() : null;
+      gl.uniform1i(u.uRunN, ro ? ro.list.length : 0);
+      gl.uniform1f(u.uRunAmt, ro ? f.runoff : 0);
+      if (ro && ro.list.length) { const a = this._run16 || (this._run16 = new Float32Array(16)); a.fill(0); ro.list.forEach((s, k) => a.set(s, k * 4)); gl.uniform4fv(u['uRun[0]'], a); gl.uniform1f(u.uRunDir, ro.dir); }
       gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, this.noAux);
       gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.paperTexture(w.world));
       gl.uniform1f(u.uPaperMean, w.world.paper ? w.world.paper.mean : 0.92);
@@ -462,6 +509,7 @@ export class Renderer {
     const aux = grey.aux ? this.auxTexture(grey.aux) : null;
     const fakeWorld = { meta: world.meta, tiles: new Map(), paper: world.paper, paperVersion: world.paperVersion, _paperTex: world._paperTex, _paperVersion: world._paperVersion };
     if (world.waterLine) { fakeWorld.waterLine = lv => world.waterLine(lv); }
+    if (world.runoff) fakeWorld.runoff = () => world.runoff();
     // draw one quad with the raster as its tile
     const { p, u } = this.main;
     this.draw({ ...look, W, H, scale: W / rect.w, camY: rect.y, worlds: [{ world: fakeWorld, x: rect.x, alpha: 1 }], vignette: 0, rainOn: false }, tgt);

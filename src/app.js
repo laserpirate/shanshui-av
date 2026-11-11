@@ -22,6 +22,7 @@ import { sunElev, lightOfElev, doyOf, hhmm, FAST as DAY_FAST } from './worlds/na
 import { TagStream } from './worlds/nashua/tags.js';
 import { Hydro } from './ui/hydro.js';
 import { MapInset } from './ui/mapinset.js';
+import { Guide } from './ui/guide.js';
 import { offline } from './offline.js';
 import { Ladder } from './core/ladder.js';
 
@@ -45,7 +46,8 @@ const DEF = {
   // what happens at the ends of the reach, labels in the controller and on the output, fact line on the output
   // mode: a list of layers (modes.js); sections: the live section toggle (X) on top of any mode
   // hx: world px per m along the river (P6: 8, live 2 to 12); ve 2 and ends ping-pong since P6 (ADDENDUM-A, A1 and A6)
-  nashua: { bank: 'L', hx: 8, ve: 2, level: 0, ends: 'pingpong', labels: true, outLabels: false, outFacts: false, map: false, outMap: false, mapSize: 'm', mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false, dayCycle: false, hold: 21 } },
+  menu: 'full',
+  nashua: { bank: 'L', hx: 8, ve: 2, level: 0, flood: 2, runoff: true, ends: 'pingpong', labels: true, outLabels: false, outFacts: false, map: false, outMap: false, mapSize: 'm', mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false, dayCycle: false, hold: 21 } },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
@@ -341,6 +343,13 @@ async function copyPairLinks() {
   return L;
 }
 
+// ADDENDUM-B B9: runoff, 0 when dry or switched off (Reach panel), running with the rain, stronger at the flood levels
+// (up to 1.75 at the 1936 level). Drawn in the shader from the frame state, so the output and the wall get it too.
+function runoffAmt(wx) {
+  if (!isData() || cfg.nashua.runoff === false || !wx) return 0;
+  const wet = Math.max(0, Math.min(1, (wx.rain - 0.05) / 0.5));
+  return wet * (1 + 0.75 * Math.max(0, Math.min(4, lvShown)) / 4);
+}
 // ---------- frame state ----------
 let time0 = performance.now();
 function frameState(now) {
@@ -351,14 +360,16 @@ function frameState(now) {
   else if (fade) a = 0;
   worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts });
   for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = modeLayers(); w.all = LAYERS; }
+  const wxNow = weatherNow();
   return {
     level: lvShown,
+    runoff: runoffAmt(wxNow),
     reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts, map: cfg.nashua.outMap, mapSize: cfg.nashua.mapSize, time: timeText() },
     worlds, dir: pb.dir,
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
     u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign, master: cfg.master },
     time: (now - time0) / 1000,
-    weather: weatherNow(),
+    weather: wxNow,
     v: pb.velocity, t: Date.now(),
     fx: cfg.fx.mode !== 'off' ? { ...cfg.fx, vt: fxVideo.currentTime || 0 } : null,
   };
@@ -438,7 +449,26 @@ function toggleFull() {
   if (el.requestFullscreen) el.requestFullscreen().catch(() => { body.classList.add('fullwin'); log('warn', 'full screen refused, using full window'); });
   else body.classList.add('fullwin');
 }
+// ADDENDUM-B B5: the Full button cycles the menu: full menu, mini menu (Play, Speed, World, Labels, Map), full screen
+// (true full screen with the mini menu, hidden after 3 s, back on mouse move). Its label names the next state. Key F
+// still goes straight to full screen. The state persists per instance.
+const MENU_NEXT = { full: 'mini', mini: 'screen', screen: 'full' }, MENU_LABEL = { full: 'Full menu', mini: 'Mini menu', screen: 'Full screen' };
+function setMenu(m) {
+  if (!MENU_NEXT[m]) m = 'full';
+  cfg.menu = m; persist();
+  body.classList.toggle('mini', m !== 'full');
+  const fs = !!(document.fullscreenElement || body.classList.contains('fullwin'));
+  if (m === 'screen' && !fs) toggleFull();
+  if (m !== 'screen' && fs && menuFS) toggleFull();
+  menuFS = m === 'screen';
+  $('b-full').textContent = MENU_LABEL[MENU_NEXT[m]];
+  $('b-full').setAttribute('aria-label', 'menu: next ' + MENU_LABEL[MENU_NEXT[m]]);
+  idle();
+}
+let menuFS = false;
 document.addEventListener('fullscreenchange', () => {
+  // leaving full screen any other way (Esc held, F) while the menu state is "full screen": back to the mini menu
+  if (!document.fullscreenElement && cfg.menu === 'screen' && !body.classList.contains('fullwin')) { menuFS = false; cfg.menu = 'mini'; persist(); $('b-full').textContent = MENU_LABEL.screen; }
   $('b-full').classList.toggle('on', !!document.fullscreenElement); idle(); if (flags.card) drawTestCard($('card'));
   // keep Esc for the panic key while in full screen (Chrome: hold Esc 2 s to leave full screen)
   if (document.fullscreenElement && navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {});
@@ -495,6 +525,7 @@ addEventListener('keyup', e => {
 function onKey(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') {
+    if (!e.repeat && guide.on) guide.close();
     if (!e.repeat) { escAt = performance.now(); clearTimeout(escTimer); escTimer = setTimeout(() => { if (escAt) { escAt = 0; setPanic(true); } }, 1000); }
     return;
   }
@@ -532,6 +563,7 @@ function onKey(e) {
     case 'y': case 'Y': setTime({ on: !cfg.nashua.time.on, run: !cfg.nashua.time.on }); toast(cfg.nashua.time.on ? 'Time scroll on' : 'Time scroll off'); break;
     case 'u': case 'U': setTime({ on: true, run: true, iso: '1936-03-01' }); toast('March 1936'); break;
     case 'l': case 'L': setLabels('labels', !cfg.nashua.labels); break;
+    case 'n': case 'N': { const r = setRain(!rainOn()); if (typeof r === 'string') toast(r); break; }
     case 'i': case 'I': if (isData()) setMapInset(!cfg.nashua.map); break;
     case '1': case '2': case '3': case '4': case '5': case '6': setLevel(+k - 1); break;
     case '?': case '/': togglePanel('p-keys'); break;
@@ -562,7 +594,20 @@ $('b-out').onclick = openOutput;
 $('b-pair').onclick = () => openPair();
 $('b-pairlinks').onclick = () => copyPairLinks();
 $('s-out').onclick = openOutput;
-$('b-full').onclick = toggleFull;
+$('b-full').onclick = () => setMenu(MENU_NEXT[cfg.menu] || 'mini');
+// ADDENDUM-B B6: the quick guide (ui/guide.js), built from the key table, the bar and the parameter table on open
+const guide = new Guide(body, $('bar'));
+$('b-guide').onclick = () => guide.toggle();
+// a full-screen state cannot be restored without a press: it comes back as the mini menu
+setMenu(cfg.menu === 'screen' ? 'mini' : cfg.menu || 'full');
+// ADDENDUM-B B2: the folded menus (More panels, Pair) open above the bar; a press inside or anywhere else closes them
+function closeFolds(except) { document.querySelectorAll('.fold').forEach(f => { if (f === except) return; f.querySelector('.menu').hidden = true; f.querySelector('.fold-b').setAttribute('aria-expanded', 'false'); f.querySelector('.fold-b').classList.remove('on'); }); }
+document.querySelectorAll('.fold').forEach(f => {
+  const b = f.querySelector('.fold-b'), m = f.querySelector('.menu');
+  b.onclick = e => { e.stopPropagation(); const open = m.hidden; closeFolds(f); m.hidden = !open; b.setAttribute('aria-expanded', open ? 'true' : 'false'); b.classList.toggle('on', open); };
+  m.addEventListener('click', () => closeFolds());
+});
+addEventListener('pointerdown', e => { if (!e.target.closest('.fold')) closeFolds(); });
 $('b-black').onclick = () => setBlack();
 $('s-card').onclick = () => setCard();
 $('seed-go').onclick = () => setSeed($('seed-in').value, { why: 'typed' });
@@ -678,6 +723,8 @@ const ACT = {
   labels: { fire: () => (isData() ? setLabels('labels', !cfg.nashua.labels) : 'labels: nashua only') },
   outLabels: { fire: () => (isData() ? setLabels('outLabels', !cfg.nashua.outLabels) : 'labels: nashua only') },
   mapInset: { fire: () => (isData() ? setMapInset(!cfg.nashua.map) : 'map: nashua only') },
+  rainToggle: { fire: () => setRain(!rainOn()) },
+  flood: { fire: () => setFlood(!(Math.round(cfg.nashua.level) > 0)) },
   bank: { fire: () => (isData() ? setBank(cfg.nashua.bank === 'L' ? 'R' : 'L') : 'bank: nashua only') },
   mode: { fire: () => (isData() ? setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]) : 'mode: nashua only') },
   morph: { get: () => (isData() ? cfg.nashua.morph : null), set: v => (isData() ? setMorph(v) : 'morph: nashua only') },
@@ -985,12 +1032,13 @@ function renderWorld() {
   $('weather-off').hidden = worldOf(cur.world).weather;
   if ($('r-off')) $('r-off').hidden = !!worldOf(cur.world).data;
   if ($('b-data')) $('b-data').hidden = !worldOf(cur.world).data;
+  if ($('b-wx')) $('b-wx').hidden = !worldOf(cur.world).weather && !worldOf(cur.world).data;
 }
 document.querySelectorAll('#b-world button').forEach(b => b.onclick = () => setWorld(b.dataset.v));
 const paintCycle = bindSeg('w-cycle', () => cfg.weather.mode === 'scrub' ? '' : cfg.weather.mode, v => { cfg.weather.mode = v; renderWeather(); });
 bindNum('w-period', 'period', cfg.weather);
 function renderWeather() {
-  paintCycle();
+  paintCycle(); renderBarWx();
   for (const k of PARAMS) {
     const held = cfg.weather.holds[k] !== undefined;
     $('w-' + k + '-f').classList.toggle('on', !held);
@@ -1019,13 +1067,15 @@ const overlay = new ReachOverlay($('labels'));
 const ticks = new URLSearchParams(location.search).get('ticks') === '1' ? new TickOverlay($('labels').parentElement) : null;
 const section = new SectionInset($('section'), $('playhead'));
 // the map inset (ui/mapinset.js): click a station or the river to go there
-const mapInset = new MapInset($('labels').parentElement, (s, why) => {
+// ADDENDUM-B B1: on the body, above everything; dragged by its grip or edge; where it was left is kept per instance
+const mapInset = new MapInset(document.body, (s, why) => {
   const P = curPack(); if (!P) return;
   pb.x = xOf(P, s, cfg.nashua.bank) - viewW() / 2; pb.pull = 0; pb.tween = null;
   log('info', 'map: to s ' + Math.round(s) + ' m (' + why + ')');
-});
-// keep the inset above the controller bar (the bar wraps on narrow screens): measured on resize, never per frame
-if (window.ResizeObserver) new ResizeObserver(() => { mapInset.root.style.bottom = ($('bar').offsetHeight + 28) + 'px'; }).observe($('bar'));
+}, { pos: cfg.nashua.mapPos || null, onMove: p => { cfg.nashua.mapPos = p; persist(); } });
+// until it has been moved, it sits above the controller bar at the left (the bar wraps on narrow screens): measured
+// on resize, never per frame
+if (window.ResizeObserver) new ResizeObserver(() => { if (!cfg.nashua.mapPos) Object.assign(mapInset.root.style, { left: '16px', top: 'auto', bottom: ($('bar').offsetHeight + 28) + 'px' }); }).observe($('bar'));
 const isData = () => !!(WORLDS[cur.world] && WORLDS[cur.world].data);
 const curPack = () => { const w = scene.peek(cur.key); return w && w.pack ? w.pack : null; };
 const nLevels = () => (curPack() ? curPack().levels.length : 5);
@@ -1080,6 +1130,31 @@ function setLabels(key, v) {
   cfg.nashua[key] = !!v; persist(); renderReach();
   toast((key === 'labels' ? 'Labels here ' : 'Labels on the output ') + (v ? 'on' : 'off'));
 }
+// ADDENDUM-B B3: Rain on the main bar, key N, a MIDI role. On = the weather's rain held at RAIN_ON; off = held at 0
+const RAIN_ON = 0.85;
+function rainOn() { return (cfg.weather.holds.rain !== undefined ? cfg.weather.holds.rain : weather.values().rain) > 0.05; }
+function setRain(on) {
+  if (!weatherWorld()) return 'rain: weather worlds only (derelict, nashua)';
+  cfg.weather.holds.rain = on ? RAIN_ON : 0; persist(); renderWeather(); renderBarWx();
+  toast('Rain ' + (on ? 'on' : 'off'));
+}
+// ADDENDUM-B B4: Flood on the main bar. Off = Median Water (level 0); on = the flood level last picked (default
+// Minor Flood). The picker sets that level and turns the flood on. Full names stay in the fact line.
+function setFlood(on) {
+  if (!isData()) return 'flood: nashua only';
+  setLevel(on ? Math.max(1, Math.min(nLevels() - 1, cfg.nashua.flood || 2)) : 0);
+  const P = curPack(); toast('Flood ' + (on ? 'on: ' + (P ? P.levels[cfg.nashua.level].name : '') : 'off: Median Water'));
+}
+function pickFlood(i) { cfg.nashua.flood = Math.max(1, Math.min(4, +i || 2)); persist(); setFlood(true); }
+function renderBarWx() {
+  const t = (id, on) => { const e = $(id); if (!e) return; e.classList.toggle('on', !!on); e.setAttribute('aria-pressed', on ? 'true' : 'false'); };
+  t('b-rain', weatherWorld() && rainOn());
+  t('b-flood', isData() && Math.round(cfg.nashua.level) > 0);
+  if ($('b-floodlv') && document.activeElement !== $('b-floodlv')) $('b-floodlv').value = String(cfg.nashua.flood || 2);
+}
+$('b-rain').onclick = () => { const r = setRain(!rainOn()); if (typeof r === 'string') toast(r); };
+$('b-flood').onclick = () => { const r = setFlood(!(Math.round(cfg.nashua.level) > 0)); if (typeof r === 'string') toast(r); };
+$('b-floodlv').onchange = e => pickFlood(e.target.value);
 // the plan inset (ui/mapinset.js): key I, a button, a MIDI role; size small, medium, large
 function setMapInset(v, size) {
   cfg.nashua.map = !!v; if (size) cfg.nashua.mapSize = size;
@@ -1199,7 +1274,7 @@ function reachTick() {
   factAt = now;
   const P = curPack();
   if (P && levelsBuilt !== P.hash) renderReach();
-  const t = isData() ? factLine(w, pb.x + viewW() / 2, lvShown, vs, timeText()) : '';
+  const t = isData() ? factLine(w, pb.x + viewW() / 2, lvShown, vs, timeText(), viewW() / 2) : '';
   if ($('hud-facts').textContent !== t) $('hud-facts').textContent = t;
   if (hydro) hydro.update(gauge, cfg.nashua.time.d, isData() && cfg.nashua.time.on);
   if (!$('p-reach').hidden) { $('r-facts').textContent = t; $('r-level').parentElement.querySelector('output').textContent = lvShown.toFixed(2); }
@@ -1208,6 +1283,7 @@ const paintBank = bindSeg('r-bank', () => cfg.nashua.bank, v => setBank(v));
 const paintReachSel = bindSeg('r-reach', () => reach, v => setReach(v));
 const paintMode = bindSeg('r-mode', () => cfg.nashua.mode, v => setMode(v));
 bindCheck('r-sections', 'sections', cfg.nashua, () => renderReach());
+bindCheck('r-runoff', 'runoff', cfg.nashua, () => renderReach());
 $('r-morph').addEventListener('input', e => setMorph(+e.target.value));
 const paintEnds = bindSeg('r-ends', () => cfg.nashua.ends, v => { cfg.nashua.ends = v; });
 $('r-ve').addEventListener('input', e => setVE(+e.target.value, false));
@@ -1223,6 +1299,7 @@ let levelsBuilt = '';
 function renderReach() {
   paintBank(); paintReachSel(); paintEnds(); paintMode();
   $('r-sections').checked = cfg.nashua.sections || cfg.nashua.mode === 'sections';
+  $('r-runoff').checked = cfg.nashua.runoff !== false;
   if (document.activeElement !== $('r-morph')) $('r-morph').value = cfg.nashua.morph;
   $('r-morph').parentElement.querySelector('output').textContent = Math.round(morphQ(cfg.nashua.morph) * 100) + '%';
   { const w = scene.peek(cur.key), miss = !!(w && w.designMissing); $('r-morph-note').hidden = !miss; $('r-morph-note').textContent = miss ? 'Design pack not loaded (local only): the morph stays at Existing Grade (before landform)' : ''; }
@@ -1234,7 +1311,7 @@ function renderReach() {
   tog('r-outlabels', cfg.nashua.outLabels, 'Labels on output: on', 'Labels on output: off'); tog('b-outlabels', cfg.nashua.outLabels);
   tog('r-map', cfg.nashua.map, 'Map here: on', 'Map here: off'); tog('b-map', cfg.nashua.map);
   tog('r-outmap', cfg.nashua.outMap, 'Map on output: on', 'Map on output: off');
-  paintMapSize();
+  paintMapSize(); renderBarWx();
   $('b-data').hidden = !isData();
   const P = curPack();
   $('r-level').max = nLevels() - 1;
