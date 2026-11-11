@@ -10,9 +10,16 @@ import { waterY } from '../core/weather.js';
 import { mulberry32, seedInt } from '../worlds/derelict/rng.js';
 
 export const ARCH_D = { long: 36, short: 24 };
+// stated-scale prints (P5.4, data worlds): Arch D or a long roll 36 in wide, at 1:N horizontal and 1:(N / VE)
+// vertical. The scale is never changed to fit: what does not fit is cropped and the window is reported (g.scale).
+export const ROLL_W = 36, ROLL_MAX = 200;   // in; PDF pages stop at 200 in (14,400 pt)
+export const SCALES = [500, 1000, 2000];
+const PT_PER_M = 72 / 0.0254;
 
-// frame geometry. opts: {format:'view'|'archd', portrait, fit, yAlign, margin, x0}; view: {W, H, scale, camX, camY}
+// frame geometry. opts: {format:'view'|'archd'|'scale', portrait, fit, yAlign, margin, x0, sheet:'archd'|'roll',
+// scaleN, hx (world px per m), ve, reachW (world px)}; view: {W, H, scale, camX, camY}
 export function frameGeom(opts, view) {
+  if (opts.format === 'scale' && opts.hx > 0) return scaleGeom(opts);
   if (opts.format !== 'archd') {
     return { unit: 'px', pageW: view.W, pageH: view.H, m: 0, printW: view.W, printH: view.H, k: view.scale,
       x0: view.camX, y0: view.camY, worldW: view.W / view.scale, worldH: view.H / view.scale };
@@ -24,6 +31,87 @@ export function frameGeom(opts, view) {
   const worldW = printW * 72 / k, worldH = printH * 72 / k;
   const y0 = (WORLD_H - worldH) * (opts.yAlign ?? 0.5);
   return { unit: 'in', pageW, pageH, m, printW, printH, k, x0: opts.x0 || 0, y0, worldW, worldH };
+}
+
+function scaleGeom(opts) {
+  const N = SCALES.includes(+opts.scaleN) ? +opts.scaleN : 1000, hx = opts.hx, ve = opts.ve || 1;
+  const k = PT_PER_M / N / hx;                                   // pt per world px, both axes: the stated scale
+  const roll = opts.sheet === 'roll';
+  const m = Math.max(0, Math.min(ROLL_W / 2 - 1, +opts.margin || 0));
+  const x0 = Math.max(0, opts.x0 || 0);
+  let pageW, pageH, printW, printH, cut = false;
+  if (roll) {
+    pageH = ROLL_W; printH = pageH - 2 * m;
+    const left = opts.reachW > x0 ? opts.reachW - x0 : 0;       // to the end of the reach
+    printW = left * k / 72;
+    if (printW + 2 * m > ROLL_MAX) { printW = ROLL_MAX - 2 * m; cut = true; }
+    printW = Math.max(1, printW); pageW = printW + 2 * m;
+  } else {
+    pageW = opts.portrait ? ARCH_D.short : ARCH_D.long; pageH = opts.portrait ? ARCH_D.long : ARCH_D.short;
+    printW = pageW - 2 * m; printH = pageH - 2 * m;
+  }
+  const worldW = printW * 72 / k, worldH = printH * 72 / k;
+  // the world band is WORLD_H tall: shorter prints crop it (window set by yAlign), taller ones leave paper
+  const y0 = (WORLD_H - worldH) * (opts.yAlign ?? 0.5);
+  const crop = worldH < WORLD_H - 1e-6 ? { y0, y1: y0 + worldH } : null;
+  const scale = { N, vN: N / ve, ve, hx, sheet: roll ? 'roll' : 'archd', mFrom: x0 / hx, mTo: (x0 + worldW) / hx, crop, cut, nextX: cut ? x0 + worldW : null };
+  return { unit: 'in', pageW: +pageW.toFixed(4), pageH, m, printW: +printW.toFixed(4), printH, k, x0, y0, worldW, worldH, scale };
+}
+
+// scale bars of a stated-scale print, in page pt: 100 m horizontal (ticks at 0, 50, 100), 10 m vertical, and the
+// ratio. In the bottom margin when it is at least 0.75 in, else inside the frame's lower left on a paper patch.
+export function scaleBar(g) {
+  const S = g.scale; if (!S) return null;
+  const M = g.m * 72, PH = g.pageH * 72, hpt = 100 * PT_PER_M / S.N, vpt = 10 * PT_PER_M / S.vN;
+  const inMargin = M >= 54, size = 9;
+  const x = M + (inMargin ? 0 : 18), base = inMargin ? PH - M / 2 + 3 : PH - M - 18;
+  const text = `Scale 1:${S.N} horizontal` + (S.ve !== 1 ? `, 1:${+S.vN.toFixed(1)} vertical (Vertical Exaggeration ${S.ve}x)` : '');
+  const vh = Math.min(vpt, inMargin ? M - 12 : 160);   // a vertical bar too tall for the space shortens to a labelled tick
+  const vm = vh < vpt ? +(vh / PT_PER_M * S.vN).toFixed(2) : 10;
+  const textX = x + hpt + 24, patch = inMargin ? null : { x: x - 8, y: base - vh - 10, w: hpt + 40 + text.length * size * 0.52, h: vh + 26 };
+  return { x, base, hpt, vh, vm, size, text, textX, patch };
+}
+function scaleBarSVG(g) {
+  const b = scaleBar(g); if (!b) return '';
+  const p = [], t = (x, y, s, a = 'start') => p.push(`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Helvetica, Arial, sans-serif" font-size="${b.size}" fill="#222222" text-anchor="${a}">${esc(s)}</text>`);
+  if (b.patch) p.push(`<rect x="${b.patch.x.toFixed(2)}" y="${b.patch.y.toFixed(2)}" width="${b.patch.w.toFixed(2)}" height="${b.patch.h.toFixed(2)}" fill="#ffffff"/>`);
+  const y = b.base - b.size - 2;
+  p.push(`<rect x="${b.x.toFixed(2)}" y="${(y - 3).toFixed(2)}" width="${(b.hpt / 2).toFixed(3)}" height="3" fill="#222222"/>`);
+  p.push(`<rect x="${(b.x + b.hpt / 2).toFixed(2)}" y="${(y - 3).toFixed(2)}" width="${(b.hpt / 2).toFixed(3)}" height="3" fill="none" stroke="#222222" stroke-width="0.5"/>`);
+  t(b.x, b.base, '0', 'middle'); t(b.x + b.hpt / 2, b.base, '50', 'middle'); t(b.x + b.hpt, b.base, '100 m', 'middle');
+  const vx = b.x + b.hpt + 10;
+  p.push(`<line x1="${vx.toFixed(2)}" y1="${(y - b.vh).toFixed(2)}" x2="${vx.toFixed(2)}" y2="${y.toFixed(2)}" stroke="#222222" stroke-width="1.5"/>`);
+  t(vx + 4, y - b.vh + b.size, b.vm + ' m');
+  t(b.textX + 12, b.base, b.text);
+  return p.join('\n');
+}
+function scaleBarPNG(ctx, g, unit) {
+  const b = scaleBar(g); if (!b) return;
+  const u = v => v * unit;
+  ctx.save();
+  if (b.patch) { ctx.fillStyle = '#fff'; ctx.fillRect(u(b.patch.x), u(b.patch.y), u(b.patch.w), u(b.patch.h)); }
+  const y = b.base - b.size - 2;
+  ctx.fillStyle = '#222'; ctx.strokeStyle = '#222';
+  ctx.fillRect(u(b.x), u(y - 3), u(b.hpt / 2), u(3));
+  ctx.lineWidth = u(0.5); ctx.strokeRect(u(b.x + b.hpt / 2), u(y - 3), u(b.hpt / 2), u(3));
+  ctx.font = `${u(b.size)}px Helvetica, Arial, sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText('0', u(b.x), u(b.base)); ctx.fillText('50', u(b.x + b.hpt / 2), u(b.base)); ctx.fillText('100 m', u(b.x + b.hpt), u(b.base));
+  const vx = b.x + b.hpt + 10;
+  ctx.lineWidth = u(1.5); ctx.beginPath(); ctx.moveTo(u(vx), u(y - b.vh)); ctx.lineTo(u(vx), u(y)); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.fillText(b.vm + ' m', u(vx + 4), u(y - b.vh + b.size));
+  ctx.fillText(b.text, u(b.textX + 12), u(b.base));
+  ctx.restore();
+}
+
+// the window of a stated-scale print, in words (the export panel, the log and window.__lastExport)
+export function scaleWindow(g) {
+  const S = g.scale;
+  if (!S) return '';
+  const v = S.ve !== 1 ? `, 1:${+S.vN.toFixed(1)} vertical (Vertical Exaggeration ${S.ve}x)` : ' both axes';
+  return `1:${S.N} horizontal${v}; ${S.sheet === 'roll' ? 'roll ' + ROLL_W + ' x ' + g.pageW.toFixed(1) + ' in' : 'Arch D ' + g.pageW + ' x ' + g.pageH + ' in'}; ` +
+    `along the scroll ${S.mFrom.toFixed(0)} to ${S.mTo.toFixed(0)} m` +
+    (S.crop ? `; cropped vertically to world y ${S.crop.y0.toFixed(0)} to ${S.crop.y1.toFixed(0)} of ${WORLD_H.toFixed(0)}` : '; full height') +
+    (S.cut ? `; cut at ${ROLL_MAX} in, the next roll starts at x ${Math.round(S.nextX)}` : '');
 }
 
 // page size in the SVG/PDF user unit (pt for inches, px for the view)
@@ -143,6 +231,7 @@ export function buildSVG(world, g, look, o) {
   }
   parts.push('</g></g>');
   if (o.border) parts.push(`<rect x="${M}" y="${M}" width="${pw}" height="${ph}" fill="none" stroke="#000000" stroke-width="0.75"/>`);
+  if (g.scale) parts.push(scaleBarSVG(g));
   if (o.label) {
     const size = g.unit === 'in' ? 9 : 11;
     const y = M > size * 1.6 ? PH - M / 2 + size / 3 : PH - M - size;
@@ -155,7 +244,8 @@ export function buildSVG(world, g, look, o) {
 
 export function fileName(o, g, ext) {
   const safe = s => String(s).replace(/[^\w.-]+/g, '-').slice(0, 64);
-  const tail = g.unit === 'in' ? '_archD-' + (g.pageW > g.pageH ? 'landscape' : 'portrait') : '';
+  const tail = g.scale ? '_1-' + g.scale.N + (g.scale.sheet === 'roll' ? '_roll' + ROLL_W : '_archD-' + (g.pageW > g.pageH ? 'landscape' : 'portrait'))
+    : g.unit === 'in' ? '_archD-' + (g.pageW > g.pageH ? 'landscape' : 'portrait') : '';
   return `${o.world && o.world !== 'shanshui' ? safe(o.world) : 'shanshui'}_${safe(o.seed)}_${safe(o.paletteId)}_${Math.round(g.x0)}${tail}.${ext}`;
 }
 
@@ -175,6 +265,7 @@ export async function buildPNG(world, renderer, g, look, o, dpi, onProgress) {
   const Mp = Math.round(g.m * pxPer * mult);
   const pw = Wp - 2 * Mp, ph = Hp - 2 * Mp;
   const s = pw / g.worldW;                                // px per world px
+  if (Wp > 32767 || Hp > 32767 || Wp * Hp > 268e6) throw new Error(`page is ${Wp} x ${Hp} px at ${dpi} dpi, more than one browser canvas holds; use 150 dpi, SVG or PDF`);
   const canvas = document.createElement('canvas'); canvas.width = Wp; canvas.height = Hp;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas too large for this browser: ' + Wp + ' x ' + Hp);
@@ -193,6 +284,7 @@ export async function buildPNG(world, renderer, g, look, o, dpi, onProgress) {
   }
   const unit = Wp / (g.unit === 'in' ? g.pageW * 72 : g.pageW);  // canvas px per svg unit
   if (o.border) { ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(1, 0.75 * unit); ctx.strokeRect(Mp, Mp, pw, ph); }
+  if (g.scale) scaleBarPNG(ctx, g, unit);
   if (o.label) {
     const size = (g.unit === 'in' ? 9 : 11) * unit;
     ctx.font = `${size}px Helvetica, Arial, sans-serif`; ctx.fillStyle = '#333'; ctx.textAlign = 'right';

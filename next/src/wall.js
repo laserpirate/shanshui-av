@@ -65,7 +65,7 @@ export function keystone(el, ks, W, H) {
 }
 
 // calibration card: a grid every 100 px, the node id, the overlap bands, centre cross
-export function drawCard(cv, wall) {
+export function drawCard(cv, wall, status = '') {
   const W = cv.clientWidth, H = cv.clientHeight;
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
@@ -82,6 +82,7 @@ export function drawCard(cv, wall) {
   g.fillText(`col ${wall.col}  row ${wall.row}`, W / 2, H / 2 - 90);
   g.font = "500 24px 'IBM Plex Sans Condensed', sans-serif";
   g.fillText(`${wall.cols} x ${wall.rows}   ${W} x ${H} px   overlap ${wall.overlap} px   bezel ${wall.bezel} px`, W / 2, H / 2 + 80);
+  if (status) g.fillText(status, W / 2, H / 2 + 120);
 }
 
 // LAN sync client: ws relay with a ping clock. onFrame(msg, serverNow) where serverNow() is this node's estimate
