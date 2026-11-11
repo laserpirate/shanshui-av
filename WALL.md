@@ -55,6 +55,10 @@ Three ways, pick one:
    If the relay goes (closed, or 2 s without a frame), each node runs on from the last frame at its speed, turning
    at the nashua reach ends, and reconnects every second; give the nodes `&t0=` as well and they switch to clock mode
    instead. Blackout and panic need the relay: they reach a node only while it is connected.
+   **Serve the app over http on the show network for this** (`node tools/serve.mjs --port 8093 --host 0.0.0.0` on
+   the relay machine, every page from `http://<that machine>:8093/`). A page from GitHub Pages is https, and the
+   browser blocks a plain `ws://` connection from it to any address but the machine itself (`localhost`,
+   `127.0.0.1`), so from Pages the relay only works on one machine. Clock mode has no such limit.
 3. **Clock mode (no network).** Give every node the same `&t0=<epoch ms>&speed=<px/s>` plus `world`, `seed`,
    `palette`. The position is a function of UTC time alone: nashua ping-pongs over the whole reach, the endless
    worlds scroll on. Nodes stay together as long as their clocks do (sync them to the same NTP server). No controller.
