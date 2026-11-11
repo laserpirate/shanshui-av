@@ -4,6 +4,8 @@
 import { loadPalettes } from './core/palettes.js';
 import { Scene, viewOf } from './core/scene.js';
 import { ReachOverlay, factLine } from './ui/reach.js';
+import { SectionInset } from './ui/section.js';
+import { sOf } from './worlds/nashua/pack.js';
 import { drawTestCard } from './ui/testcard.js';
 
 const INSTANCE = (new URLSearchParams(location.search).get('i') || 'main').replace(/[^\w-]/g, '').slice(0, 32) || 'main';
@@ -16,9 +18,21 @@ scene.onStuck = () => { say('error', 'blank for 15 s, reloading the output windo
 
 let msg = null, msgAt = 0, gradRev = -1;
 const flags = { blackout: false, card: false, panic: false };
+// the slit-scan video source: the controller posts the dropped file; this window plays its own muted copy, kept
+// within 0.2 s of the controller's position. A camera stays in the controller (the output shows the scroll instead).
+const fxVideo = document.createElement('video');
+fxVideo.muted = true; fxVideo.loop = true; fxVideo.playsInline = true;
+scene.video = fxVideo;
+let fxSeekAt = 0;
 chan.onmessage = e => {
   const m = e.data;
+  if (m.type === 'fxvideo') {
+    if (fxVideo.src) URL.revokeObjectURL(fxVideo.src);
+    if (m.file) { fxVideo.src = URL.createObjectURL(m.file); fxVideo.play().catch(() => {}); } else fxVideo.removeAttribute('src');
+    return;
+  }
   if (m.type !== 'frame') return;
+  if (m.fs.fx && m.fs.fx.source === 'video' && fxVideo.readyState >= 2 && performance.now() - fxSeekAt > 1000 && Math.abs(fxVideo.currentTime - m.fs.fx.vt) > 0.2) { fxVideo.currentTime = m.fs.fx.vt; fxSeekAt = performance.now(); }
   msg = m; msgAt = performance.now();
   if (m.custom && m.custom.rev !== gradRev) {
     gradRev = m.custom.rev;
@@ -44,12 +58,15 @@ function tick() {
 }
 // data worlds: labels and fact line, only when the controller turns them on for the output (off by default)
 const overlay = new ReachOverlay($('labels'));
+const section = new SectionInset($('section'), $('playhead'));
 let factAt = 0;
 function reach(fs) {
   const top = fs.worlds[fs.worlds.length - 1], w = top ? scene.peek(top.key) : null;
   const R = fs.reach || {}, data = !!(w && w.meta && w.meta.data);
   const c = $('gl'), v = viewOf(c.clientWidth, c.clientHeight, fs.u.zoom, fs.u.yAlign);
   overlay.update(w, { cssScale: v.scale, camX: top ? top.x : 0, camY: v.camY, W: c.clientWidth }, data && R.labels && !flags.blackout);
+  const P = data ? w.pack : null, o = (top && top.opts) || {};
+  section.update(P, { s: P ? sOf(P, top.x + v.viewW / 2, o.bank) : 0, lv: fs.level || 0, ve: o.ve || 10, show: data && !flags.blackout && !!(top.layers && top.layers.includes('sections')), W: c.clientWidth });
   const f = $('facts'), on = data && R.facts && !flags.blackout;
   if (f.hidden === on) f.hidden = !on;
   const now = performance.now();

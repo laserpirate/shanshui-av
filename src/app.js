@@ -12,7 +12,9 @@ import { Midi, MIDI_TARGETS } from './ui/midi.js';
 import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
 import { ReachOverlay, factLine } from './ui/reach.js';
+import { SectionInset } from './ui/section.js';
 import { xOf, sOf, reachW } from './worlds/nashua/pack.js';
+import { MODES, MODE_ORDER, MODE_DEFAULT, LAYERS, layersOf } from './worlds/nashua/modes.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -28,9 +30,12 @@ const DEF = {
   midi: {},
   exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150, lights: true, rain: false },
   weather: { mode: 'auto', period: 360, holds: {} },
+  // slit-scan / time-smear (off by default): mode off|strip|smear|displace, source scroll|video
+  fx: { mode: 'off', source: 'scroll', slit: 0.5, width: 2, dir: 1, depth: 64, mix: 1, freeze: false, axis: 'x', slope: 1 },
   // data world (nashua): bank in view, vertical exaggeration, water level position (0 = first named level),
   // what happens at the ends of the reach, labels in the controller and on the output, fact line on the output
-  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false },
+  // mode: a list of layers (modes.js); sections: the live section toggle (X) on top of any mode
+  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false, mode: MODE_DEFAULT, sections: false, morph: 0 },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
@@ -108,8 +113,13 @@ let epoch = 0;
   if (q.get('ve') && isFinite(+q.get('ve'))) N.ve = Math.max(1, Math.min(20, Math.round(+q.get('ve'))));
   if (['handover', 'loop', 'pingpong'].includes(q.get('ends'))) N.ends = q.get('ends');
   if (q.get('level') && isFinite(+q.get('level'))) N.level = Math.max(0, +q.get('level'));
+  if (MODES[q.get('mode')]) N.mode = q.get('mode');
+  if (q.get('morph') && isFinite(+q.get('morph'))) N.morph = Math.max(0, Math.min(1, +q.get('morph')));
 }
-const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve } : undefined;
+const modeLayers = () => layersOf(cfg.nashua.mode, cfg.nashua.sections || cfg.nashua.mode === 'sections');
+// morph is quantized to 5% steps: each step is a regenerated reach (pure function of bank, ve, morph)
+const morphQ = v => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
+const optsFor = world => WORLDS[world] && WORLDS[world].data ? (morphQ(cfg.nashua.morph) > 0 ? { bank: cfg.nashua.bank, ve: cfg.nashua.ve, morph: morphQ(cfg.nashua.morph) } : { bank: cfg.nashua.bank, ve: cfg.nashua.ve }) : undefined;
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
 cur.opts = optsFor(cur.world);
 let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
@@ -155,7 +165,7 @@ function setSeed(seed, { history = true, why = '', world = cur.world, keepX } = 
   renderSeed(); renderWorld();
   log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
-function reseed(why) { setSeed(newSeed(), { why }); }
+function reseed(why) { setSeed(newSeed(), isData() ? { why, keepX: pb.x } : { why }); }
 function setWorld(w, why = 'world') {
   if (!WORLDS[w] || w === cur.world) return;
   setSeed(cur.seed, { world: w, why });
@@ -284,6 +294,7 @@ function frameState(now) {
   if (fade && fade.t0) { const t = Math.min(1, (now - fade.t0) / (fade.dur * 1000)); a = t * t * (3 - 2 * t); }
   else if (fade) a = 0;
   worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts });
+  for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = modeLayers(); w.all = LAYERS; }
   return {
     level: lvShown,
     reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts },
@@ -293,6 +304,7 @@ function frameState(now) {
     time: (now - time0) / 1000,
     weather: weather.values(),
     v: pb.velocity, t: Date.now(),
+    fx: cfg.fx.mode !== 'off' ? { ...cfg.fx, vt: fxVideo.currentTime || 0 } : null,
   };
 }
 
@@ -451,6 +463,10 @@ function onKey(e) {
     case 'k': case 'K': setBank(cfg.nashua.bank === 'L' ? 'R' : 'L'); break;
     case ',': setVE(cfg.nashua.ve - 1, true); break;
     case '.': setVE(cfg.nashua.ve + 1, true); break;
+    case 'm': case 'M': setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]); break;
+    case 'v': case 'V': setFxMode(FX_MODES[(FX_MODES.indexOf(cfg.fx.mode) + 1) % FX_MODES.length]); break;
+    case 'z': case 'Z': cfg.fx.freeze = !cfg.fx.freeze; persist(); renderFx(); toast(cfg.fx.freeze ? 'FX frozen' : 'FX running'); break;
+    case 'x': case 'X': cfg.nashua.sections = !cfg.nashua.sections; persist(); renderReach(); toast(cfg.nashua.sections ? 'Sections on' : 'Sections off'); break;
     case 'l': case 'L': cfg.nashua.labels = !cfg.nashua.labels; persist(); renderReach(); toast(cfg.nashua.labels ? 'Labels on' : 'Labels off'); break;
     case '1': case '2': case '3': case '4': case '5': case '6': setLevel(+k - 1); break;
     case '?': case '/': togglePanel('p-keys'); break;
@@ -559,6 +575,17 @@ const midi = new Midi({
     else if (id === 'level') scrubLevel(v);
     else if (id === 've') setVE(1 + Math.round(v * 19), false);
     else if (id === 'bank') setBank(cfg.nashua.bank === 'L' ? 'R' : 'L');
+    else if (id === 'morph') setMorph(v);
+    else if (id === 'fxMode') setFxMode(FX_MODES[(FX_MODES.indexOf(cfg.fx.mode) + 1) % FX_MODES.length]);
+    else if (id === 'fxFreeze') { cfg.fx.freeze = !cfg.fx.freeze; persist(); renderFx(); }
+    else if (id === 'fxDir') { cfg.fx.dir = -cfg.fx.dir; persist(); renderFx(); }
+    else if (id === 'fxSlit') { cfg.fx.slit = v; persist(); renderFx(); }
+    else if (id === 'fxWidth') { cfg.fx.width = 1 + Math.round(v * 15); persist(); renderFx(); }
+    else if (id === 'fxDepth') { cfg.fx.depth = 2 + Math.round(v * 126); persist(); renderFx(); }
+    else if (id === 'fxSlope') { cfg.fx.slope = 0.1 + v * 3.9; persist(); renderFx(); }
+    else if (id === 'fxMix') { cfg.fx.mix = v; persist(); renderFx(); }
+    else if (id === 'mode') setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]);
+    else if (id === 'sections') { cfg.nashua.sections = !cfg.nashua.sections; persist(); renderReach(); }
     else if (PARAMS.includes(id)) { cfg.weather.holds[id] = v; persist(); renderWeather(); }
   },
   onChange() { cfg.midi = { ...midi.map }; persist(); renderMidi(); },
@@ -745,6 +772,7 @@ function weatherTick() {
 
 // ---------- data world (nashua): bank, exaggeration, water level, ends, labels ----------
 const overlay = new ReachOverlay($('labels'));
+const section = new SectionInset($('section'), $('playhead'));
 const isData = () => !!(WORLDS[cur.world] && WORLDS[cur.world].data);
 const curPack = () => { const w = scene.peek(cur.key); return w && w.pack ? w.pack : null; };
 const nLevels = () => (curPack() ? curPack().levels.length : 5);
@@ -768,20 +796,38 @@ function setVE(v, now) {
   // a new exaggeration redraws the reach: debounced, then crossfaded at the same x
   veTimer = setTimeout(() => { if (isData() && cur.opts && cur.opts.ve !== cfg.nashua.ve) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'Vertical Exaggeration ' + cfg.nashua.ve + 'x' }); }, now ? 0 : 350);
 }
+let morphTimer = 0;
+function setMorph(v) {
+  cfg.nashua.morph = Math.max(0, Math.min(1, v)); persist(); renderReach();
+  clearTimeout(morphTimer);
+  morphTimer = setTimeout(() => { const want = morphQ(cfg.nashua.morph), have = (cur.opts && cur.opts.morph) || 0; if (isData() && want !== have) setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'morph ' + Math.round(want * 100) + '%' }); }, 250);
+}
+function setMode(m) { if (!MODES[m]) return; cfg.nashua.mode = m; persist(); renderReach(); toast('Mode: ' + m); }
 function setLevel(i) { cfg.nashua.level = Math.max(0, Math.min(nLevels() - 1, i)); lvScrub = false; persist(); renderReach(); }
 function scrubLevel(v) { cfg.nashua.level = lvShown = Math.max(0, Math.min(1, v)) * (nLevels() - 1); renderReach(); persist(); }
-let endsArmed = true;
+let endsArmed = true, pingLogged = -Infinity;
 function endsTick() {
-  if (!isData() || fade) return;
+  if (!isData()) return;
   const P = curPack(); if (!P) return;
-  const W = reachW(P), vw = viewW(), xc = pb.x + vw / 2, v = pb.velocity;
+  const W = reachW(P), vw = viewW(), xc = pb.x + vw / 2, v = pb.velocity, mode = cfg.nashua.ends;
+  // ping-pong is a rule on the travel direction, so it holds through fades and reseeds: past an end and heading out,
+  // turn back (setting the direction again is harmless)
+  if (mode === 'pingpong') {
+    const turn = xc < 0 && pb.dir < 0 ? 1 : xc > W && pb.dir > 0 ? -1 : 0;
+    if (turn) {
+      setDir(turn); pb.k = 0;
+      const now = performance.now();
+      if (now - pingLogged > 60000) { pingLogged = now; log('info', 'ping-pong at the ' + (turn > 0 ? 'left' : 'right') + ' end (logged once a minute)'); }
+    }
+    return;
+  }
+  if (fade) return;
   const out = (xc > W && v > 0) || (xc < 0 && v < 0);
   if (!out) { if (xc >= 0 && xc <= W) endsArmed = true; return; }
   if (!endsArmed) return;
   endsArmed = false;
-  const right = xc > W, mode = cfg.nashua.ends;
-  if (mode === 'pingpong') { setDir(-pb.dir); pb.k = 0; log('info', 'ping-pong at the ' + (right ? 'right' : 'left') + ' end'); }
-  else if (mode === 'loop') setSeed(cur.seed, { world: cur.world, keepX: right ? -vw / 2 : W - vw / 2, history: false, why: 'loop' });
+  const right = xc > W;
+  if (mode === 'loop') setSeed(cur.seed, { world: cur.world, keepX: right ? -vw / 2 : W - vw / 2, history: false, why: 'loop' });
   else setSeed(cur.seed, { world: 'shanshui', history: false, why: 'end of the reach, hand over' });
 }
 let factAt = 0;
@@ -790,6 +836,8 @@ function reachTick() {
   // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
   const vs = lastView ? (lastView.H / WORLD_H) * cfg.zoom : cssScale();
   if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels);
+  const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
+  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || 10, show: isData() && !flags.blackout && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
   const now = performance.now();
   if (now - factAt < 250) return;
   factAt = now;
@@ -800,6 +848,9 @@ function reachTick() {
   if (!$('p-reach').hidden) { $('r-facts').textContent = t; $('r-level').parentElement.querySelector('output').textContent = lvShown.toFixed(2); }
 }
 const paintBank = bindSeg('r-bank', () => cfg.nashua.bank, v => setBank(v));
+const paintMode = bindSeg('r-mode', () => cfg.nashua.mode, v => setMode(v));
+bindCheck('r-sections', 'sections', cfg.nashua, () => renderReach());
+$('r-morph').addEventListener('input', e => setMorph(+e.target.value));
 const paintEnds = bindSeg('r-ends', () => cfg.nashua.ends, v => { cfg.nashua.ends = v; });
 $('r-ve').addEventListener('input', e => setVE(+e.target.value, false));
 $('r-level').addEventListener('input', e => { cfg.nashua.level = lvShown = +e.target.value; persist(); renderReach(); });
@@ -808,7 +859,11 @@ bindCheck('r-outlabels', 'outLabels', cfg.nashua);
 bindCheck('r-outfacts', 'outFacts', cfg.nashua);
 let levelsBuilt = '';
 function renderReach() {
-  paintBank(); paintEnds();
+  paintBank(); paintEnds(); paintMode();
+  $('r-sections').checked = cfg.nashua.sections || cfg.nashua.mode === 'sections';
+  if (document.activeElement !== $('r-morph')) $('r-morph').value = cfg.nashua.morph;
+  $('r-morph').parentElement.querySelector('output').textContent = Math.round(morphQ(cfg.nashua.morph) * 100) + '%';
+  { const w = scene.peek(cur.key), miss = !!(w && w.designMissing); $('r-morph-note').hidden = !miss; $('r-morph-note').textContent = miss ? 'Design pack not loaded (local only): the morph stays at Existing Grade (before landform)' : ''; }
   $('r-off').hidden = isData();
   $('r-ve').value = cfg.nashua.ve; $('r-ve').parentElement.querySelector('output').textContent = cfg.nashua.ve + 'x';
   $('r-labels').checked = cfg.nashua.labels;
@@ -930,6 +985,65 @@ log('info', 'v' + VERSION + ' ready, instance ' + INSTANCE + ', world ' + cur.wo
 requestAnimationFrame(tick);
 
 // test and console hooks
+// ---------- slit-scan and time-smear (GPU, after the scene; see render/slitscan.js) ----------
+// sources: the scroll itself, a video dropped on the stage or listed in media/ (local, never committed), or a camera
+// granted in this window. The output follows the mode on its own frames; it never asks for a camera.
+const FX_MODES = ['off', 'strip', 'smear', 'displace'];
+const fxVideo = document.createElement('video');
+fxVideo.muted = true; fxVideo.loop = true; fxVideo.playsInline = true; fxVideo.crossOrigin = 'anonymous';
+scene.video = fxVideo;
+let fxVideoName = '', fxCam = null;
+function setFxMode(m) { if (!FX_MODES.includes(m)) return; cfg.fx.mode = m; persist(); renderFx(); toast('FX: ' + m); }
+function fxUseVideo(url, name, file) {
+  if (fxCam) { fxCam.getTracks().forEach(t => t.stop()); fxCam = null; fxVideo.srcObject = null; }
+  fxVideo.src = url; fxVideo.play().catch(() => {});
+  fxVideoName = name; cfg.fx.source = 'video'; persist(); renderFx();
+  if (chan && file) chan.postMessage({ type: 'fxvideo', file, name });   // the output plays its own copy
+  log('info', 'FX source: ' + name);
+}
+async function fxCamera() {
+  try {
+    fxCam = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    fxVideo.removeAttribute('src'); fxVideo.srcObject = fxCam; fxVideo.play().catch(() => {});
+    fxVideoName = 'camera (this window only)'; cfg.fx.source = 'video'; persist(); renderFx();
+    if (chan) chan.postMessage({ type: 'fxvideo', file: null, name: 'camera' });
+  } catch (e) { log('warn', 'Camera not granted: ' + (e && e.name || e)); }
+}
+stage.addEventListener('dragover', e => { if ([...(e.dataTransfer.items || [])].some(i => i.type.startsWith('video/'))) e.preventDefault(); });
+stage.addEventListener('drop', e => {
+  const f = [...(e.dataTransfer.files || [])].find(x => x.type.startsWith('video/'));
+  if (!f) return;
+  e.preventDefault();
+  fxUseVideo(URL.createObjectURL(f), f.name, f);
+});
+$('f-media').onclick = async () => {
+  // tools/serve.mjs lists media/ as media/list.json; on a static host there is no media/ (it is never published)
+  const box = $('f-medialist');
+  try {
+    const r = await fetch('media/list.json', { cache: 'no-store' });
+    const list = r.ok ? await r.json() : [];
+    box.replaceChildren(...(list.length ? list : ['(no videos in media/)']).map(n => { const b = document.createElement('button'); b.textContent = n; if (list.length) b.onclick = () => fxUseVideo('media/' + encodeURIComponent(n), n, null); return b; }));
+  } catch { box.textContent = '(media/ is only on a local server)'; }
+};
+$('f-cam').onclick = fxCamera;
+const paintFxMode = bindSeg('f-mode', () => cfg.fx.mode, v => setFxMode(v));
+const paintFxSrc = bindSeg('f-src', () => cfg.fx.source, v => { cfg.fx.source = v; renderFx(); });
+const paintFxDir = bindSeg('f-dir', () => cfg.fx.dir, v => { cfg.fx.dir = +v; });
+const paintFxAxis = bindSeg('f-axis', () => cfg.fx.axis, v => { cfg.fx.axis = v; });
+bindRange('f-slit', 'slit', v => Math.round(v * 100) + '%', cfg.fx);
+bindRange('f-width', 'width', v => v + ' px', cfg.fx);
+bindRange('f-depth', 'depth', v => v + ' frames', cfg.fx);
+bindRange('f-slope', 'slope', f2, cfg.fx);
+bindRange('f-mix', 'mix', v => Math.round(v * 100) + '%', cfg.fx);
+bindCheck('f-freeze', 'freeze', cfg.fx);
+function renderFx() {
+  paintFxMode(); paintFxSrc(); paintFxDir(); paintFxAxis();
+  for (const k of ['slit', 'width', 'depth', 'slope', 'mix']) { const el = $('f-' + k); if (document.activeElement !== el) { el.value = cfg.fx[k]; el.dispatchEvent(new Event('input')); } }
+  $('f-freeze').checked = cfg.fx.freeze;
+  $('f-video').textContent = cfg.fx.source === 'video' ? (fxVideoName ? 'Video: ' + fxVideoName : 'No video yet: drop a file on the stage, or pick one from media/') : 'Source: the scroll';
+}
+renderFx();
+
 window.SSAV = {
   get seed() { return cur.seed; }, get key() { return cur.key; }, get x() { return pb.x; }, get playing() { return pb.playing; },
   get worldName() { return cur.world; }, setWorld, nextWorld, weather, renderWeather,
@@ -937,5 +1051,5 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  setBank, setVE, setLevel, scrubLevel, get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
+  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

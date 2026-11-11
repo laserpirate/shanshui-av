@@ -18,6 +18,8 @@ export class World {
     this.onLog = onLog || (() => {});
     this.chunks = new Map();          // id -> {id, tag, x, y, canv, minx, maxx}
     this.order = [];
+    this.hidden = null;               // data worlds: mode layers not drawn (Set), null = all
+    this._drawOrder = null;
     this.xmin = 0; this.xmax = 0;
     this.started = false;             // first batch arrived
     this.paper = null;                // {w, h, data, mean}
@@ -39,7 +41,7 @@ export class World {
     this.ras.onerror = e => this._fail('raster: ' + (e.message || 'error'));
     this.gen.postMessage(this.opts ? { type: 'init', seed: this.seed, opts: this.opts } : { type: 'init', seed: this.seed });
     if (this.meta.data) {             // data worlds keep the pack on the main thread too (water line, facts, labels)
-      import('../worlds/nashua/pack.js').then(m => m.loadPack().then(p => { if (!this.disposed) { this.pack = p; this._packMod = m; this.keepK = [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
+      import('../worlds/nashua/pack.js').then(m => m.packFor(this.opts || {}).then(({ pack: p, designMissing }) => { if (!this.disposed) { this.pack = p; this.designMissing = designMissing; this._packMod = m; this.keepK = [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
         .catch(e => this._fail('pack: ' + (e && e.message || e)));
       this.waterLine = lv => {
         if (!this.pack) return null;
@@ -159,7 +161,7 @@ export class World {
       if (!final && !(onScreen && !t.tex && this.xmax >= (k + 1) * TILE_W && this.xmin <= k * TILE_W)) continue;
       t.pending = true; t.dirty = !final; t.reqScale = scale;
       this.pendingRaster++;
-      this.ras.postMessage({ type: 'tile', key: k, x0: k * TILE_W, w: TILE_W, h: WORLD_H, scale, order: this.order, aux: this.meta.kind === 1 });
+      this.ras.postMessage({ type: 'tile', key: k, x0: k * TILE_W, w: TILE_W, h: WORLD_H, scale, order: this.drawOrder(), aux: this.meta.kind === 1 });
     }
   }
 
@@ -171,6 +173,21 @@ export class World {
   }
 
   refreshTiles() { for (const t of this.tiles.values()) t.dirty = true; }
+
+  // modes: the paint order without the hidden layers (elements carry their mode layer)
+  drawOrder() {
+    if (!this.hidden) return this.order;
+    if (!this._drawOrder || this._drawOrder.src !== this.order) this._drawOrder = { src: this.order, ids: this.order.filter(id => { const c = this.chunks.get(id); return !(c && this.hidden.has(c.layer)); }) };
+    return this._drawOrder.ids;
+  }
+  // layers: the mode layers to draw (array), or null for all; redraws the tiles when it changes
+  setLayers(layers, all) {
+    const hide = layers && all ? all.filter(l => !layers.includes(l)) : [];
+    const key = hide.join(',');
+    if (key === (this._hiddenKey || '')) return;
+    this._hiddenKey = key; this.hidden = hide.length ? new Set(hide) : null; this._drawOrder = null;
+    this.refreshTiles();
+  }
 
   // make sure elements exist up to x1 (export of a frame ahead of the view); resolves when generated.
   // Chunked worlds also fill back to x0 (a frame behind the view regenerates exactly).
@@ -192,7 +209,7 @@ export class World {
   // elements overlapping [x0, x1], in upstream paint order
   elementsIn(x0, x1) {
     const out = [];
-    for (const id of this.order) { const c = this.chunks.get(id); if (c && c.maxx >= x0 && c.minx <= x1) out.push(c); }
+    for (const id of this.drawOrder()) { const c = this.chunks.get(id); if (c && c.maxx >= x0 && c.minx <= x1) out.push(c); }
     return out;
   }
 
@@ -203,7 +220,7 @@ export class World {
     return new Promise(res => {
       this._exportCbs.set(key, res);
       this.pendingRaster++;
-      this.ras.postMessage({ type: 'tile', key, x0, y0, w, h, scale, pw, ph, order: this.order, aux: this.meta.kind === 1 });
+      this.ras.postMessage({ type: 'tile', key, x0, y0, w, h, scale, pw, ph, order: this.drawOrder(), aux: this.meta.kind === 1 });
     });
   }
 

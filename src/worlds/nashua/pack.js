@@ -33,6 +33,35 @@ export function loadPack(url = PACK_URL) {
   return cache.get(url);
 }
 
+// Existing to design morph: every per-station and per-section array of the same shape is interpolated (terrain bands,
+// water edge, bed, sections together); objects (buildings, levels, landmarks) come from the nearer end. t in [0, 1].
+export const MORPH_LABELS = ['Existing Grade (before landform)', 'Landform Sequence (after landform)'];
+const MORPH_FIXED = new Set(['s', 'sec_s', 'sec_off']);
+export function blendPacks(a, b, t) {
+  if (!b || !(t > 0)) return a;
+  t = Math.min(1, t);
+  const A = {};
+  for (const k of Object.keys(a.A)) {
+    const x = a.A[k], y = b.A[k];
+    if (y && y.length === x.length && x instanceof Float32Array && !MORPH_FIXED.has(k)) {
+      const o = new Float32Array(x.length);
+      for (let i = 0; i < x.length; i++) o[i] = x[i] + (y[i] - x[i]) * t;
+      A[k] = o;
+    } else A[k] = t < 0.5 || !y ? x : y;
+  }
+  const near = t < 0.5 ? a : b;
+  return { ...near, A, n: a.n, ds: a.ds, route_len_m: a.route_len_m, hash: a.hash + '>' + b.hash + '@' + t.toFixed(3), morph: t };
+}
+
+// the pack a world draws: the existing pack, morphed toward the local design pack when opts.morph > 0 (the design
+// pack is fetched only then; it is never published, so on the preview it is missing and the morph stays at 0)
+export async function packFor(opts = {}) {
+  const p = await loadPack();
+  if (!(opts.morph > 0)) return { pack: p, designMissing: false };
+  const d = await loadPack(DESIGN_URL).catch(() => null);
+  return { pack: d ? blendPacks(p, d, opts.morph) : p, designMissing: !d };
+}
+
 export const bankKey = bank => bank === 'R' ? 'R' : 'L';
 export const reachW = pack => pack.route_len_m * HX;
 export const xOf = (pack, s, bank) => (bank === 'R' ? pack.route_len_m - s : s) * HX;

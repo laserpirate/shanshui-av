@@ -41,7 +41,12 @@ body.uihidden .ui { display: none !important; }
 #hud-facts:empty { display: none; }
 .reach-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; contain: strict; }
 .reach-labels[hidden] { display: none; }
+.playhead { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 2px solid rgba(46, 74, 140, 0.85); pointer-events: none; }
+.section-inset { position: absolute; right: 16px; top: 16px; pointer-events: none; }
+.playhead[hidden], .section-inset[hidden] { display: none; }
 .rl { position: absolute; left: 0; top: 0; font: 500 18px 'Plex Cond', sans-serif; color: #07090e; background: rgba(236, 238, 242, 0.88); padding: 2px 6px; white-space: nowrap; will-change: transform; }
+.morph-ends { display: flex; justify-content: space-between; gap: 12px; }
+.morph-ends span { max-width: 48%; }
 .rlevels button { display: block; width: 100%; text-align: left; margin: 0 0 4px; }
 
 #bar { position: fixed; left: var(--pad); right: var(--pad); bottom: var(--pad); display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }

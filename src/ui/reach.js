@@ -1,7 +1,7 @@
 // Labels and the fact line for data worlds (nashua), as DOM over the canvas, in the controller and (optionally)
 // the output window. Label text is names and ids from the data pack only. Nodes are built once per world and
 // moved with transforms each frame; nothing is rebuilt on mouse or frame events.
-import { xOf, YW, HX, levelAt, sOf } from '../worlds/nashua/pack.js';
+import { xOf, YW, HX, levelAt, sOf, MORPH_LABELS } from '../worlds/nashua/pack.js';
 
 const FT = 0.3048;
 export const mft = (m, nd = 1, sign = false) => {
@@ -68,5 +68,6 @@ export function factLine(world, x, lv, cssScale) {
     'bed ' + (meas ? 'measured' : 'estimated'),
     '100 m (328 ft) = ' + Math.round(100 * HX * cssScale) + ' px',
     water,
+    ...(o.morph > 0 ? [world.designMissing ? 'design pack not loaded' : (o.morph >= 1 ? MORPH_LABELS[1] : MORPH_LABELS[0] + ' to ' + MORPH_LABELS[1] + ' ' + Math.round(o.morph * 100) + '%')] : []),
   ].join('   ');
 }

@@ -2,6 +2,7 @@
 // BroadcastChannel in the output window), keeps one World per seed instance, draws with the
 // Renderer, and watches its own output for blank frames.
 import { World } from './world.js';
+import { SlitScan } from '../render/slitscan.js';
 import { Renderer } from '../render/renderer.js';
 import { WORLD_H } from './constants.js';
 
@@ -66,6 +67,7 @@ export class Scene {
     for (const it of fs.worlds) {
       const world = this.world(it.key, it.seed, it.world, it.opts);
       this.worlds.get(it.key).lastUsed = now;
+      if (it.layers && world.setLayers) world.setLayers(it.layers, it.all);
       world.update(it.x, v.viewW, fs.dir, rscale);
       list.push({ world, x: it.x, alpha: it.alpha });
     }
@@ -77,7 +79,17 @@ export class Scene {
     const f = { ...look, W, H, scale: v.scale, camY: v.camY, worlds: list };
     this.lastFrame = { fs, f, v };
     this.renderer.poll();
-    const ok = this.renderer.draw(f);
+    // slit-scan / time-smear: the scene (or a video) into a target, then the effect to the screen; off = untouched path
+    const fx = fs.fx && fs.fx.mode && fs.fx.mode !== 'off' && !blackout ? fs.fx : null;
+    let ok;
+    if (fx) {
+      const gl = this.renderer.gl;
+      if (!this.slit || this.slit.gl !== gl) this.slit = new SlitScan(gl);
+      if (!this.fxTarget || this.fxTarget.w !== W || this.fxTarget.h !== H || this.fxGl !== gl) { if (this.fxTarget && this.fxGl === gl) this.renderer.freeTarget(this.fxTarget); this.fxTarget = this.renderer.target(W, H); this.fxGl = gl; }
+      const vsrc = fx.source === 'video' ? this.slit.videoSource(this.video) : null;
+      ok = vsrc ? true : this.renderer.draw(f, this.fxTarget);
+      this.slit.run(vsrc || { tex: this.fxTarget.tex, w: W, h: H }, W, H, fx, null);
+    } else ok = this.renderer.draw(f);
     if (ok && !blackout && !panic) this._watch(now, f, list);
     return v;
   }

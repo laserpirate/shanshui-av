@@ -18,6 +18,17 @@ export const MIDI_TARGETS = [
   { id: 'level', label: 'Water level', cont: true },
   { id: 've', label: 'Exaggeration', cont: true },
   { id: 'bank', label: 'Bank' },
+  { id: 'mode', label: 'Mode' },
+  { id: 'morph', label: 'Morph', cont: true },
+  { id: 'fxMode', label: 'FX mode' },
+  { id: 'fxFreeze', label: 'FX freeze' },
+  { id: 'fxDir', label: 'FX direction' },
+  { id: 'fxSlit', label: 'Slit position', cont: true },
+  { id: 'fxWidth', label: 'Slit width', cont: true },
+  { id: 'fxDepth', label: 'History depth', cont: true },
+  { id: 'fxSlope', label: 'Time slope', cont: true },
+  { id: 'fxMix', label: 'FX mix', cont: true },
+  { id: 'sections', label: 'Sections' },
 ];
 
 export class Midi {
