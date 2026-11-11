@@ -1,6 +1,10 @@
-// Web MIDI learn (opt-in). Nothing is requested until the user presses Enable.
-// A binding is "<kind>:<channel>:<number>" (kind cc or note). Continuous targets take a CC value 0..1;
-// trigger targets fire on note-on or on a CC crossing 64 upward.
+// Web MIDI (opt-in). Nothing is requested until the user presses Enable. Controller window only.
+// A binding is "<kind>:<channel>:<number>" (kind cc or note); a target holds one binding or a list of them.
+// Continuous targets take a CC value 0..1 with soft takeover (ignored until the control crosses the app's value);
+// trigger targets fire on note-on or on a CC crossing 64 upward; hold targets (panic) fire only after hold_ms held.
+// The app's action seam (app.js ACT) does the work; this file only maps messages to target ids.
+// Presets are JSON in data/midi-maps/ (one per controller, plus generic), picked by port name on Enable and
+// changeable in the panel; learned maps are kept per device and per instance.
 export const MIDI_TARGETS = [
   { id: 'speed', label: 'Speed', cont: true },
   { id: 'play', label: 'Play' },
@@ -29,72 +33,132 @@ export const MIDI_TARGETS = [
   { id: 'fxSlope', label: 'Time slope', cont: true },
   { id: 'fxMix', label: 'FX mix', cont: true },
   { id: 'sections', label: 'Sections' },
+  { id: 'time', label: 'Time (date)', cont: true },
+  { id: 'timeRun', label: 'Time run' },
+  { id: 'panic', label: 'Panic (hold 1 s)', hold: 1000 },
+  { id: 'back', label: 'Seed back' },
+  { id: 'forward', label: 'Seed forward' },
+  { id: 'clean', label: 'Clean full-window' },
+  { id: 'speedReset', label: 'Reset speed' },
+  { id: 'dir', label: 'Direction' },
+  { id: 'ink', label: 'Ink weight', cont: true },
+  { id: 'contrast', label: 'Contrast', cont: true },
+  { id: 'weatherAuto', label: 'Weather auto' },
+  { id: 'master', label: 'Master dim', cont: true },
+  { id: 'drift', label: 'Gradient drift', cont: true },
+  { id: 'hold', label: 'Hold' },
+  { id: 'star', label: 'Star seed' },
+  { id: 'hide', label: 'Hide controls' },
+  { id: 'palPick', label: 'Palette pick', cont: true },
 ];
-
-// KORG nanoKONTROL2 at its factory settings (CC mode, channel 1). Fader 5 stays on CC 4, the weather (water level
-// in nashua). Not tried on the hardware: check the scene with the KORG editor if a control does nothing.
-export const NANOKONTROL2 = {
-  speed: 'cc:0:0', rain: 'cc:0:1', wind: 'cc:0:2', fog: 'cc:0:3', weather: 'cc:0:4', light: 'cc:0:5', ve: 'cc:0:6', fxMix: 'cc:0:7',
-  fxSlit: 'cc:0:16', fxWidth: 'cc:0:17', fxDepth: 'cc:0:18', fxSlope: 'cc:0:19', morph: 'cc:0:20', water: 'cc:0:21', level: 'cc:0:22',
-  mode: 'cc:0:32', sections: 'cc:0:33', bank: 'cc:0:34', fxMode: 'cc:0:35', fxFreeze: 'cc:0:36', fxDir: 'cc:0:37',
-  world: 'cc:0:64', play: 'cc:0:41', black: 'cc:0:45', reseed: 'cc:0:46', palPrev: 'cc:0:58', palNext: 'cc:0:59',
-};
+const BY_ID = new Map(MIDI_TARGETS.map(t => [t.id, t]));
+export const PRESETS = ['korg-nanokontrol', 'korg-nanokontrol2', 'generic'];
+// by port name: nanoKONTROL2 before nanoKONTROL (the longer name first)
+export function presetFor(name) { return /nanokontrol\s*2/i.test(name || '') ? 'korg-nanokontrol2' : /nanokontrol/i.test(name || '') ? 'korg-nanokontrol' : 'generic'; }
+// a preset file -> {target: binding | [bindings]}
+export function mapOf(preset) {
+  const m = {};
+  for (const b of preset.bindings || []) {
+    if (!BY_ID.has(b.act)) continue;
+    const key = `${b.type}:${b.ch | 0}:${b.num}`;
+    m[b.act] = m[b.act] ? [].concat(m[b.act], key) : key;
+  }
+  return m;
+}
+const keysOf = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
+const PICK = 0.03;   // a control within this of the app's value has picked it up
 
 export class Midi {
-  constructor({ map = {}, onAction, onChange, onLog }) {
-    this.map = { ...map };            // target id -> binding
+  // getValue(id) -> 0..1 or null (no soft takeover); onPickup(id, hw, app) while a control waits to cross
+  constructor({ map = {}, onAction, onChange, onLog, getValue = () => null, onPickup = () => {}, onMonitor = () => {} }) {
+    this.map = { ...map };            // target id -> binding or bindings
     this.onAction = onAction; this.onChange = onChange; this.onLog = onLog;
+    this.getValue = getValue; this.onPickup = onPickup; this.onMonitor = onMonitor;
     this.access = null; this.learn = null; this.last = new Map(); this.devices = [];
-    this.out = false;                 // MIDI out (button LEDs) is off until switched on
-  }
-  preset(map) { this.map = { ...map }; this.onChange(); }
-  // LED feedback for toggles: CC 127 / 0 on the bound control, to every output port; only when MIDI out is on.
-  // A nanoKONTROL2 lights its LEDs from the host only with LED mode set to External in the KORG editor.
-  feedback(id, on) {
-    if (!this.out || !this.access) return;
-    const m = /^cc:(\d+):(\d+)$/.exec(this.map[id] || '');
-    if (!m) return;
-    for (const o of this.access.outputs.values()) { try { o.send([0xb0 | +m[1], +m[2], on ? 127 : 0]); } catch {} }
+    this.picked = new Map();          // target id -> {ok, set} soft takeover state
+    this.holds = new Map();           // binding key -> timer of a held trigger
+    this.monitor = [];                // the last 10 messages
+    this.presetName = null;
   }
   get supported() { return typeof navigator.requestMIDIAccess === 'function'; }
   async enable() {
     if (this.access) return true;
-    if (!this.supported) { this.onLog('warn', 'Web MIDI not available in this browser'); return false; }
+    if (!this.supported) { this.onLog('warn', 'Web MIDI not available in this browser (Chrome or Edge needed)'); return false; }
     try { this.access = await navigator.requestMIDIAccess(); }
     catch (e) { this.onLog('warn', 'MIDI refused: ' + e.message); return false; }
-    this.access.onstatechange = () => this._wire();
+    this.access.onstatechange = e => {
+      try { const p = e && e.port; if (p) this.onLog('info', 'MIDI ' + (p.type || 'port') + ' ' + (p.name || '') + ' ' + (p.state || '')); } catch {}
+      this._wire();
+    };
     this._wire();
     return true;
   }
   _wire() {
     this.devices = [];
-    for (const input of this.access.inputs.values()) {
-      input.onmidimessage = e => this.message(e.data);
-      this.devices.push(input.name || 'MIDI input');
-    }
+    try {
+      for (const input of this.access.inputs.values()) {
+        const name = input.name || 'MIDI input';
+        input.onmidimessage = e => { try { this.message(e.data, name); } catch (err) { this.onLog('error', 'MIDI message: ' + (err && err.message || err)); } };
+        this.devices.push(name);
+      }
+    } catch (e) { this.onLog('warn', 'MIDI ports: ' + (e && e.message || e)); }
     this.onChange();
   }
+  get outputs() { try { return this.access && this.access.outputs ? [...this.access.outputs.values()] : []; } catch { return []; } }
+  setMap(map, presetName = null) { this.map = { ...map }; this.picked.clear(); this.presetName = presetName; this.onChange(); }
   startLearn(id) { this.learn = this.learn === id ? null : id; this.onChange(); }
-  clear(id) { delete this.map[id]; this.onChange(); }
-  message(data) {
+  clear(id) { delete this.map[id]; this.picked.delete(id); this.onChange(); }
+  bound(id, key) { return keysOf(this.map[id]).includes(key); }
+  message(data, port = '') {
     const [st, num, val = 0] = data;
     const type = st & 0xf0, ch = st & 0x0f;
-    let kind, v;
+    let kind, v, release = false;
     if (type === 0xb0) { kind = 'cc'; v = val / 127; }
     else if (type === 0x90 && val > 0) { kind = 'note'; v = 1; }
+    else if (type === 0x80 || type === 0x90) { kind = 'note'; v = 0; release = true; }
     else return;
     const key = `${kind}:${ch}:${num}`;
+    this.monitor.unshift({ port, ch: ch + 1, kind, num, val: kind === 'cc' ? val : release ? 'off' : val });
+    if (this.monitor.length > 10) this.monitor.length = 10;
+    this.onMonitor();
+    // the control's last position (kept while learning too, so its first move after learn can pick up)
+    const prev = this.last.get(key);
+    this.last.set(key, v);
     if (this.learn) {
-      for (const id in this.map) if (this.map[id] === key) delete this.map[id];
-      this.map[this.learn] = key; this.learn = null; this.onChange();
+      if (release) return;
+      for (const id in this.map) {
+        const ks = keysOf(this.map[id]).filter(k => k !== key);
+        if (ks.length === keysOf(this.map[id]).length) continue;
+        if (ks.length) this.map[id] = ks.length === 1 ? ks[0] : ks; else delete this.map[id];
+      }
+      this.map[this.learn] = key; this.picked.delete(this.learn); this.learn = null; this.onChange();
       return;
     }
-    const prev = this.last.get(key) ?? 0;
-    this.last.set(key, v);
     for (const t of MIDI_TARGETS) {
-      if (this.map[t.id] !== key) continue;
-      if (t.cont) { if (kind === 'cc') this.onAction(t.id, v); }
-      else if (kind === 'note' || (prev < 0.5 && v >= 0.5)) this.onAction(t.id, 1);
+      if (!this.bound(t.id, key)) continue;
+      if (t.cont) { if (kind === 'cc') this._cont(t, v, prev); continue; }
+      const down = kind === 'note' ? !release : (prev ?? 0) < 0.5 && v >= 0.5;
+      const up = kind === 'note' ? release : (prev ?? 0) >= 0.5 && v < 0.5;
+      if (t.hold) {
+        if (down && !this.holds.has(key)) this.holds.set(key, setTimeout(() => { this.holds.delete(key); this.onAction(t.id, 1); }, t.hold));
+        else if (up && this.holds.has(key)) { clearTimeout(this.holds.get(key)); this.holds.delete(key); this.onLog('info', t.label + ': hold 1 s to fire'); }
+      } else if (down) this.onAction(t.id, 1);
     }
+  }
+  // soft takeover: a control drives its target only once it reaches or crosses the app's value; a change from
+  // elsewhere (keys, panel, another control) drops the pickup again
+  _cont(t, v, prev) {
+    const cur = this.getValue(t.id);
+    if (cur == null) { this.onAction(t.id, v); return; }
+    let p = this.picked.get(t.id);
+    if (p && p.ok && Math.abs(cur - p.set) > PICK * 2) p.ok = false;
+    if (!p || !p.ok) {
+      const near = Math.abs(v - cur) <= PICK, crossed = prev != null && (prev - cur) * (v - cur) <= 0;
+      if (!near && !crossed) { this.onPickup(t.id, v, cur); return; }
+      p = { ok: true, set: v }; this.picked.set(t.id, p);
+    }
+    this.onAction(t.id, v);
+    const after = this.getValue(t.id);
+    p.set = after == null ? v : after;
   }
 }

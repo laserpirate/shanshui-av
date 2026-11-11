@@ -106,7 +106,7 @@ export class Scene {
     return {
       palA: this.palette(fs.pal.a), palB: this.palette(fs.pal.b), mix: fs.pal.mix,
       inkRange: this.palettes.inkRange || 0.75,
-      contrast: fs.u.contrast, ink: fs.u.ink, paperOn: fs.u.paper, vignette: fs.u.vignette ? 0.55 : 0, time: fs.time,
+      contrast: fs.u.contrast, ink: fs.u.ink, paperOn: fs.u.paper, vignette: fs.u.vignette ? 0.55 : 0, master: fs.u.master == null ? 1 : fs.u.master, time: fs.time,
       weather: fs.weather || null,
       level: fs.level || 0,
     };

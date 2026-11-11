@@ -35,6 +35,9 @@ button, input, select, a.btn { font: inherit; }
 .ui { transition: opacity .4s; }
 body.hide .ui { opacity: 0 !important; pointer-events: none !important; }
 body.uihidden .ui { display: none !important; }
+body.clean { cursor: none; }
+.mmon { font: 18px/1.3 ui-monospace, Consolas, monospace; min-height: 4em; max-height: 13.5em; overflow: hidden; white-space: pre; margin: 6px 0; }
+#m-preset, #m-outch { min-height: 44px; font-size: 18px; border-radius: 0; }
 
 #hud { position: fixed; top: var(--pad); left: var(--pad); background: var(--panel); border: 1px solid var(--bor); padding: 6px 10px; line-height: 1.35; font-size: calc(var(--fs) * .9); pointer-events: none; max-width: calc(100vw - 2 * var(--pad)); }
 #hud b { font-weight: 600; color: var(--acc); }

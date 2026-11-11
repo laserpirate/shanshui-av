@@ -1,5 +1,5 @@
 // P4 show-machine tests: the quality ladder (pure), baked tiles against live tiles (same pixels), offline after the
-// network goes away, the nanoKONTROL2 map, MIDI out off by default.
+// network goes away, (MIDI is in tests/midi.mjs).
 //   node tests/p4.mjs [http://localhost:8096/] [--only=name,name]
 // The bake test writes baked/ and precache.json in the repo (both gitignored). Writes test-results/p4.json.
 import fs from 'node:fs';
@@ -96,11 +96,22 @@ await test('offline-reload', async () => {
   await p.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller || navigator.serviceWorker.getRegistration().then(r => !!(r && r.active)), null, { timeout: 30000 });
   await p.reload(); await ready(p);   // now every file is served through the worker and cached
   await p.waitForTimeout(2000);
+  // a release while the worker is installed: online, the new file must be served, never the cached one
+  const probe = path.join(ROOT, 'sw-probe.js');
+  const get = () => p.evaluate(() => fetch('sw-probe.js').then(r => r.text()));
+  fs.writeFileSync(probe, 'release A\n');
+  const a = await get();
+  fs.writeFileSync(probe, 'release B\n');
+  const b = await get();
   await ctx.setOffline(true);
+  const cachedB = await get().catch(e => 'failed: ' + e.message);
   await p.reload();
   await ready(p);
   const ok = await p.evaluate(() => ({ controlled: !!navigator.serviceWorker.controller, tiles: SSAV.scene.stats().tiles, world: SSAV.worldName }));
   await ctx.setOffline(false);
+  fs.rmSync(probe, { force: true });
+  assert(a === 'release A\n' && b === 'release B\n', 'stale file after a release: ' + JSON.stringify([a, b]));
+  assert(cachedB === 'release B\n', 'offline did not serve the last good copy: ' + cachedB);
   // and a page without ?offline=1 in a fresh context registers nothing
   const c2 = await browser.newContext({ viewport: { width: 960, height: 540 } });
   const p2 = await c2.newPage(); watch(p2);
@@ -112,29 +123,7 @@ await test('offline-reload', async () => {
   return ok;
 });
 
-await test('midi-nanokontrol2', async () => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
-  const p = await ctx.newPage(); watch(p);
-  await p.addInitScript(() => { const r = navigator.requestMIDIAccess; window.__midiAsked = 0; if (r) navigator.requestMIDIAccess = (...a) => { window.__midiAsked++; return r.apply(navigator, a); }; });
-  await p.goto(BASE + '?i=p4-midi&world=nashua&seed=1'); await ready(p);
-  const r = await p.evaluate(() => {
-    const before = { out: SSAV.midi.out, asked: window.__midiAsked };
-    document.getElementById('m-nano').click();
-    const map = { ...SSAV.cfg.midi };
-    SSAV.midi.message([0xb0, 45, 127]); const black = SSAV.flags.blackout;
-    SSAV.midi.message([0xb0, 45, 0]); SSAV.midi.message([0xb0, 45, 127]); const unblack = SSAV.flags.blackout;
-    SSAV.midi.message([0xb0, 6, 127]); const ve = SSAV.cfg.nashua.ve;
-    const outLabel = document.getElementById('m-out').textContent;
-    return { before, map, black, unblack, ve, outLabel };
-  });
-  await ctx.close();
-  assert(r.before.out === false && r.before.asked === 0, 'MIDI out on or MIDI requested at load ' + JSON.stringify(r.before));
-  assert(r.map.weather === 'cc:0:4' && r.map.black === 'cc:0:45' && r.map.speed === 'cc:0:0', 'map ' + JSON.stringify(r.map));
-  assert(r.black === true && r.unblack === false, 'REC did not toggle blackout');
-  assert(r.ve === 20, 'fader 7 did not set the exaggeration: ' + r.ve);
-  assert(r.outLabel === 'MIDI out off', 'MIDI out label ' + r.outLabel);
-  return { bindings: Object.keys(r.map).length };
-});
+// MIDI: tests/midi.mjs
 
 await browser.close();
 const failed = results.filter(r => !r.pass);

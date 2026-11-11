@@ -7,6 +7,18 @@ frame state (a few hundred bytes).
 Tested on one machine only: two nodes as windows of one Chromium on one GPU. A wall of separate machines,
 projectors, real bezels and real keystone have not been tested on hardware.
 
+## Room checklist
+
+- [ ] **Who is the controller.** One machine runs the controller (and, for a LAN wall, `tools/wall-server.mjs`). Write its address on tape on the machine. Clock-mode walls have no controller.
+- [ ] **Displays.** Every node the same resolution and scaling (Windows: 100 % scale; Mac: Default for display). Note each screen's left edge (x) for the launchers.
+- [ ] **Cables.** Every output on a direct video cable (HDMI or DisplayPort), no adapters that rescale. Spare cable per node. Power strips labelled.
+- [ ] **Clocks.** Clock mode and the relay both depend on time: every machine on the same NTP server (Windows: Settings, Time, Sync now; Mac: Date and Time, set automatically). Check the seconds agree before doors.
+- [ ] **Network.** A closed show network or a switch of your own; no venue wifi. The relay has no authentication.
+- [ ] **Sleep off** on every machine; notifications off; Windows Update paused.
+- [ ] **Calibration card** (`cal=1`, key C) on every node: grid lines continuous across the bezel or overlap band; then keystone (`ks=`) until the corners sit on the screen.
+- [ ] **Blend check** with a flat grey: no bright or dark stripe in the overlap; adjust `gamma=` (2.2 for most projectors).
+- [ ] **One full pass** of the nashua reach (ping-pong both ends) with every node watching for a seam or a lag.
+
 ## Place a node
 
 Open `output.html` with:

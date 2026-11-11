@@ -3,8 +3,8 @@
 Everything runs from a folder: a static server (`tools/serve.mjs`, no dependencies) and Chrome or Edge. No account,
 no build step, no internet once installed.
 
-What was tested: Windows 11 with an RTX 3080 and Chrome (Playwright Chromium for the tests). The Mac and Pi launchers
-were written to the same pattern but have not been run on a Mac or a Pi.
+What was tested: Windows 11 with an RTX 3080 and Chromium (the Playwright tests). The launchers themselves, the Mac
+and the Pi have not been run: they are written to the same pattern and unverified.
 
 ## 1. Get the folder
 
@@ -14,15 +14,23 @@ were written to the same pattern but have not been run on a Mac or a Pi.
 
 ## 2. Start
 
-| Machine | Start | What opens |
-|---|---|---|
-| Windows | double-click `launch\windows-show.cmd`, or `launch\windows-show.cmd output 1920` | the controller; with `output X`, also the output full screen on the screen at x = X |
-| macOS | double-click `launch/mac-show.command` (first time: right-click, Open), or `launch/mac-show.command output 1920` | the same |
-| Raspberry Pi | `launch/pi-show.sh` | one output in kiosk, clock mode or following a controller (see the script) |
+| Machine | Controller | Output full screen | Wall node |
+|---|---|---|---|
+| Windows | `launch\windows\controller.bat` | `launch\windows\output.bat 1920` | `launch\windows\wall-node.bat 3 1 0 0 0 "overlap=160&cal=1"` |
+| macOS | `launch/mac/controller.command` | `launch/mac/output.command 1920` | `launch/mac/wall-node.command 2 1 1 0 1920 'sync=ws://192.168.1.10:8097'` |
+| Raspberry Pi | (none: run the controller elsewhere, or use clock mode) | `launch/pi/kiosk.sh` | `WALL='wall=3x1&col=2&row=0' launch/pi/kiosk.sh` |
 
-Settings for the page go in `SHOW_QUERY`, for example `world=nashua&ends=pingpong`. Every launcher opens the page
-with `?offline=1`: the first visit stores the app in the browser (a service worker, network first), so after that it
-starts with no network at all.
+The number after `output` is the left edge (x, in px) of the screen to fill. Outputs open in kiosk mode, so full
+screen needs no click; Alt+F4 (Windows) or Cmd+Q (Mac) closes them. On a Mac, the first time, right-click a
+`.command` file and choose Open. On a Pi, `launch/pi/shanshui-kiosk.service` starts the kiosk with the desktop
+(install steps are in the file).
+
+Settings for the controller page go in `SHOW_QUERY`, for example `world=nashua&ends=pingpong`. Every launcher opens
+the page with `?offline=1`: the first visit stores the app in the browser (a service worker, network first, so a new
+release is always picked up while online), and after that it starts with no network at all.
+
+Not verified: that `--window-position` with `--kiosk` lands on the intended screen on every machine. If an output
+opens on the wrong screen, open it with `O` in the controller, drag it, and press `F`.
 
 By hand: `node tools/serve.mjs --port 8093`, then open `http://localhost:8093/?offline=1`.
 

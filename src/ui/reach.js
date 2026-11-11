@@ -50,7 +50,7 @@ export class ReachOverlay {
 }
 
 // one line of facts at the playhead (view centre)
-export function factLine(world, x, lv, cssScale) {
+export function factLine(world, x, lv, cssScale, time) {
   if (!world || !world.pack) return '';
   const P = world.pack, o = world.opts || {}, ve = o.ve || 10;
   const s = sOf(P, x, o.bank);
@@ -68,6 +68,7 @@ export function factLine(world, x, lv, cssScale) {
     'bed ' + (meas ? 'measured' : 'estimated'),
     '100 m (328 ft) = ' + Math.round(100 * HX * cssScale) + ' px',
     water,
+    ...(time ? [time] : []),
     ...(o.morph > 0 ? [world.designMissing ? 'design pack not loaded' : (o.morph >= 1 ? MORPH_LABELS[1] : MORPH_LABELS[0] + ' to ' + MORPH_LABELS[1] + ' ' + Math.round(o.morph * 100) + '%')] : []),
   ].join('   ');
 }

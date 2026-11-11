@@ -79,6 +79,10 @@
     <h4>Water level (1 to 6)</h4>
     <div id="r-levels" class="list rlevels"></div>
     <label class="sl">Level <input type="range" id="r-level" min="0" max="4" step="0.01"><output></output></label>
+    <h4>Time (Nashua River at East Pepperell, upstream proxy)</h4>
+    <div class="row"><button id="r-time-on">Time off</button><button id="r-time-run">Run</button><button id="r-time-1936">March 1936</button></div>
+    <div class="row seg" id="r-time-rate"><button data-v="1">1 day/s</button><button data-v="30">30 days/s</button><button data-v="365">1 year/s</button></div>
+    <label class="sl">Date <input type="range" id="r-time" min="0" max="1" step="1"><output id="r-time-out"></output></label>
     <h4>Morph</h4>
     <label class="sl morph"><input type="range" id="r-morph" min="0" max="1" step="0.05"><output></output></label>
     <div class="row morph-ends"><span>Existing Grade (before landform)</span><span>Landform Sequence (after landform)</span></div>
@@ -128,8 +132,12 @@
     <div class="row"><button id="s-card">Test card</button><button id="s-out">Output window</button></div>
     <div class="kv" id="s-inst"></div>
     <h4>MIDI</h4>
-    <div class="row"><button id="m-enable">Enable MIDI</button><button id="m-nano">nanoKONTROL2 map</button><button id="m-out">MIDI out off</button></div>
+    <div class="row"><button id="m-enable">Enable MIDI</button><select id="m-preset" aria-label="MIDI preset"><option value="">Preset</option><option value="korg-nanokontrol">Korg nanoKONTROL (original)</option><option value="korg-nanokontrol2">Korg nanoKONTROL2</option><option value="generic">Generic</option></select><button id="m-reset">Reset to preset</button><button id="m-export">Export map</button></div>
     <div class="kv" id="m-dev"></div>
+    <div class="kv">Chrome or Edge only (Web MIDI). nanoKONTROL: keep the SCENE light on 1. Presets are marked verify with the wizard until seen on the monitor. MIDI cannot enter full screen: LOOP gives a clean full window, F gives full screen.</div>
+    <pre class="kv mmon" id="m-mon" aria-label="MIDI monitor"></pre>
+    <div class="kv" id="m-note"></div>
+    <div class="row"><button id="m-out">MIDI out off</button><label class="sl">Out channel <select id="m-outch"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></label></div>
     <div class="row mlist" id="m-map"></div>
     <div class="kv">Press a target, then move a fader or hit a pad. Right-click clears.</div>
   </section>

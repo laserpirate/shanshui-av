@@ -105,7 +105,7 @@ function reach(fs) {
   const f = $('facts'), on = data && R.facts && !flags.blackout;
   if (f.hidden === on) f.hidden = !on;
   const now = performance.now();
-  if (on && now - factAt > 250) { factAt = now; const t = factLine(w, top.x + v.viewW / 2, fs.level || 0, v.scale); if (f.textContent !== t) f.textContent = t; }
+  if (on && now - factAt > 250) { factAt = now; const t = factLine(w, top.x + v.viewW / 2, fs.level || 0, v.scale, fs.reach && fs.reach.time); if (f.textContent !== t) f.textContent = t; }
 }
 requestAnimationFrame(tick);
 setInterval(() => {

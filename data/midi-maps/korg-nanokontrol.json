@@ -1,0 +1,66 @@
+{
+  "name": "Korg nanoKONTROL (original), scene 1",
+  "match": "nanoKONTROL",
+  "verify": "verify with the wizard: CC numbers are Korg's factory scene 1 as documented (channel 1), not yet seen on the in-app monitor. Keep the SCENE light on 1. MIDI Learn fixes any control that does nothing.",
+  "layout": {
+    "strips": 9,
+    "fader": [2, 3, 4, 5, 6, 8, 9, 12, 13],
+    "knob": [14, 15, 16, 17, 18, 19, 20, 21, 22],
+    "upper": [23, 24, 25, 26, 27, 28, 29, 30, 31],
+    "lower": [33, 34, 35, 36, 37, 38, 39, 40, 41],
+    "transport": { "REC": 44, "PLAY": 45, "STOP": 46, "REW": 47, "FF": 48, "LOOP": 49 }
+  },
+  "bindings": [
+    { "act": "play", "type": "cc", "ch": 0, "num": 45, "mode": "momentary", "where": "PLAY" },
+    { "act": "black", "type": "cc", "ch": 0, "num": 46, "mode": "momentary", "where": "STOP" },
+    { "act": "back", "type": "cc", "ch": 0, "num": 47, "mode": "momentary", "where": "REW" },
+    { "act": "forward", "type": "cc", "ch": 0, "num": 48, "mode": "momentary", "where": "FF" },
+    { "act": "clean", "type": "cc", "ch": 0, "num": 49, "mode": "momentary", "where": "LOOP" },
+    { "act": "panic", "type": "cc", "ch": 0, "num": 44, "mode": "momentary", "hold_ms": 1000, "where": "REC" },
+
+    { "act": "fxSlit", "type": "cc", "ch": 0, "num": 14, "where": "strip 1 knob" },
+    { "act": "fxMix", "type": "cc", "ch": 0, "num": 2, "where": "strip 1 fader" },
+    { "act": "black", "type": "cc", "ch": 0, "num": 23, "mode": "momentary", "where": "strip 1 upper" },
+    { "act": "reseed", "type": "cc", "ch": 0, "num": 33, "mode": "momentary", "where": "strip 1 lower" },
+
+    { "act": "fxWidth", "type": "cc", "ch": 0, "num": 15, "where": "strip 2 knob" },
+    { "act": "speed", "type": "cc", "ch": 0, "num": 3, "where": "strip 2 fader" },
+    { "act": "speedReset", "type": "cc", "ch": 0, "num": 24, "mode": "momentary", "where": "strip 2 upper" },
+    { "act": "dir", "type": "cc", "ch": 0, "num": 34, "mode": "momentary", "where": "strip 2 lower" },
+
+    { "act": "ink", "type": "cc", "ch": 0, "num": 16, "where": "strip 3 knob" },
+    { "act": "contrast", "type": "cc", "ch": 0, "num": 4, "where": "strip 3 fader" },
+    { "act": "palNext", "type": "cc", "ch": 0, "num": 25, "mode": "momentary", "where": "strip 3 upper" },
+    { "act": "palPrev", "type": "cc", "ch": 0, "num": 35, "mode": "momentary", "where": "strip 3 lower" },
+
+    { "act": "wind", "type": "cc", "ch": 0, "num": 17, "where": "strip 4 knob" },
+    { "act": "rain", "type": "cc", "ch": 0, "num": 5, "where": "strip 4 fader" },
+    { "act": "weatherAuto", "type": "cc", "ch": 0, "num": 26, "mode": "momentary", "where": "strip 4 upper" },
+    { "act": "timeRun", "type": "cc", "ch": 0, "num": 36, "mode": "momentary", "where": "strip 4 lower" },
+
+    { "act": "fog", "type": "cc", "ch": 0, "num": 18, "where": "strip 5 knob" },
+    { "act": "water", "type": "cc", "ch": 0, "num": 6, "where": "strip 5 fader" },
+    { "act": "bank", "type": "cc", "ch": 0, "num": 27, "mode": "momentary", "where": "strip 5 upper" },
+    { "act": "mode", "type": "cc", "ch": 0, "num": 37, "mode": "momentary", "where": "strip 5 lower" },
+
+    { "act": "light", "type": "cc", "ch": 0, "num": 19, "where": "strip 6 knob" },
+    { "act": "master", "type": "cc", "ch": 0, "num": 8, "where": "strip 6 fader" },
+    { "act": "hold", "type": "cc", "ch": 0, "num": 28, "mode": "momentary", "where": "strip 6 upper" },
+    { "act": "sections", "type": "cc", "ch": 0, "num": 38, "mode": "momentary", "where": "strip 6 lower" },
+
+    { "act": "weather", "type": "cc", "ch": 0, "num": 20, "where": "strip 7 knob" },
+    { "act": "drift", "type": "cc", "ch": 0, "num": 9, "where": "strip 7 fader" },
+    { "act": "fxMode", "type": "cc", "ch": 0, "num": 29, "mode": "momentary", "where": "strip 7 upper" },
+    { "act": "fxFreeze", "type": "cc", "ch": 0, "num": 39, "mode": "momentary", "where": "strip 7 lower" },
+
+    { "act": "ve", "type": "cc", "ch": 0, "num": 21, "where": "strip 8 knob" },
+    { "act": "morph", "type": "cc", "ch": 0, "num": 12, "where": "strip 8 fader" },
+    { "act": "star", "type": "cc", "ch": 0, "num": 30, "mode": "momentary", "where": "strip 8 upper" },
+    { "act": "world", "type": "cc", "ch": 0, "num": 40, "mode": "momentary", "where": "strip 8 lower" },
+
+    { "act": "palPick", "type": "cc", "ch": 0, "num": 22, "where": "strip 9 knob" },
+    { "act": "fxDepth", "type": "cc", "ch": 0, "num": 13, "where": "strip 9 fader" },
+    { "act": "fxDir", "type": "cc", "ch": 0, "num": 31, "mode": "momentary", "where": "strip 9 upper" },
+    { "act": "hide", "type": "cc", "ch": 0, "num": 41, "mode": "momentary", "where": "strip 9 lower" }
+  ]
+}

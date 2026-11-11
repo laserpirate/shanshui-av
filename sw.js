@@ -1,6 +1,7 @@
 // Offline for show machines. Registered only when a page is opened with ?offline=1 (the launchers do); once
 // registered it keeps serving after a reboot without network.
-// Network first with a short timeout, the cache as fallback, so an online machine always runs the current build.
+// Network first (revalidated), the cache only when the network fails, so an online machine always runs the current
+// build and never a stale entry module after a release (tests/p4.mjs offline-release checks it).
 // Same-origin GET only; never caches byte ranges (video), media/ or data/local/ (both local-only and gitignored).
 // precache.json (written by tools/bake.mjs) lists everything a show needs, so worlds not yet visited work offline too.
 const CACHE = 'ssav-v1';
@@ -28,8 +29,10 @@ self.addEventListener('fetch', e => {
     const c = await caches.open(CACHE);
     // the ?v= stamp and the page's own query do not change the file
     const key = u.origin + u.pathname;
+    // the cache answers only when the network fails outright (no timeout race), so an online page never mixes
+    // cached modules of one release with fresh ones of the next
     try {
-      const net = await Promise.race([fetch(r), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000))]);
+      const net = await fetch(r, { cache: 'no-cache' });
       if (net.ok && net.status === 200) c.put(key, net.clone());
       return net;
     } catch (err) {
