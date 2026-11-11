@@ -88,4 +88,7 @@ A projector, two real screens (the pair as two windows of one Chromium), two mac
 ## Site
 | check | result |
 | --- | --- |
-| deploy /next/ | SITE |
+| deploy /next/ | pages-preview a098be0 (root = main 1f009a1, next/ = e6ceeb0), Pages built a098be0; the P7 code served (the clock fix and the mouth found in the live files) |
+| the root, live | 134/134 files byte-identical to main 1f009a1 |
+| crawl /next/ | 5 pages, 59 requests, 62 linked files, 0 broken, 0 console errors; all three worlds drew |
+| e2e on /next/ | 24/24, console clean |

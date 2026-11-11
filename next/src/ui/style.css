@@ -83,6 +83,7 @@ button.warn { border-color: var(--warn); }
 .fold > .fold-b { margin-left: -1px; }
 .fold .menu { position: absolute; bottom: 100%; left: -1px; z-index: 20; display: flex; flex-direction: column; min-width: 100%; background: var(--btn); border: 1px solid var(--bor); }
 .fold .menu[hidden] { display: none; }
+#b-mirror[hidden] { display: none; }
 .fold .menu button { justify-content: flex-start; margin: 0; border-width: 0 0 1px; }
 #bar .sp input { width: 100px; }
 /* ADDENDUM-B B6: the quick guide, one screen above everything; four columns, each scrolls on its own if it must */

@@ -10,6 +10,7 @@
 // Sync: BroadcastChannel (same machine), ?sync=ws://host:port (tools/wall-server.mjs on the LAN), or clock mode
 // ?t0=<epoch ms>&speed=<px/s> (no network: position is a function of UTC time; correct clocks keep nodes aligned).
 import { MODE_DEFAULT, MODES, LAYERS, layersOf } from './worlds/nashua/modes.js';
+import { mirrorSpec, mirrorFromQuery } from './core/mirror.js';
 const q = new URLSearchParams(location.search);
 const num = (k, d) => { const v = q.get(k); return v != null && v !== '' && isFinite(+v) ? +v : d; };
 
@@ -126,7 +127,15 @@ export function clockState(viewW, reachW) {
   // nashua draws the same mode layers as the controller would (default built), so baked tiles match
   const mode = MODES[q.get('mode')] ? q.get('mode') : MODE_DEFAULT;
   const layers = world === 'nashua' ? { layers: layersOf(mode, q.get('sections') === '1' || mode === 'sections'), all: LAYERS } : {};
+  // B11 the mirror, only with ?mirror=1&mon=1 (the pair and clock links carry it)
+  const M = q.get('mirror') === '1' ? mirrorFromQuery(location.search) : null;
+  const mirror = M && M.on ? mirrorSpec({ world, seed, opts, ...layers }, M, {
+    isData: w => w === 'nashua',
+    optsFor: w => (w === 'nashua' ? { bank: 'L', hx: 8, ve: 2, spread: 1 } : undefined),
+    span: reachW || 0, viewW, t: (now - t0) / 1000, speed,
+  }) : null;
   return {
+    ...(mirror ? { mirror } : {}),
     worlds: [{ key: 'clock:' + world + ':' + seed + (opts && opts.reach ? ':' + opts.reach : '') + (opts ? ':' + opts.hx + ':' + opts.ve + (opts.spread ? ':spread' : '') : ''), seed, world, x, alpha: 1, opts, ...layers }],
     dir: v >= 0 ? 1 : -1, pal: { a: pal, b: pal, mix: 0 },
     u: { contrast: 1, ink: 1, paper: true, vignette: false, zoom: 1, yAlign: 0.5 },

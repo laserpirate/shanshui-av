@@ -42,6 +42,17 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?offline=1` | Register the service worker so the app runs with the network off |
 | `?baked=1` | Use baked tiles from `baked/` where they exist (`tools/bake.mjs`) |
 | `?sync=ws://host:8097` | Follow, or as the controller drive, a LAN wall through `tools/wall-server.mjs`; an output that loses the relay runs on at the last speed (or from `&t0=` if given) |
+| `?mirror=1` | The mirror (below): the Mirror button and panel, its MIDI roles. Without it the app is the `.p7` app, frame for frame. `&mon=1` turns it on from the URL, with `&maxis=0..80`, `&mstr=0..1`, `&mscroll=with\|against\|free`, `&malt=other\|shanshui\|derelict\|nashua`; the pair links carry these, so a clock-mode node draws it too |
+
+**The mirror** (`?mirror=1`, ADDENDUM-B B11). A second world drawn upside down below the water line, meeting the first at the water: for nashua the other bank (the north bank above, the south bank turned below so each column is the same station), for shanshui and derelict the next seed, or any world by name. While it is on, the view fits the upper world from its top to the axis into the upper half (so the scroll is drawn at about half the size). Mirror panel and MIDI roles:
+
+| Control | MIDI role | What |
+| --- | --- | --- |
+| Mirror on / off | Mirror on / off | Off is the normal picture |
+| Axis | Mirror axis (continuous) | 0 to 80 css px below the water line (nashua: Median Water; derelict: the weather's water; shanshui: the foot of the scroll) |
+| Strength | Mirror strength (continuous) | The lower world's ink, 0 to 1 (default 0.85) |
+| Lower half | Mirror lower half (cycles) | Other (the other bank, or the next seed), shanshui, derelict, nashua |
+| Its scroll | Mirror scroll (cycles) | With the upper world, against it, or free at half the speed on its own clock |
 
 Export, To scale (nashua): Arch D or a 36 in roll at 1:500, 1:1000 or 1:2000 horizontal, vertical 1:(N / exaggeration), with scale bars. Never fitted: what does not fit is cropped, and the window is shown and logged.
 
@@ -161,6 +172,9 @@ node tests/p6.mjs --ref=<.p5 url> # no hills, the scale, structures, the map ins
 node tests/p7.mjs --ref=<.p6 url> # ADDENDUM-B: floating map, the bar fits, Rain, Flood, menu cycle, guide drift,
                                  # the mouth, landmark glyphs and labels, runoff (each rule fails on a planted picture)
 node tools/nashua/review-p7.mjs  # P7 review frames into docs/nashua/index.md
+node tests/p8.mjs --ref=<.p7 url> # the mirror: flag off byte-identical to .p7 (three worlds, dry and heavy), the flip,
+                                 # controls and MIDI, the axis, scroll modes, output, pair and wall, 60 fps at 1080p heavy
+node tools/nashua/review-p8.mjs  # a mirrored strip of each world into docs/nashua/index.md
 node tools/capture.mjs --out=C:/_av/captures   # 20 s WebM per mode (local only, never committed)
 node tools/soak.mjs 30 --world=nashua --heavy --fxevery=5      # slit-scan modes cycling; --midi sweeps a fake nanoKONTROL
 node tools/bake.mjs --world=nashua --seed=1   # bake tiles for a weak machine (?baked=1)

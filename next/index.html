@@ -122,6 +122,18 @@
     <div class="row"><label class="chk"><input type="checkbox" id="f-freeze"> Freeze (Z)</label></div>
   </section>
 
+  <!-- ADDENDUM-B B11: the mirror, only with ?mirror=1 (the bar button is hidden without it) -->
+  <section id="p-mirror" class="panel" hidden>
+    <h3>Mirror</h3>
+    <div class="row"><button id="mi-on" class="tog" title="A second world, flipped, below the water line">Mirror off</button></div>
+    <label class="sl">Axis below the water line <input type="range" id="mi-axis" min="0" max="80" step="1"><output></output></label>
+    <label class="sl">Strength <input type="range" id="mi-str" min="0" max="1" step="0.01"><output></output></label>
+    <h4>Lower half</h4>
+    <div class="row seg" id="mi-alt"><button data-v="other" title="nashua: the other bank; shanshui and derelict: the next seed">Other</button><button data-v="shanshui">shanshui</button><button data-v="derelict">derelict</button><button data-v="nashua">nashua</button></div>
+    <h4>Its scroll</h4>
+    <div class="row seg" id="mi-scroll"><button data-v="with">With</button><button data-v="against">Against</button><button data-v="free">Free</button></div>
+  </section>
+
   <section id="p-show" class="panel" hidden>
     <h3>Show</h3>
     <div class="row"><label class="chk"><input type="checkbox" id="s-auto"> Auto reseed</label></div>
@@ -207,7 +219,7 @@
   <div class="grp" id="b-wx"><button id="b-rain" class="tog" title="Rain held on or held at zero (N)">Rain</button></div>
   <!-- ADDENDUM-B B2: the less used panels and the pair fold into menus that open above the bar (same ids) -->
   <div class="grp mini-part">
-    <button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button>
+    <button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button><button data-panel="p-mirror" id="b-mirror" hidden title="Mirror: a second world below the water line">Mirror</button>
     <div class="fold"><button class="fold-b" id="b-more" aria-haspopup="true" aria-expanded="false" title="More panels">More<span id="log-n"></span></button><div class="menu" hidden><button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log</button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button></div></div>
     <button id="b-guide" class="mini-keep" title="Quick guide: keys, buttons, URL parameters, a pair">Guide</button>
   </div>
@@ -223,6 +235,6 @@
 </div>
 
 <div id="toast" class="ui"></div>
-<script type="module" src="src/app.js?v=e6ceeb0"></script>
+<script type="module" src="src/app.js?v=eae0755"></script>
 </body>
 </html>

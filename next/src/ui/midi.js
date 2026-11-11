@@ -58,6 +58,14 @@ export const MIDI_TARGETS = [
   // ADDENDUM-B: Rain and Flood as one-press toggles (the rain and level faders stay as they are)
   { id: 'rainToggle', label: 'Rain on / off' },
   { id: 'flood', label: 'Flood on / off' },
+  // ADDENDUM-B B11: the mirror's roles, only listed with ?mirror=1 (the flag off keeps the P7 list)
+  ...(typeof location !== 'undefined' && new URLSearchParams(location.search).get('mirror') === '1' ? [
+    { id: 'mirror', label: 'Mirror on / off' },
+    { id: 'mirrorAxis', label: 'Mirror axis', cont: true },
+    { id: 'mirrorStrength', label: 'Mirror strength', cont: true },
+    { id: 'mirrorScroll', label: 'Mirror scroll' },
+    { id: 'mirrorAlt', label: 'Mirror lower half' },
+  ] : []),
 ];
 const BY_ID = new Map(MIDI_TARGETS.map(t => [t.id, t]));
 export const PRESETS = ['korg-nanokontrol', 'korg-nanokontrol2', 'generic'];

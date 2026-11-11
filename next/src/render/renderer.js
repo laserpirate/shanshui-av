@@ -370,11 +370,23 @@ export class Renderer {
     { const wa = waterOf(f.palA), wb = waterOf(f.palB); gl.uniform4fv(u.uWatA0, wa[0]); gl.uniform4fv(u.uWatA1, wa[1]); gl.uniform4fv(u.uWatB0, wb[0]); gl.uniform4fv(u.uWatB1, wb[1]); }
     const s = f.scale, camY = f.camY;
     let first = true;
-    for (const w of f.worlds) {
+    // B11: the mirror world comes last, drawn flipped about the axis A (canvas px), only below it, at its strength.
+    // m: {A, flip}; flip: w.x is the world x at the screen's left edge and x decreases to the right
+    const mm = f.mirror && f.worlds.length && f.mirror.alpha > 0.001 ? f.mirror : null;
+    let A = 0;
+    if (mm) {
+      const base = mm.base === 'water' ? waterY(wx.water) : mm.base;   // core/mirror.js mirrorBase
+      A =Math.max(0, Math.min(H, Math.round((base - camY) * s + mm.axis)));
+    }
+    for (const w of mm ? [...f.worlds, mm] : f.worlds) {
       if (w.alpha <= 0.001) continue;
-      if (first) gl.disable(gl.BLEND); else { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); }
-      gl.uniform1f(u.uAlpha, first ? 1 : w.alpha);
-      first = false;
+      const m = w === mm ? { A, flip: !!w.flip } : null;
+      if (m) { if (A >= H) continue; gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, W, H - A); gl.uniform1f(u.uAlpha, w.alpha); }
+      else {
+        if (first) gl.disable(gl.BLEND); else { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); }
+        gl.uniform1f(u.uAlpha, first ? 1 : w.alpha);
+        first = false;
+      }
       const kind = w.world.meta ? w.world.meta.kind : 0;
       gl.uniform1i(u.uKind, kind);
       // data worlds: the water surface along x from the named levels (else the weather's flat water line)
@@ -394,22 +406,31 @@ export class Renderer {
       // ground: the whole screen as bare paper
       gl.uniform1f(u.uHasTile, 0);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.white);
-      gl.uniform4f(u.uRect, 0, 0, W, H);
-      gl.uniform4f(u.uWorld, w.x, camY, W / s, H / s);
+      if (!m) {
+        gl.uniform4f(u.uRect, 0, 0, W, H);
+        gl.uniform4f(u.uWorld, w.x, camY, W / s, H / s);
+      } else {
+        // the screen below the axis shows the world above it, upside down: screen y maps to world camY + (2A - y) / s
+        gl.uniform4f(u.uRect, 0, A, W, H - A);
+        gl.uniform4f(u.uWorld, w.x, camY + A / s, (m.flip ? -W : W) / s, -(H - A) / s);
+      }
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       // tiles; blending stays as set, tiles are opaque within this world's alpha
       gl.uniform1f(u.uHasTile, 1);
-      const k0 = Math.floor(w.x / TILE_W), k1 = Math.floor((w.x + W / s) / TILE_W);
+      const xa = m && m.flip ? w.x - W / s : w.x;
+      const k0 = Math.floor(xa / TILE_W), k1 = Math.floor((xa + W / s) / TILE_W);
       for (let k = k0; k <= k1; k++) {
         const t = w.world.tiles.get(k);
         if (!t || !t.tex) continue;
         if (kind === 1) { gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, t.aux || this.noAux); gl.activeTexture(gl.TEXTURE0); }
         gl.bindTexture(gl.TEXTURE_2D, t.tex);
         const x0 = k * TILE_W;
-        gl.uniform4f(u.uRect, (x0 - w.x) * s, (0 - camY) * s, TILE_W * s, WORLD_H * s);
+        if (!m) gl.uniform4f(u.uRect, (x0 - w.x) * s, (0 - camY) * s, TILE_W * s, WORLD_H * s);
+        else gl.uniform4f(u.uRect, m.flip ? (w.x - x0) * s : (x0 - w.x) * s, 2 * A - (0 - camY) * s, (m.flip ? -TILE_W : TILE_W) * s, -WORLD_H * s);
         gl.uniform4f(u.uWorld, x0, 0, TILE_W, WORLD_H);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
+      if (m) gl.disable(gl.SCISSOR_TEST);
     }
     if (first) { gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }
     // rain over the worlds that have weather, at their alpha

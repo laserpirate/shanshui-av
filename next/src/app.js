@@ -2,7 +2,7 @@
 // Scene the output window uses, and sends that window a frame state every frame.
 import { VERSION, WORLD_H, CULL, UPSTREAM_SITE } from './core/constants.js';
 import { loadPalettes, hexRgb } from './core/palettes.js';
-import { Scene, viewOf } from './core/scene.js';
+import { Scene, viewOf, mirrorView } from './core/scene.js';
 import { Playback, pxToWorld } from './core/playback.js';
 import { INSTANCE, load, save, saveNow } from './core/store.js';
 import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download, scaleWindow } from './export/export.js';
@@ -25,6 +25,7 @@ import { MapInset } from './ui/mapinset.js';
 import { Guide } from './ui/guide.js';
 import { offline } from './offline.js';
 import { Ladder } from './core/ladder.js';
+import { mirrorSpec, mirrorQuery, mirrorFromQuery, cleanMirror, mirrorBase, MIRROR_ALTS, MIRROR_SCROLL, AXIS_MAX } from './core/mirror.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -333,6 +334,7 @@ function openPair() {
 function pairLinks(t0 = Date.now() + 10000) {
   const o = { world: cur.world, seed: cur.seed, t0, speed: Math.round(cfg.speed), palette: pal.target };
   if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}), ...(SPREAD_Q ? {} : { spread: 0 }) });
+  if (MIRROR_Q) Object.assign(o, mirrorQuery(cfg.mirror));
   return [pairUrl(0, o), pairUrl(1, o)];
 }
 async function copyPairLinks() {
@@ -350,6 +352,21 @@ function runoffAmt(wx) {
   const wet = Math.max(0, Math.min(1, (wx.rain - 0.05) / 0.5));
   return wet * (1 + 0.75 * Math.max(0, Math.min(4, lvShown)) / 4);
 }
+// ADDENDUM-B B11 the mirror (core/mirror.js), only with ?mirror=1. Without it there is no cfg.mirror and no
+// fs.mirror, so the frame is the .p7 frame. &mon=1 and the m* parameters (the pair links) turn it on from a URL.
+const MIRROR_Q = new URLSearchParams(location.search).get('mirror') === '1';
+if (MIRROR_Q) {
+  const uq = new URLSearchParams(location.search);
+  cfg.mirror = uq.get('mon') === '1' ? mirrorFromQuery(location.search) : cleanMirror(cfg.mirror || {});
+}
+// the mirror on changes the view (core/scene.js mirrorView); the labels, the scrub and the export frame follow it
+function mirrorOn() { return MIRROR_Q && cfg.mirror.on && cfg.mirror.strength > 0.001; }
+function mirrorCss(W, H) { return mirrorView(W, H, cfg.zoom, mirrorBase(cur.world).frame, cfg.mirror.axis); }
+function mirrorState(now, top) {
+  if (!MIRROR_Q || !cfg.mirror.on || !top) return null;
+  const P = isData() ? curPack() : null;
+  return mirrorSpec(top, cfg.mirror, { isData: w => !!(WORLDS[w] && WORLDS[w].data), optsFor, span: P ? reachW(P) : 0, viewW: viewW(), t: (now - time0) / 1000, speed: cfg.speed });
+}
 // ---------- frame state ----------
 let time0 = performance.now();
 function frameState(now) {
@@ -361,7 +378,9 @@ function frameState(now) {
   worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts });
   for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = modeLayers(); w.all = LAYERS; }
   const wxNow = weatherNow();
+  const mirror = mirrorState(now, worlds[worlds.length - 1]);
   return {
+    ...(mirror ? { mirror } : {}),
     level: lvShown,
     runoff: runoffAmt(wxNow),
     reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts, map: cfg.nashua.outMap, mapSize: cfg.nashua.mapSize, time: timeText() },
@@ -485,7 +504,7 @@ addEventListener('resize', () => { if (flags.card) drawTestCard($('card')); layo
 // ---------- input on the stage ----------
 const stage = $('stage');
 let drag = null;
-const cssScale = () => (canvas.clientHeight / WORLD_H) * cfg.zoom;
+const cssScale = () => (mirrorOn() ? mirrorCss(canvas.clientWidth, canvas.clientHeight).scale : (canvas.clientHeight / WORLD_H) * cfg.zoom);
 stage.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   if (e.target.closest('.map-inset')) return;   // P6: the map takes its own clicks (a drag here would capture them)
@@ -944,7 +963,7 @@ if (E.x0 === undefined) E.x0 = 0;
 
 function viewForExport() {
   const W = canvas.clientWidth, H = canvas.clientHeight;
-  const v = viewOf(W, H, cfg.zoom, cfg.yAlign);
+  const v = mirrorOn() ? mirrorCss(W, H) : viewOf(W, H, cfg.zoom, cfg.yAlign);
   return { W, H, scale: v.scale, camX: pb.x, camY: v.camY };
 }
 // to scale (data worlds only): the world's px per m, the exaggeration and the reach length go into the geometry
@@ -1262,7 +1281,7 @@ let factAt = 0;
 function reachTick() {
   const w = scene.peek(cur.key);
   // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
-  const vs = lastView ? (lastView.H / WORLD_H) * cfg.zoom : cssScale();
+  const vs = lastView ? (mirrorOn() ? mirrorCss(lastView.W, lastView.H).scale : (lastView.H / WORLD_H) * cfg.zoom) : cssScale();
   if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off');
   if (ticks && lastView) ticks.update(w, { cssScale: vs, camX: pb.x, W: lastView.W }, isData() && cfg.fx.mode === 'off');
   const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
@@ -1482,6 +1501,39 @@ bindRange('f-depth', 'depth', v => v + ' frames', cfg.fx);
 bindRange('f-slope', 'slope', f2, cfg.fx);
 bindRange('f-mix', 'mix', v => Math.round(v * 100) + '%', cfg.fx);
 bindCheck('f-freeze', 'freeze', cfg.fx);
+// ---------- B11 the mirror panel and its MIDI roles (only with ?mirror=1) ----------
+const mirrorNo = 'mirror: open with ?mirror=1';
+function setMirror(p) {
+  if (!MIRROR_Q) return mirrorNo;
+  cfg.mirror = cleanMirror({ ...cfg.mirror, ...p }); persist(); renderMirror();
+}
+const paintMiAlt = MIRROR_Q ? bindSeg('mi-alt', () => cfg.mirror.alt, v => setMirror({ alt: v })) : () => {};
+const paintMiScroll = MIRROR_Q ? bindSeg('mi-scroll', () => cfg.mirror.scroll, v => setMirror({ scroll: v })) : () => {};
+function renderMirror() {
+  if (!MIRROR_Q) return;
+  const M = cfg.mirror, on = $('mi-on');
+  on.classList.toggle('on', M.on); on.textContent = M.on ? 'Mirror on' : 'Mirror off';
+  $('b-mirror').classList.toggle('lit', M.on);
+  for (const [id, v, f] of [['mi-axis', M.axis, x => Math.round(x) + ' px'], ['mi-str', M.strength, x => Math.round(x * 100) + '%']]) {
+    const el = $(id); if (document.activeElement !== el) el.value = v; el.parentElement.querySelector('output').textContent = f(+el.value);
+  }
+  paintMiAlt(); paintMiScroll();
+}
+if (MIRROR_Q) {
+  $('b-mirror').hidden = false;
+  $('mi-on').onclick = () => setMirror({ on: !cfg.mirror.on });
+  $('mi-axis').addEventListener('input', e => setMirror({ axis: +e.target.value }));
+  $('mi-str').addEventListener('input', e => setMirror({ strength: +e.target.value }));
+  renderMirror();
+}
+const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+Object.assign(ACT, {
+  mirror: { fire: () => setMirror({ on: !(MIRROR_Q && cfg.mirror.on) }) },
+  mirrorAxis: { get: () => (MIRROR_Q ? cfg.mirror.axis / AXIS_MAX : null), set: v => setMirror({ axis: Math.round(v * AXIS_MAX) }) },
+  mirrorStrength: { get: () => (MIRROR_Q ? cfg.mirror.strength : null), set: v => setMirror({ strength: v }) },
+  mirrorScroll: { fire: () => (MIRROR_Q ? setMirror({ scroll: cyc(MIRROR_SCROLL, cfg.mirror.scroll) }) : mirrorNo) },
+  mirrorAlt: { fire: () => (MIRROR_Q ? setMirror({ alt: cyc(MIRROR_ALTS, cfg.mirror.alt) }) : mirrorNo) },
+});
 function renderFx() {
   paintFxMode(); paintFxSrc(); paintFxDir(); paintFxAxis();
   for (const k of ['slit', 'width', 'depth', 'slope', 'mix']) { const el = $('f-' + k); if (document.activeElement !== el) { el.value = cfg.fx[k]; el.dispatchEvent(new Event('input')); } }
