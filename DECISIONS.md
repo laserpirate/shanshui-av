@@ -268,6 +268,8 @@ The addendum overrides the prompt where they disagree. Order A1, A6, A2, A4, A3,
 - 08:58 A5: Open pair opens two `wall=2x1` windows (columns 0 and 1) on the BroadcastChannel; Copy pair links writes two clock-mode links with one `t0` 10 s ahead, carrying world, seed, speed, palette, bank, hx, ve, mode and reach. No `wss://` relay (A7).
 - 08:58 Lapse: one patch to `src/ui/reach.js` was made with a Python heredoc from the shell, against the addendum's rule (Edit and Write only). The change itself was checked by the tests; every patch since has been Edit or Write.
 
+- 11:13 The 12 h gate (handoff section 9), after the `.p6` tag: gate passed; privacy grep 0 hits; the built preview 0 hits in text files (two older JPEGs hold "gsd" as chance bytes in image data); soak nashua heavy 30 min fps min 59.8 (tool verdict false on DOM +74 and tiles 54, see CHECKPOINT_P6); soak derelict heavy 30 min fps min 54.5, heap +0.07 MB, pass; old worlds byte-identical (old-worlds-identical, e2e upstream-identical); root 134/134; e2e 24/24 on `/next/`; sections 1 and 3 re-read, which added the missing checkpoint sections (defaults, unverified hardware, where everything landed, next).
+
 ### Questions (Owner's call)
 
 - The church behind the lot (structures layer id 24170, primary occupancy Religious, s about 1110, 97 m from the water edge) has no name in the data. It is labelled by its kind. Its name, if it should carry one.
