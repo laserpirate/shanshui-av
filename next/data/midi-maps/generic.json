@@ -1,0 +1,22 @@
+{
+  "name": "Generic (AV standard default map)",
+  "match": "",
+  "verify": "the shared default map of AV-STANDARD section 4: pads from note 36, CC 1 to 8 on channel 1. Any controller; MIDI Learn overrides.",
+  "bindings": [
+    { "act": "play", "type": "note", "ch": 0, "num": 36, "where": "pad 1" },
+    { "act": "forward", "type": "note", "ch": 0, "num": 37, "where": "pad 2" },
+    { "act": "reseed", "type": "note", "ch": 0, "num": 38, "where": "pad 3" },
+    { "act": "palNext", "type": "note", "ch": 0, "num": 39, "where": "pad 4" },
+    { "act": "palPrev", "type": "note", "ch": 0, "num": 40, "where": "pad 5" },
+    { "act": "black", "type": "note", "ch": 0, "num": 41, "where": "pad 6" },
+    { "act": "panic", "type": "note", "ch": 0, "num": 42, "hold_ms": 1000, "where": "pad 7" },
+    { "act": "hold", "type": "note", "ch": 0, "num": 43, "where": "pad 8" },
+    { "act": "star", "type": "note", "ch": 0, "num": 44, "where": "pad 9" },
+    { "act": "speed", "type": "cc", "ch": 0, "num": 1, "where": "CC 1" },
+    { "act": "fxMix", "type": "cc", "ch": 0, "num": 2, "where": "CC 2" },
+    { "act": "drift", "type": "cc", "ch": 0, "num": 3, "where": "CC 3" },
+    { "act": "weather", "type": "cc", "ch": 0, "num": 4, "where": "CC 4" },
+    { "act": "contrast", "type": "cc", "ch": 0, "num": 5, "where": "CC 5" },
+    { "act": "master", "type": "cc", "ch": 0, "num": 7, "where": "CC 7" }
+  ]
+}

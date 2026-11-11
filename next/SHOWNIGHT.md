@@ -4,18 +4,18 @@ The room is the risk, not the code. Rehearse once on the real projector.
 
 ## Before
 
-- [ ] Run offline: `node tools/serve.mjs` in the repo, open http://localhost:8080/ (never depend on venue wifi)
+- [ ] Run offline: a launcher in `launch/` (INSTALL.md), or `node tools/serve.mjs` in the repo and open http://localhost:8080/?offline=1 once while online. Never depend on venue wifi
 - [ ] Chrome, plugged in, Windows set to High performance GPU for Chrome
 - [ ] Displays on Extend. `O` opens the output window; drag it to the projector; `F` (or double-click) inside it
 - [ ] `T` test card: check edges, grid, grey ramp for keystone and focus. `T` again to leave
-- [ ] Controller HUD shows `output <w> x <h> <fps>`; fps near 60. If not, Show panel, Quality: Med or Low
+- [ ] Controller HUD shows `output <w> x <h> <fps>`; fps near 60. Quality Auto steps down on its own (the Log says so); to fix it, Show panel, Quality: Med or Low, or `?quality=low` on the output
 - [ ] Two outputs or two laptops: give each its own `?i=<name>`
 - [ ] Star the seeds you want (`s`). Show panel: Auto reseed, Starred, every N minutes
 - [ ] Star the palettes you want (`S`), then Look panel: "P cycles starred only"
 - [ ] Sleep, Windows Update and notifications off; Do Not Disturb on
 - [ ] Blackout tested: `B` from the controller and from the output window
 - [ ] Derelict: rehearse one full weather loop (Weather panel, 6 min) on the projector; night and flood are the darkest frames. Pin a phase there if the room is bright
-- [ ] MIDI (optional): plug the controller in before opening the page, Show panel, Enable MIDI, press a target and move a control. Map Blackout to a pad you can find in the dark
+- [ ] MIDI (optional): plug the controller in before opening the page, Show panel, Enable MIDI, press a target and move a control. Map Blackout to a pad you can find in the dark. A KORG nanoKONTROL2: "nanoKONTROL2 map" loads a full layout (REC = Blackout, PLAY = Play). MIDI out (button LEDs) stays off unless you switch it on
 
 ## During
 
@@ -26,12 +26,20 @@ The room is the risk, not the code. Rehearse once on the real projector.
 | `R` | Reseed (crossfade) |
 | `p` / `P` | Next / previous palette (crossfade) |
 | `G` | Hold: freeze auto reseed and auto palette |
-| `W` | World: shanshui / derelict (crossfade) |
+| `W` | World: shanshui / derelict / nashua (crossfade) |
+| `M` | nashua: next mode (nature, built, design, sections) |
+| `X` | nashua: sections on / off |
+| `V` | FX: off / strip / smear / time displace |
+| `Z` | FX: freeze |
 | `B` | Blackout (always works) |
 | Esc held 1 s | Panic: fades to the last good frame. Esc or Space to leave |
 | `H` | Hide controls |
 
 In full screen Chrome keeps Esc for the panic key; hold Esc 2 s to leave full screen.
+
+## Walls
+
+See WALL.md. Put every node on the calibration card (`cal=1`, key C) before doors open, and check the overlap bands line up.
 
 ## If something goes wrong
 

@@ -1,0 +1,20 @@
+# systemd user unit: start the kiosk when the desktop session starts, restart it if it exits.
+# Install (as the desktop user, repo at ~/shanshui-av):
+#   mkdir -p ~/.config/systemd/user && cp launch/pi/shanshui-kiosk.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now shanshui-kiosk
+# Settings go in Environment= lines below (WORLD, SEED, SPEED, T0, SYNC, WALL; see kiosk.sh).
+[Unit]
+Description=AV Shan Shui kiosk output
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+Environment=WORLD=nashua
+ExecStart=%h/shanshui-av/launch/pi/kiosk.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

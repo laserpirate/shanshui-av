@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>AV Shan Shui Infinite Scrolls</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="src/ui/style.css">
 </head>
 <body>
@@ -15,6 +16,8 @@
   <canvas id="card"></canvas>
   <div id="frame" hidden><span id="frame-tag"></span></div>
   <div id="labels" class="reach-labels" hidden></div>
+  <div id="playhead" class="playhead" hidden></div>
+  <canvas id="section" class="section-inset" hidden></canvas>
   <div id="black"></div>
 </div>
 
@@ -76,11 +79,40 @@
     <h4>Water level (1 to 6)</h4>
     <div id="r-levels" class="list rlevels"></div>
     <label class="sl">Level <input type="range" id="r-level" min="0" max="4" step="0.01"><output></output></label>
+    <h4>Time (Nashua River at East Pepperell, upstream proxy)</h4>
+    <div class="row"><button id="r-time-on">Time off</button><button id="r-time-run">Run</button><button id="r-time-1936">March 1936</button></div>
+    <div class="row seg" id="r-time-rate"><button data-v="1">1 day/s</button><button data-v="30">30 days/s</button><button data-v="365">1 year/s</button></div>
+    <label class="sl">Date <input type="range" id="r-time" min="0" max="1" step="1"><output id="r-time-out"></output></label>
+    <h4>Morph</h4>
+    <label class="sl morph"><input type="range" id="r-morph" min="0" max="1" step="0.05"><output></output></label>
+    <div class="row morph-ends"><span>Existing Grade (before landform)</span><span>Landform Sequence (after landform)</span></div>
+    <div class="kv" id="r-morph-note" hidden></div>
+    <h4>Mode (M)</h4>
+    <div class="row seg" id="r-mode"><button data-v="nature">nature</button><button data-v="built">built</button><button data-v="design">design</button><button data-v="sections">sections</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="r-sections"> Sections (X)</label></div>
     <h4>Ends of the reach</h4>
     <div class="row seg" id="r-ends"><button data-v="handover">Hand over</button><button data-v="loop">Loop</button><button data-v="pingpong">Ping-pong</button></div>
     <div class="row"><label class="chk"><input type="checkbox" id="r-labels"> Labels (L)</label></div>
     <div class="row"><label class="chk"><input type="checkbox" id="r-outlabels"> Labels on output</label><label class="chk"><input type="checkbox" id="r-outfacts"> Fact line on output</label></div>
     <div class="kv" id="r-facts"></div>
+  </section>
+
+  <section id="p-fx" class="panel" hidden>
+    <h3>Slit-scan and time-smear</h3>
+    <div class="row seg" id="f-mode"><button data-v="off">Off</button><button data-v="strip">Strip</button><button data-v="smear">Smear</button><button data-v="displace">Time displace</button></div>
+    <h4>Source</h4>
+    <div class="row seg" id="f-src"><button data-v="scroll">The scroll</button><button data-v="video">Video</button></div>
+    <div class="row"><button id="f-media">Videos in media/</button><button id="f-cam">Camera (this window only)</button></div>
+    <div id="f-medialist" class="list"></div>
+    <div class="kv" id="f-video">Drop a video file on the stage to use it as the source</div>
+    <label class="sl">Slit position <input type="range" id="f-slit" min="0" max="1" step="0.005"><output></output></label>
+    <label class="sl">Slit width <input type="range" id="f-width" min="1" max="16" step="1"><output></output></label>
+    <div class="row seg" id="f-dir"><button data-v="1">Right to left</button><button data-v="-1">Left to right</button></div>
+    <label class="sl">History depth <input type="range" id="f-depth" min="2" max="128" step="1"><output></output></label>
+    <label class="sl">Slope <input type="range" id="f-slope" min="0.1" max="4" step="0.05"><output></output></label>
+    <div class="row seg" id="f-axis"><button data-v="x">Columns</button><button data-v="y">Rows</button></div>
+    <label class="sl">Mix <input type="range" id="f-mix" min="0" max="1" step="0.01"><output></output></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="f-freeze"> Freeze (Z)</label></div>
   </section>
 
   <section id="p-show" class="panel" hidden>
@@ -100,8 +132,12 @@
     <div class="row"><button id="s-card">Test card</button><button id="s-out">Output window</button></div>
     <div class="kv" id="s-inst"></div>
     <h4>MIDI</h4>
-    <div class="row"><button id="m-enable">Enable MIDI</button></div>
+    <div class="row"><button id="m-enable">Enable MIDI</button><select id="m-preset" aria-label="MIDI preset"><option value="">Preset</option><option value="korg-nanokontrol">Korg nanoKONTROL (original)</option><option value="korg-nanokontrol2">Korg nanoKONTROL2</option><option value="generic">Generic</option></select><button id="m-reset">Reset to preset</button><button id="m-export">Export map</button></div>
     <div class="kv" id="m-dev"></div>
+    <div class="kv">Chrome or Edge only (Web MIDI). nanoKONTROL: keep the SCENE light on 1. Presets are marked verify with the wizard until seen on the monitor. MIDI cannot enter full screen: LOOP gives a clean full window, F gives full screen.</div>
+    <pre class="kv mmon" id="m-mon" aria-label="MIDI monitor"></pre>
+    <div class="kv" id="m-note"></div>
+    <div class="row"><button id="m-out">MIDI out off</button><label class="sl">Out channel <select id="m-outch"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></label></div>
     <div class="row mlist" id="m-map"></div>
     <div class="kv">Press a target, then move a fader or hit a pad. Right-click clears.</div>
   </section>
@@ -162,7 +198,7 @@
   </div>
   <div class="grp seg" id="b-world"><label>World</label><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button><button data-v="nashua" title="World (W)">nashua</button></div>
   <div class="grp">
-    <button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-show">Show</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log<span id="log-n"></span></button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button>
+    <button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log<span id="log-n"></span></button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button>
   </div>
   <div class="grp">
     <button id="b-hold" title="Hold (G)">Hold</button>
@@ -174,6 +210,6 @@
 </div>
 
 <div id="toast" class="ui"></div>
-<script type="module" src="src/app.js?v=a4699ad"></script>
+<script type="module" src="src/app.js?v=e6b9b68"></script>
 </body>
 </html>

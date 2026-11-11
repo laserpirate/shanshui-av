@@ -23,9 +23,15 @@ export const KEYS = [
   [', and .', 'nashua: Vertical Exaggeration down / up'],
   ['1 to 6', 'nashua: water level'],
   ['L', 'nashua: labels'],
+  ['Y', 'nashua: time scroll on / off (real daily record)'],
+  ['U', 'nashua: time scroll to March 1936'],
+  ['M', 'nashua: next mode (nature, built, design, sections)'],
+  ['X', 'nashua: sections on / off'],
+  ['V', 'FX: off / strip / smear / time displace'],
+  ['Z', 'FX: freeze'],
   ['?', 'This key card'],
   ['Esc', 'Close panels; leave panic'],
   ['Esc held 1 s', 'Panic: fade to the last good frame'],
 ];
 // the keys the handler listens for, by KeyboardEvent.key, for the duplicate check
-export const KEY_CODES = [' ', 'Home', 'd', '-', '=', 'ArrowLeft', 'ArrowRight', 'r', '[', ']', 's', 'p', 'P', 'S', 'f', 'h', 'b', 'g', 't', 'o', 'w', 'k', ',', '.', '1', '2', '3', '4', '5', '6', 'l', '?', 'Escape'];
+export const KEY_CODES = [' ', 'Home', 'd', '-', '=', 'ArrowLeft', 'ArrowRight', 'r', '[', ']', 's', 'p', 'P', 'S', 'f', 'h', 'b', 'g', 't', 'o', 'w', 'k', ',', '.', '1', '2', '3', '4', '5', '6', 'l', 'y', 'u', 'm', 'x', 'v', 'z', '?', 'Escape'];

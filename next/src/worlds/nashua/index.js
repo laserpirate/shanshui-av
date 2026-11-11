@@ -31,8 +31,11 @@ export function init(seed, opts = {}, pack) {
   const ve = Math.max(VE_MIN, Math.min(VE_MAX, +opts.ve || VE_DEF));
   return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, VY: HX * ve, pack, W: reachW(pack) };
 }
-export const elementId = (c, layer) => c * 8 + layer + 1;
-export const paintOrder = (a, b) => a.depth - b.depth || a.c - b.c;
+// one element per (chunk, depth layer, piece); pieces keep their order inside a layer, so tiles are unchanged
+export const elementId = (c, layer, sub = 0) => c * 64 + layer * 12 + sub + 1;
+export const paintOrder = (a, b) => a.depth - b.depth || a.c - b.c || (a.sub || 0) - (b.sub || 0);
+// the mode layers (modes json) each piece belongs to
+export const MODE_LAYERS = ['terrain', 'water', 'trees', 'landmarks', 'buildings', 'hardscape', 'infrastructure', 'cso', 'interventions', 'walk', 'kodama', 'sections'];
 
 const f1 = v => Math.round(v * 10) / 10;
 // band name -> world y at x
@@ -282,10 +285,11 @@ function dam(st, x0, x1) {
 }
 
 // pipes at the water line on the bank in view: CSOs and outfalls (diameter x ve, at least 2.5 px)
-function pipes(st, x0, x1) {
+function pipes(st, x0, x1, which = 'all') {
   let o = '';
   const P = st.pack, VY = st.VY;
-  for (const p of [...P.cso.map(c => ({ ...c, dia_in: null })), ...P.outfalls]) {
+  const list = [...(which !== 'outfall' ? P.cso.map(c => ({ ...c, dia_in: null })) : []), ...(which !== 'cso' ? P.outfalls : [])];
+  for (const p of list) {
     if (p.side !== st.side) continue;
     const x = xOf(P, p.s, st.bank);
     if (x < x0 || x >= x1) continue;
@@ -293,6 +297,26 @@ function pipes(st, x0, x1) {
     o += pl([[x - rr * 1.6, y + rr * 1.5], [x - rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y - rr * 1.5], [x + rr * 1.6, y + rr * 1.5]], G(200, 1), G(40, 0.9), 0.8);
     const ring = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * Math.PI * 2; ring.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
     o += pl(ring, G(25, 1), G(20, 1), 0.8);
+  }
+  return o;
+}
+
+// design only (the local design pack, morph 50% or more): each observatory as a bracket 6 m over the bank across its
+// s range, on the interventions layer
+function observatories(st, x0, x1) {
+  const P = st.pack;
+  if (!P.observatories) return '';
+  let o = '';
+  for (const ob of P.observatories) {
+    if (ob.side !== st.side) continue;
+    let xa = xOf(P, ob.s0, st.bank), xb = xOf(P, ob.s1, st.bank);
+    if (xa > xb) [xa, xb] = [xb, xa];
+    const ca = Math.max(xa, x0), cb = Math.min(xb, x1);
+    if (cb <= ca) continue;
+    const y = x => YW - (at(P, 'band0_' + st.bank, sAt(st, x)) + 6) * st.VY;
+    const pts = []; for (let x = ca; x <= cb + 0.01; x += 6) pts.push([Math.min(x, cb), y(Math.min(x, cb))]);
+    o += pl(pts, NONE, G(30, 0.85), 1.4);
+    for (const xe of [xa, xb]) if (xe >= x0 && xe < x1) o += pl([[xe, y(xe)], [xe, y(xe) + 4 * st.VY]], NONE, G(30, 0.85), 1.4);
   }
   return o;
 }
@@ -318,19 +342,24 @@ export function generate(st, c) {
   const x0 = c * CW, x1 = x0 + CW, W = st.W;
   if (x1 < -200 || x0 > W + 200) return [];
   const ta = Math.max(x0, 0), tb = Math.min(x1, W);         // terrain only inside the reach
-  const layers = ['', '', '', '', ''];
+  // per depth layer, the pieces in paint order, each with its mode layer
+  const L = [[], [], [], [], []];
   if (tb > ta) {
-    layers[0] = band(st, BAND[0], 0, ta, tb) + band(st, BAND[1], 1, ta, tb);
-    layers[1] = band(st, BAND[2], 2, ta, tb) + buildings(st, [3], x0, x1, () => 160) + band(st, BAND[3], 3, ta, tb) + buildings(st, [2], x0, x1, () => 130);
-    layers[2] = band(st, BAND[4], 4, ta, tb) + trees(st, 1, 4, ta, tb, 95, 26) + buildings(st, [1], x0, x1, () => 85);
-    layers[3] = band(st, BAND[5], 5, ta, tb) + lot(st, x0, x1) + trees(st, 0, 5, ta, tb, 45, 38) + buildings(st, [0], x0, x1, () => 40) + pipes(st, x0, x1);
-    layers[4] = bed(st, ta, tb);
+    L[0].push(['terrain', band(st, BAND[0], 0, ta, tb)], ['terrain', band(st, BAND[1], 1, ta, tb)]);
+    L[1].push(['terrain', band(st, BAND[2], 2, ta, tb)], ['buildings', buildings(st, [3], x0, x1, () => 160)], ['terrain', band(st, BAND[3], 3, ta, tb)], ['buildings', buildings(st, [2], x0, x1, () => 130)]);
+    L[2].push(['terrain', band(st, BAND[4], 4, ta, tb)], ['trees', trees(st, 1, 4, ta, tb, 95, 26)], ['buildings', buildings(st, [1], x0, x1, () => 85)]);
+    L[3].push(['terrain', band(st, BAND[5], 5, ta, tb)], ['hardscape', lot(st, x0, x1)], ['trees', trees(st, 0, 5, ta, tb, 45, 38)], ['buildings', buildings(st, [0], x0, x1, () => 40)], ['cso', pipes(st, x0, x1, 'cso')], ['infrastructure', pipes(st, x0, x1, 'outfall')], ['interventions', observatories(st, x0, x1)]);
+    L[4].push(['terrain', bed(st, ta, tb)]);
   }
-  layers[4] += bridges(st, x0, x1) + dam(st, x0, x1);
+  L[4].push(['landmarks', bridges(st, x0, x1)], ['landmarks', dam(st, x0, x1)]);
   const out = [];
   for (let k = 0; k < 5; k++) {
-    if (!layers[k]) continue;
-    out.push({ id: elementId(c, k), layer: meta.layers[k], depth: k + 1, x: x0 + CW / 2, y: 0, c, canv: layers[k], tag: meta.layers[k] });
+    let sub = 0;
+    for (const [layer, canv] of L[k]) {
+      if (!canv) continue;
+      out.push({ id: elementId(c, k, sub), layer, depth: k + 1, x: x0 + CW / 2, y: 0, c, sub, canv, tag: meta.layers[k] });
+      sub++;
+    }
   }
   return out;
 }

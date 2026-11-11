@@ -4,7 +4,7 @@
 //   out: {type:'ready'}  {type:'paper', w, h, data}
 //        {type:'chunks', added:[{id,tag,x,y,canv,depth}], removed:[ids], order:[ids], xmin, xmax, ms}
 import { init, generate, paintOrder, paperTexture, meta } from '../worlds/nashua/index.js';
-import { loadPack } from '../worlds/nashua/pack.js';
+import { packFor } from '../worlds/nashua/pack.js';
 
 const CW = meta.chunk;
 let st = null;
@@ -15,7 +15,7 @@ const queue = [];                // messages that arrive while the pack loads
 function add(c) {
   const els = generate(st, c);
   for (const e of els) live.set(e.id, e);
-  return els.map(e => ({ id: e.id, tag: e.tag, x: e.x, y: 0, canv: e.canv, depth: e.depth }));
+  return els.map(e => ({ id: e.id, tag: e.tag, layer: e.layer, x: e.x, y: 0, canv: e.canv, depth: e.depth }));
 }
 function order() { return [...live.values()].sort(paintOrder).map(e => e.id); }
 function send(added, removed, ms) { self.postMessage({ type: 'chunks', added, removed, order: order(), xmin: c0 * CW, xmax: c1 * CW, ms }); }
@@ -45,7 +45,7 @@ self.onmessage = async (e) => {
   try {
     if (msg.type === 'init') {
       const t = performance.now();
-      const pack = await loadPack();
+      const { pack } = await packFor(msg.opts || {});
       st = init(msg.seed, msg.opts || {}, pack);
       self.postMessage({ type: 'ready', seed: msg.seed, intSeed: st.s });
       c0 = -2; c1 = 7;
