@@ -93,7 +93,7 @@ A projector, two real screens side by side (the pair was tested as two windows o
 | test results, soak and bench JSON | `test-results/` | no (ignored) | no | numbers in this file |
 | the `.p5` reference | worktree `C:\_av\shanshui-av-p5ref` (port 8098) | tag `.p5` | | |
 
-Gate grep on the built preview (`next/` of pages-preview): 0 hits in text files. Two older JPEGs (a P1 strip and a derelict review frame) contain the three bytes "gsd" by chance inside their compressed image data; no metadata.
+Gate grep on the built preview (`next/` of pages-preview): 0 hits in text files. Two older JPEGs (a P1 strip and a derelict review frame) match one of the gate's short patterns by chance (three bytes) inside their compressed image data; no metadata.
 
 ## Next (the section 9 loop)
 1. The 12 h gate: the derelict heavy soak (started after the tag), the e2e suite on `/next/`, sections 1 and 3 re-read (done).
