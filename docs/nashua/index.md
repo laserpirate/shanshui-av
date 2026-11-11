@@ -188,3 +188,28 @@ Made with `node tools/nashua/review-p7.mjs`. 1280 x 720 controller frames, seed 
 ![B1 the map floated over the header](p7_ui_map-float.jpg)
 
 <!-- end p7 frames -->
+
+<!-- p8 strips: made by tools/nashua/review-p8.mjs -->
+## P8 strips (ADDENDUM-B B11, the mirror)
+
+Made with `node tools/nashua/review-p8.mjs`. 1280 x 720 controller frames with `?mirror=1&mon=1`, seed 1, day, fog 0, the default axis (20 px below the water line) and strength (0.85) unless the row says otherwise.
+
+| Frame | What | KB |
+| --- | --- | --- |
+| [p8_mirror_shanshui.jpg](p8_mirror_shanshui.jpg) | shanshui: the next seed (2) below the water line, scrolling with | 152 |
+| [p8_mirror_derelict.jpg](p8_mirror_derelict.jpg) | derelict: the next seed (2) below the water line | 152 |
+| [p8_mirror_nashua_other-bank.jpg](p8_mirror_nashua_other-bank.jpg) | nashua: the other bank (right) below the north bank, turned so each column is the same station | 49 |
+| [p8_mirror_nashua_axis-80.jpg](p8_mirror_nashua_axis-80.jpg) | nashua: the axis at 80 px below the water line | 53 |
+| [p8_mirror_nashua_alt-shanshui.jpg](p8_mirror_nashua_alt-shanshui.jpg) | nashua over shanshui (seed 1), scrolling against, strength 0.6 | 69 |
+
+![shanshui: the next seed (2) below the water line, scrolling with](p8_mirror_shanshui.jpg)
+
+![derelict: the next seed (2) below the water line](p8_mirror_derelict.jpg)
+
+![nashua: the other bank (right) below the north bank, turned so each column is the same station](p8_mirror_nashua_other-bank.jpg)
+
+![nashua: the axis at 80 px below the water line](p8_mirror_nashua_axis-80.jpg)
+
+![nashua over shanshui (seed 1), scrolling against, strength 0.6](p8_mirror_nashua_alt-shanshui.jpg)
+
+<!-- end p8 strips -->

@@ -45,6 +45,12 @@ export const PARAMS = [
   ['light', 'w', 'clock mode: light 0 to 1'],
   ['fog', 'w', 'clock mode: fog 0 to 1'],
   ['water', 'w', 'clock mode: water 0 to 1'],
+  ['mirror', 'c o w', '1, the Mirror panel (a second world below the water)'],
+  ['mon', 'c w', 'with mirror=1: 1 turns the mirror on'],
+  ['maxis', 'c w', 'mirror axis, 0 to 80 css px below the water line'],
+  ['mstr', 'c w', 'mirror strength 0 to 1'],
+  ['mscroll', 'c w', 'mirror scroll: with, against or free'],
+  ['malt', 'c w', 'mirror lower half: other, shanshui, derelict or nashua'],
 ];
 export const PAIR = [
   'Open pair: two output windows as a 2 x 1 wall on this machine. Drag each to its screen, press F in each.',
