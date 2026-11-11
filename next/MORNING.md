@@ -1,13 +1,16 @@
 # MORNING · shanshui-av nashua · 2026-11-11
 
 Preview: **https://laserpirate.github.io/shanshui-av/next/?world=nashua** (the stock app at the root is unchanged, byte for byte).
-Branch `feat/nashua`. Tags `.p1` the nashua world, `.p2` modes, morph, live section and slit-scan, `.p3` the wall, `.p4` platforms and MIDI. One file each: `CHECKPOINT_P1.md` to `CHECKPOINT_P4.md`.
+Branch `feat/nashua`. Tags `.p1` the nashua world, `.p2` modes, morph, live section and slit-scan, `.p3` the wall, `.p4` platforms and MIDI, `.p5` night river, tag stream, print to scale, a second reach and three small tools. One file each: `CHECKPOINT_P1.md` to `CHECKPOINT_P5.md`.
 
 ## Try first (5 minutes)
 - `?world=nashua`: the reach as a section. Keys 1 to 6 for the water levels, K flips the bank, `,` and `.` change the exaggeration, M cycles the modes, X shows the live section, V cycles the slit-scan modes.
 - `?world=nashua&t=1936-03-20`: the time scroll at the 1936 flood (Y on and off, U for March 1936; East Pepperell discharge, an upstream proxy).
 - `?world=nashua&t=1936-03-20&daycycle=1&hour=21`: the night river, with lights by occupancy, bridge lamps and their reflections. The Reach panel has a 1 day/min rate.
 - Export panel, To scale: Arch D or a 36 in roll at 1:500, 1:1000 or 1:2000, never fitted.
+- `?world=nashua&reach=merrimack`: the second reach, 5 km of the Merrimack below the confluence (estimated bed, the Nashua's levels carried).
+- `?world=nashua&t=1936-03-19&hydro=1&ticks=1`: a hydrograph under the fact line and a distance rule along the bottom.
+- An output with `&cap=0.6`: its brightness ceiling, shown on the calibration card.
 
 ## The nanoKONTROL, 10 steps (about 10 minutes)
 The original nanoKONTROL, SCENE light on 1, Chrome or Edge, the preview URL above.
