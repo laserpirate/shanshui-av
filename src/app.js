@@ -111,6 +111,8 @@ if (Qpal && byId.has(Qpal)) { pal.a = Qpal; pal.target = Qpal; }
 const flags = { blackout: false, card: false, panic: false, hold: false, uiHidden: false };
 pushHist(tok(cur.world, cur.seed));
 const weather = new Weather(cfg.weather);
+// ?sonar=1: listen to the sonar bus (mapping table at the top of src/sonar/bus-in.js); off, nothing loads
+const bus = new URLSearchParams(location.search).get('sonar') === '1' ? (await import('./sonar/bus-in.js')).createBusIn() : null;
 
 // ---------- seeds ----------
 function pushHist(seed) {
@@ -279,6 +281,7 @@ function tick(now) {
   requestAnimationFrame(tick);
   try {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (bus) bus.step(dt, { pb, cfg, weather, speedMax: SPEED_MAX, frozen: flags.panic });
     const v0 = pb.velocity;
     if (!flags.panic) { pb.step(dt, now); weather.step(dt); }
     if (outgoing) outgoing.x += v0 * dt;
@@ -298,6 +301,7 @@ function tick(now) {
     showTick(now, dt, pb.velocity);
     qualityTick(now);
     const fs = frameState(now);
+    if (bus) bus.decorate(fs, cur.world);
     lastView = scene.frame(fs, { blackout: flags.blackout, panic: flags.panic });
     lastView.W = canvas.clientWidth; lastView.H = canvas.clientHeight;
     if (chan) chan.postMessage({ type: 'frame', fs, flags: { ...flags }, custom: cfg.gradient ? { ...cfg.gradient, rev: gradRev } : null });
@@ -785,6 +789,7 @@ function hudTick(now) {
   if (flags.panic) f.push('panic');
   if (out.connected && out.info) f.push(`output ${out.info.w} x ${out.info.h} ${Math.round(out.info.fps || 0)} fps${out.info.blank ? ' BLANK' : ''}`);
   if (scene.watch.blank) f.push('watchdog: blank');
+  if (bus) f.push('sonar ' + (bus.sonar.live ? 'live' : 'rest'));
   if (worldOf(cur.world).weather) f.push('weather ' + weather.phase + (cfg.weather.mode === 'auto' ? '' : ' (' + (cfg.weather.mode === 'scrub' ? 'MIDI' : 'pinned') + ')'));
   $('hud-flags').textContent = f.join('   ');
   // countdown to the next automatic change
@@ -821,3 +826,4 @@ window.SSAV = {
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
 };
+if (bus) SSAV.sonar = bus;

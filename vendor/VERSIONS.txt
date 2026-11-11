@@ -1,1 +1,2 @@
 jspdf 4.2.1, svg2pdf.js 2.8.1 (npm, MIT)
+sonar/sonar-in.js: laserpirate/sonar docs/js/sonar-in.js at commit dbddf6b, copied unchanged. The sonar repo is GPL-3.0 because it derives from flora; its README says sonar-in.js holds no flora-derived code, has no imports and stands alone. No other sonar file is copied here.

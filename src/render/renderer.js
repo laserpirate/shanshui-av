@@ -29,7 +29,7 @@ uniform float uMix, uContrast, uInk, uAlpha, uTime, uPaperOn, uPaperMean, uHasTi
 uniform vec2 uDriftA, uDriftB;
 uniform int uPaperA, uPaperB, uKind;
 uniform vec4 uWorld;
-uniform float uFog, uWaterY, uDay;
+uniform float uFog, uWaterY, uDay, uFlash;
 uniform vec3 uLightA, uLightB, uBeaconA, uBeaconB;
 out vec4 o;
 float curve(float i) {
@@ -95,6 +95,7 @@ void main() {
     }
     glowC = lc * lg;
     coreC = mix(lc, vec3(1.0), 0.35) * smoothstep(0.25, 0.75, lg);   // a hot core so small lamps still read
+    if (uFlash > 0.0) { glowC *= 1.0 + uFlash; coreC *= 1.0 + uFlash * 0.5; }   // sonar bus lead note (?sonar=1); 0 otherwise
   }
   vec3 a = look(uLutA, uDriftA, uPaperA, i, paper);
   vec3 b = look(uLutB, uDriftB, uPaperB, i, paper);
@@ -282,7 +283,7 @@ export class Renderer {
     gl.uniform2fv(u.uDriftA, driftOf(f.palA)); gl.uniform2fv(u.uDriftB, driftOf(f.palB));
     gl.uniform1i(u.uPaperA, paperMode(f.palA)); gl.uniform1i(u.uPaperB, paperMode(f.palB));
     const wx = f.weather || NO_WEATHER;
-    gl.uniform1f(u.uFog, wx.fog); gl.uniform1f(u.uWaterY, waterY(wx.water)); gl.uniform1f(u.uDay, wx.light);
+    gl.uniform1f(u.uFog, wx.fog); gl.uniform1f(u.uWaterY, waterY(wx.water)); gl.uniform1f(u.uDay, wx.light); gl.uniform1f(u.uFlash, wx.flash || 0);
     gl.uniform3fv(u.uLightA, lightOf(f.palA)); gl.uniform3fv(u.uLightB, lightOf(f.palB));
     gl.uniform3fv(u.uBeaconA, beaconOf(f.palA)); gl.uniform3fv(u.uBeaconB, beaconOf(f.palB));
     const s = f.scale, camY = f.camY;

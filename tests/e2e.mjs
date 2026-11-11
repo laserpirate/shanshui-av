@@ -718,6 +718,92 @@ await test('derelict-output-fullscreen', async () => {
   return { corr: +r.toFixed(3), fullscreenSd: +fsp.sd.toFixed(1) };
 });
 
+// ---------------------------------------------------------------------------------------------
+// sonar bus in (?sonar=1): a second page posts on BroadcastChannel "sonar-bus" the way sonar's bus.js does.
+await test('sonar-bus', async () => {
+  const { ctx, page } = await newPage('?i=e2e-sonar&seed=7&world=derelict&palette=derelict-rust&sonar=1', { w: 1280, h: 720 });
+  const tx = await ctx.newPage(); watch(tx);
+  await tx.goto(BASE + 'palettes.json');   // any page on the origin
+  await tx.evaluate(() => {
+    const ch = new BroadcastChannel('sonar-bus');
+    window.post = m => ch.postMessage({ ...m, src: 'sonar', at: performance.timeOrigin + performance.now() });
+    window.every = (m, ms) => { clearInterval(window.__iv); window.__iv = setInterval(() => window.post(m), ms); };
+    window.quiet = () => clearInterval(window.__iv);
+  });
+  await hideUI(page);
+  await page.evaluate(() => { SSAV.pb.x = 1200; SSAV.cfg.weather.mode = 'auto'; SSAV.cfg.weather.period = 360; SSAV.weather.p = 0; SSAV.cfg.weather.holds = { rain: 0, fog: 0.2, light: 1 }; });
+  await page.waitForFunction(ready, null, { timeout: 30000 }); await page.waitForTimeout(1500);
+  const M = await page.evaluate(() => SSAV.sonar.map);
+  const sp = () => page.evaluate(() => ({ pb: SSAV.pb.speed, cfg: SSAV.cfg.speed, nudge: SSAV.sonar.nudge, live: SSAV.sonar.sonar.live }));
+  const s0 = await sp();
+  assert(s0.pb === s0.cfg && s0.nudge === 0 && !s0.live, 'at rest before sonar ' + JSON.stringify(s0));
+  // speed: loud and dense rises to the upper bound and never past it; quiet and sparse falls, not under the lower bound
+  await tx.evaluate(() => { post({ t: 'state', key: 'C major', density: 1, forest: 4, setup: '' }); every({ t: 'level', rms: 1, peak: 1, bands: [1, 1, 1] }, 33); });
+  let hi = 0; for (let i = 0; i < 25; i++) { const s = await sp(); hi = Math.max(hi, s.pb / s.cfg); await page.waitForTimeout(150); }
+  const sHi = await sp();
+  await tx.evaluate(() => { post({ t: 'state', key: 'C major', density: 0, forest: 4, setup: '' }); every({ t: 'level', rms: 0, peak: 0, bands: [0, 0, 0] }, 33); });
+  let lo = 9; for (let i = 0; i < 30; i++) { const s = await sp(); lo = Math.min(lo, s.pb / s.cfg); await page.waitForTimeout(150); }
+  assert(sHi.live && sHi.pb / sHi.cfg > 1 + M.speed.max * 0.95 && hi <= 1 + M.speed.max + 1e-9, 'speed up within the bound ' + JSON.stringify({ sHi, hi }));
+  assert(lo < 0.85 && lo >= 1 + M.speed.min - 1e-9, 'speed down within the bound ' + lo);
+  // weather: every everyBars-th bar line steps to the next phase (auto only)
+  await page.evaluate(() => { SSAV.weather.p = 0; });
+  const ph = () => page.evaluate(() => ({ ph: SSAV.weather.phase, p: SSAV.weather.p, steps: SSAV.sonar.steps, skipped: SSAV.sonar.skipped }));
+  const beats = (a, b) => tx.evaluate(([a, b]) => { for (let n = a; n <= b; n++) post({ t: 'beat', beat: n, bar: Math.floor(n / 4), bpm: 90 }); }, [a, b]);
+  const w0 = await ph();
+  await beats(13, 16); await page.waitForTimeout(300);   // bar 3 to bar 4
+  const w1 = await ph();
+  await beats(17, 31); await page.waitForTimeout(300);   // bars 5 to 7: no step
+  const w2 = await ph();
+  await beats(32, 32); await page.waitForTimeout(300);   // bar 8
+  const w3 = await ph();
+  await page.evaluate(() => { SSAV.cfg.weather.mode = 'night'; });
+  await beats(33, 48); await page.waitForTimeout(300);   // bar 12 while pinned: skipped
+  const w4 = await ph();
+  await page.evaluate(() => { SSAV.cfg.weather.mode = 'auto'; SSAV.weather.p = 0; });
+  assert(w0.ph === 'dry' && w1.ph === 'drizzle' && w1.steps === 1 && w2.steps === 1 && w2.ph === 'drizzle' && w3.ph === 'downpour' && w3.steps === 2, 'bar steps ' + JSON.stringify([w0, w1, w2, w3]));
+  assert(w4.steps === 2 && w4.skipped === 1, 'pinned phase not stepped ' + JSON.stringify(w4));
+  // lights: lead notes flash them in the derelict world; other notes do not
+  await page.waitForTimeout(2500);   // weather values settle at p 0 under the holds
+  const shot = async () => PNG.sync.read(await page.screenshot());
+  const brighter = (a, b) => { let n = 0; for (let i = 0; i < a.data.length; i += 4) { const d = (b.data[i] + b.data[i + 1] + b.data[i + 2]) - (a.data[i] + a.data[i + 1] + a.data[i + 2]); if (d > 90) n++; } return n; };
+  // the lights animate (blink, flicker, chase) with the frame time: pin it so only the flash changes pixels
+  await page.evaluate(() => { const f0 = SSAV.scene.frame.bind(SSAV.scene); SSAV.scene.frame = (fs, o) => f0({ ...fs, time: 12.5 }, o); });
+  await page.waitForTimeout(300);
+  const base1 = await shot(); await page.waitForTimeout(400); const base2 = await shot(); await page.waitForTimeout(400); const base3 = await shot();
+  await tx.evaluate(() => every({ t: 'note', voice: 'saw', plant: 1, note: 60, freq: 261.6, vel: 1, lead: false }, 40));
+  await page.waitForTimeout(400);
+  const nonLead = await page.evaluate(() => SSAV.sonar.flash);
+  const nl = await shot();
+  await tx.evaluate(() => every({ t: 'note', voice: 'saw', plant: 1, note: 64, freq: 329.6, vel: 1, lead: true }, 40));
+  await page.waitForTimeout(400);
+  const fl = await page.evaluate(() => ({ flash: SSAV.sonar.flash, out: SSAV.sonar.decorate({ weather: { light: 1 } }, 'derelict').weather.flash, shanshui: SSAV.sonar.decorate({ weather: { light: 1 } }, 'shanshui').weather.flash }));
+  const lit = await shot();
+  const noise = Math.max(brighter(base1, base2), brighter(base2, base3), brighter(base1, base3)), nlN = brighter(base3, nl), litN = brighter(nl, lit);
+  assert(nonLead === 0 && nlN <= noise * 2 + 100, 'non-lead notes flashed ' + JSON.stringify({ nonLead, nlN, noise }));
+  assert(fl.flash > 0.5 && fl.out > 1 && fl.shanshui === undefined, 'flash state ' + JSON.stringify(fl));
+  assert(litN > 300 && litN > noise * 10, 'lights flash on lead notes ' + JSON.stringify({ litN, nlN, noise }));
+  // rest: sonar stops, everything returns to the flag-off behaviour
+  await tx.evaluate(() => quiet());
+  await page.waitForFunction(() => !SSAV.sonar.sonar.live && SSAV.sonar.nudge === 0 && SSAV.sonar.flash === 0, null, { timeout: 15000 });
+  const rest = await sp();
+  assert(rest.pb === rest.cfg, 'speed back to the set speed ' + JSON.stringify(rest));
+  // flag off: the same messages change nothing, and the sonar files never load
+  const off = await ctx.newPage(); watch(off);
+  await off.goto(BASE + '?i=e2e-sonar-off&seed=7&world=derelict&palette=derelict-rust');
+  await off.waitForFunction(() => window.SSAV && SSAV.scene.stats().tiles >= 2, null, { timeout: 30000 });
+  await off.evaluate(() => { SSAV.cfg.weather.mode = 'auto'; SSAV.cfg.weather.period = 360; SSAV.weather.p = 0; });
+  const offSp0 = await off.evaluate(() => SSAV.pb.speed);
+  await tx.evaluate(() => { post({ t: 'state', key: 'C major', density: 1, forest: 4, setup: '' }); every({ t: 'level', rms: 1, peak: 1, bands: [1, 1, 1] }, 33); });
+  await beats(13, 48);
+  await tx.evaluate(() => post({ t: 'note', voice: 'saw', plant: 1, note: 64, freq: 329.6, vel: 1, lead: true }));
+  await off.waitForTimeout(1500);
+  const o = await off.evaluate(() => ({ sonar: 'sonar' in SSAV, pb: SSAV.pb.speed, cfg: SSAV.cfg.speed, ph: SSAV.weather.phase, p: SSAV.weather.p, flash: 'flash' in SSAV.frameState().weather, files: performance.getEntriesByType('resource').map(r => r.name).filter(n => /sonar/.test(n)) }));
+  await tx.evaluate(() => quiet());
+  await ctx.close();
+  assert(!o.sonar && o.pb === o.cfg && o.pb === offSp0 && o.ph === 'dry' && o.p < 0.05 && !o.flash && !o.files.length, 'flag off changed ' + JSON.stringify(o));
+  return { speedHi: +(sHi.pb / sHi.cfg).toFixed(3), speedLo: +lo.toFixed(3), bounds: [1 + M.speed.min, 1 + M.speed.max], steps: [w1.ph, w3.ph], flashPx: litN, noisePx: noise, off: { speed: o.pb, phase: o.ph } };
+});
+
 for (const b of [headless, headed]) if (b) await b.close();
 const failed = results.filter(r => !r.pass);
 const summary = { date: new Date().toISOString(), base: BASE, pass: failed.length === 0 && consoleProblems.length === 0, tests: results.length, failed: failed.map(f => f.name), consoleProblems };

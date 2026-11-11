@@ -173,3 +173,13 @@ Scroll at 300 px/s for 10 s, same seed, Chromium 130 (Playwright 1.48.2) on Pola
 - Far window lights brightened (intensity 0.6 to 0.95) and a hot core added, after the night test showed them under-reading at 720p.
 - MIDI CC 4 (channel 1) is bound to the weather cycle by default, unless learn moved it; clearing it brings it back on reload.
 - The gate greps tracked files for password-like assignments; the gate itself holds no password.
+
+## Sonar bus in (`?sonar=1`, branch sonar-bus-v01, 2026-11-11)
+
+- Receiver: `vendor/sonar/sonar-in.js`, copied unchanged from laserpirate/sonar `docs/js/sonar-in.js` at dbddf6b (no imports, no flora-derived code per the sonar README). No other sonar file is copied. Reverse: delete `vendor/sonar/` and `src/sonar/`, drop the `bus` lines in `src/app.js`.
+- `src/app.js` imports `src/sonar/bus-in.js` only when `?sonar=1`; without the flag no sonar file loads and no code path changes. Mapping table: `MAP` at the top of `src/sonar/bus-in.js`.
+- Speed: set speed x (1 + nudge), nudge = level x 0.6 + (density - 0.6) x 0.4, clamped to -0.25..+0.5, eased 0.6 s. density 0.6 is sonar's default forest density, so a default forest at silence gives 0. Applied to the playback speed only; `cfg.speed` (slider, keys, MIDI) is never written, so nothing persists.
+- Weather: every 4th bar line moves the cycle to the start of the next phase, in auto mode only; a pinned or MIDI-scrubbed cycle is left alone. Steps are dropped during panic. A step is a jump in cycle position; the shown values ease to it as with any change. After sonar stops the cycle runs on from where it is.
+- Lights: a note with lead = true sets flash = vel (0..1), decaying with a 0.35 s time constant; the renderer multiplies glow by 1 + 3 x flash and the hot core by 1 + 1.5 x flash, derelict only. It travels in the frame state (`weather.flash`), so the output window flashes too. Exports never carry it (they use `frameState()`, which the bus does not touch). The shader skips the multiply when flash is 0.
+- Rest: when nothing arrives for 2 s (sonar-in's stale), flash and pending steps clear and the nudge eases to exactly 0, so the playback speed equals the set speed again.
+- Test `sonar-bus` (e2e): a second page posts on `sonar-bus`. The lights check pins the renderer time, because blink and flicker lights change about 390 pixels between shots 400 ms apart; with time pinned that noise is 0 and a lead note brightens about 790 pixels (1280 x 720, seed 7, derelict-rust, daylight held).

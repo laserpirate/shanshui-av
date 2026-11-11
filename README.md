@@ -28,6 +28,7 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?i=<name>` | Instance: its own settings, stars and output channel, so two laptops or two outputs never mix |
 | `?palette=<id>` | Start on a palette from `palettes.json` |
 | `?world=derelict` | Start on the derelict world (shanshui is the default) |
+| `?sonar=1` | Listen to the sonar bus (BroadcastChannel `sonar-bus`, same origin): level and density nudge the scroll speed, bar lines step the weather phase, lead notes flash the derelict lights. Mapping table at the top of `src/sonar/bus-in.js`. Off by default; when sonar stops, every nudge returns to 0 |
 
 `output.html?i=<name>` is the output window for that instance (no UI, writes nothing).
 
@@ -68,7 +69,8 @@ cd tools && npm install          # Playwright 1.48.2 + pngjs, dev only
 node tools/serve.mjs --port 8093
 node tools/gate.mjs              # syntax, links, console errors
 node tests/e2e.mjs               # upstream identity, playback, seeds, palettes, export, blackout, full screen, output, MIDI,
-                                 # worlds: shanshui vs v0.2.0 (--v020=<url of the v0.2.0 tag served>), derelict round trip, weather, lights
+                                 # worlds: shanshui vs v0.2.0 (--v020=<url of the v0.2.0 tag served>), derelict round trip, weather, lights,
+                                 # sonar-bus (?sonar=1 on and off, a second page posting on sonar-bus)
 node tools/preflight.mjs         # every palette on this GPU
 node tools/soak.mjs 30           # 30 min at high speed: heap, fps, DOM, chunks
 node tools/soak.mjs 30 --world=derelict --heavy --worldevery=5 --fpsmin=50 --out=soak-derelict.json
