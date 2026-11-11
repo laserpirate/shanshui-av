@@ -84,6 +84,9 @@ The design pack stays unpublished. /next/ is not promoted. Pages serves from `pa
 ## Site
 | check | result |
 | --- | --- |
-| deploy /next/ | DEPLOY |
-| root byte identity (`deploy-next.mjs --check-live`) | CHECKLIVE |
-| crawl /next/ | CRAWL |
+| deploy /next/ | pages-preview dfe1083: root = main 1f009a1, next/ = a7988f9 (the `.p6` tag); Pages build "built" |
+| root byte identity (`deploy-next.mjs --check-live`) | 134 of 134 files byte-identical to main 1f009a1 |
+| crawl /next/ | 5 pages, 58 requests, 45 linked files, 0 broken, 0 console errors; the live Nashua pack hash 6f84a65ea6634724 (the 1 m rebuild) |
+| p6 tests against the live /next/ | a6-scale, a3-labels, a4-map: 3 of 3 pass |
+
+This file's site rows were filled after the tag, in the commit that follows it.
