@@ -1,5 +1,19 @@
 # WALL
 
+## Two screens as one long picture
+
+**Two windows, one machine.** On the controller press **Open pair** (allow popups). Two output windows open as `wall=2x1`, columns 0 and 1, and follow the controller over the BroadcastChannel.
+Drag each window to its display and press **F** in each one for full screen. The left screen must show column 0.
+World, seed, reach and everything else follow the controller; nothing else to set.
+
+**Two machines, clock mode (no network).** On the controller press **Copy pair links**: two links share one start time `t0`, 10 s ahead.
+Open the first link on the left machine and the second on the right, both full screen (F). Each draws its half from the clock alone.
+The clocks must agree (both on NTP); a small offset is acceptable. A new link pair restarts both from the start of the reach.
+
+**Two machines, the relay.** On one machine run `node tools/wall-server.mjs` (port 8097) and `node tools/serve.mjs --port 8093`; note its address.
+Open `http://ADDRESS:8093/output.html?wall=2x1&col=0&sync=ws://ADDRESS:8097` on the left machine, `col=1` on the right, and the controller with `?sync=ws://ADDRESS:8097`.
+Local network only, pages from that machine (not from https Pages): the relay has no authentication and no `wss://` (decided, ADDENDUM-A A7).
+
 A wall is several output windows, each drawing its slice of one wide virtual canvas. Every chunk is a pure function
 of seed, world and position, so the nodes only have to agree on the state and the time. Nothing is streamed but the
 frame state (a few hundred bytes).

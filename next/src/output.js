@@ -6,6 +6,7 @@ import { Scene, viewOf } from './core/scene.js';
 import { ReachOverlay, TickOverlay, factLine } from './ui/reach.js';
 import { SectionInset } from './ui/section.js';
 import { sOf } from './worlds/nashua/pack.js';
+import { MapInset } from './ui/mapinset.js';
 import { drawTestCard } from './ui/testcard.js';
 import { parseWall, blendOverlay, keystone, drawCard, wsSync, clockState, wallView } from './wall.js';
 import { WORLD_H } from './core/constants.js';
@@ -135,6 +136,8 @@ function clockFs() {
 const overlay = new ReachOverlay($('labels'));
 const ticks = new URLSearchParams(location.search).get('ticks') === '1' ? new TickOverlay($('labels').parentElement) : null;   // ?ticks=1 on this output
 const section = new SectionInset($('section'), $('playhead'));
+// the map inset, when the controller turns it on for the output (off by default; no clicks on an output)
+const mapInset = new MapInset($('labels').parentElement, null);
 let factAt = 0;
 function reach(fs) {
   const top = fs.worlds[fs.worlds.length - 1], w = top ? scene.peek(top.key) : null;
@@ -148,7 +151,8 @@ function reach(fs) {
   overlay.update(w, { cssScale: v.scale, camX, camY: v.camY, W: c.clientWidth }, data && R.labels && !flags.blackout && !fxOn);
   if (ticks) ticks.update(w, { cssScale: v.scale, camX, W: c.clientWidth }, data && !flags.blackout && !fxOn);
   const P = data ? w.pack : null, o = (top && top.opts) || {};
-  section.update(P, { s: P ? sOf(P, top.x + v.viewW / 2, o.bank) : 0, lv: fs.level || 0, ve: o.ve || 10, show: data && !flags.blackout && !fxOn && !!(top.layers && top.layers.includes('sections')), W: c.clientWidth });
+  mapInset.update(w, P ? { s: sOf(P, top.x + v.viewW / 2, o.bank), sL: sOf(P, top.x, o.bank), sR: sOf(P, top.x + v.viewW, o.bank) } : null, !!P && R.map && !flags.blackout && !fxOn, R.mapSize || 'm');
+  section.update(P, { s: P ? sOf(P, top.x + v.viewW / 2, o.bank) : 0, lv: fs.level || 0, ve: o.ve || 2, show: data && !flags.blackout && !fxOn && !!(top.layers && top.layers.includes('sections')), W: c.clientWidth });
   const f = $('facts'), on = data && R.facts && !flags.blackout;
   if (f.hidden === on) f.hidden = !on;
   const now = performance.now();

@@ -20,12 +20,12 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
-OUT_PUB = os.path.join(ROOT, 'data', 'nashua', 'existing')
+OUT_PUB = os.environ.get('NASHUA_OUT') or os.path.join(ROOT, 'data', 'nashua', 'existing')   # NASHUA_OUT: a trial build elsewhere
 OUT_DES = os.path.join(ROOT, 'data', 'local', 'nashua', 'design')
 SRC = json.load(io.open(os.path.join(HERE, 'sources.local.json'), encoding='utf-8'))
 
 FT = 0.3048
-DS = 2.0                      # station spacing, m
+DS = float(os.environ.get('NASHUA_DS') or 1.0)   # station spacing, m (P6: 1 m, was 2; at 8 px per m a 2 m step showed corners; NASHUA_DS for a trial)
 DSEC = 10.0                   # section spacing, m
 SEC_HALF, SEC_STEP = 400.0, 4.0
 SMOOTH_M = 50.0               # triangular window, full width
@@ -33,6 +33,7 @@ EDGE_MAX = 400.0
 BANDS = [(0, 40), (40, 120), (120, 300), (300, 700)]   # m from the water edge, 1 m grid then wide DEM
 FAR = [(700, 1500), (1500, 3000)]                      # wide DEM only
 OCC = ['Residential', 'Commercial', 'Industrial', 'Institutional', 'Mixed', 'Other']
+PRIM = []                     # primary occupancy strings from the structures layer, in first-seen order (P6)
 # absolute levels found in the source lane's water-metrics glossary (v02), as the v06 scroll drew them
 LEVELS_ABS = [
     {'id': 'fema1', 'name': 'Fluvial · 1% Annual Chance Flood (FEMA) 34.63 m (113.6 ft)', 'z': 34.63},
@@ -40,6 +41,53 @@ LEVELS_ABS = [
 ]
 DAM = {'s': 0.0, 'headpond_m': 34.75, 'head_m': 4.92, 'gate_m': 2.44, 'height_m': 10.06, 'crest_length_m': 100.6,
        'source': 'dam figures as used by the source lane scroll (v06)'}
+
+
+def ornl_index():
+    """the structures layer (id and primary occupancy per footprint), centroids for a nearest join"""
+    from shapely.geometry import shape
+    if not SRC.get('ornl'): return [], np.zeros((0, 2))
+    orn = json.load(io.open(SRC['ornl'], encoding='utf-8'))['features']
+    return orn, np.array([[shape(o['geometry']).centroid.x, shape(o['geometry']).centroid.y] for o in orn])
+
+
+def ornl_of(orn, oc, c):
+    """(prim, build_id) of the structure whose centroid is within 2 m of c, else ('Unclassified', None)"""
+    if len(oc):
+        dd = np.hypot(oc[:, 0] - c.x, oc[:, 1] - c.y); j = int(np.argmin(dd))
+        if dd[j] < 2.0: return (orn[j]['properties'].get('prim_occ') or '').strip() or 'Unclassified', orn[j]['properties'].get('build_id')
+    return 'Unclassified', None
+
+
+def nid_structures(R, LEN, near_m=400):
+    """dikes and levees of the national dam inventory within near_m of the route R and inside (0, LEN), at their station"""
+    from shapely.geometry import shape
+    out = []
+    if not SRC.get('nid'): return out
+    for f in json.load(io.open(SRC['nid'], encoding='utf-8'))['features']:
+        p = f['properties']; nm = ((p.get('OTHER_NAMES') or '') + ' ' + (p.get('NAME') or '')).lower()
+        if 'dike' not in nm and 'levee' not in nm: continue
+        pt = shape(f['geometry'])
+        sp = float(R.project(pt)); dist = R.distance(pt)
+        # past an end of the route by at most 150 m: drawn at that end, its position marked approximate
+        at_end = (sp <= 0.5 or sp >= LEN - 0.5) and dist <= 150
+        if dist > near_m or ((sp <= 0.5 or sp >= LEN - 0.5) and not at_end):
+            log('structure', p['NIDID'], 'not in this reach: s', round(sp, 1), 'd', round(dist, 1)); continue
+        a = R.interpolate(max(0, min(sp, LEN - 3) - 3)); b = R.interpolate(min(R.length, max(sp, 3) + 3))
+        side = 1 if (b.x - a.x) * (pt.y - a.y) - (b.y - a.y) * (pt.x - a.x) > 0 else -1
+        if at_end: sp = 2.0 if sp <= 0.5 else LEN - 2.0
+        out.append({'kind': 'dike', 'id': p['NIDID'], 'name': p.get('NAME'), 'other_names': p.get('OTHER_NAMES'), 's': round(sp, 1), 'side': side,
+                    'd_route_m': round(R.distance(pt), 1), 'height_m': round(float(p.get('DAM_HEIGHT') or 0) * FT, 2),
+                    'line': 'a point in the inventory; the line of the dike is not in the data',
+                    'position': ('past this end of the route by %.0f m from the route: drawn at the end, approximate' % dist) if at_end else 'at its station',
+                    'label': (p.get('OTHER_NAMES') or p.get('NAME')) + ' (NID ' + p['NIDID'] + ')'})
+    return out
+
+
+def plan_of(R, LEN, step=10.0):
+    """the route in plan for the map inset (P6, A4): EPSG:32110 m every step m from s = 0 to LEN, north up"""
+    pts = [[round(R.interpolate(float(s)).x, 1), round(R.interpolate(float(s)).y, 1)] for s in np.arange(0, LEN + 1e-6, step)]
+    return {'crs': 'EPSG:32110', 'step_m': step, 'pts': pts, 'note': 'route centreline; the banks are drawn from edge_L and edge_R along its normals'}
 
 
 def log(*a):
@@ -232,7 +280,10 @@ def build(design=False, quick=False):
 
     # buildings, bridges, landmarks
     base = json.load(io.open(SRC['base'], encoding='utf-8'))['features']
-    blds = []
+    # P6: the structures layer the footprints came from (same polygons, EPSG:32110) gives each one an id and a primary
+    # occupancy; joined by nearest centroid within 2 m
+    orn, oc = ornl_index()
+    blds = []; cover = []
     for f in base:
         pr = f['properties']
         if pr.get('kind') != 'building': continue
@@ -240,31 +291,47 @@ def build(design=False, quick=False):
         if geo.geom_type == 'MultiPolygon': geo = max(geo.geoms, key=lambda q: q.area)
         vx = np.array(geo.exterior.coords)
         c = geo.centroid
+        prim, bid = ornl_of(orn, oc, c)
+        # the coverage record (A2): every footprint, where it projects on the route, and what happened to it
+        sp_ = float(R.project(c)); a_ = R.interpolate(max(0, sp_ - 3)); b_ = R.interpolate(min(R.length, sp_ + 3))
+        cv = {'id': bid, 'prim': prim, 'area_m2': round(geo.area, 1), 's': round(sp_, 1), 'd_route_m': round(R.distance(c), 1),
+              'side': 1 if (b_.x - a_.x) * (c.y - a_.y) - (b_.y - a_.y) * (c.x - a_.x) > 0 else -1, 'kept': False, 'why': ''}
+        cover.append(cv)
         ing = bool(g.inside([c.x], [c.y])[0])
         if ing:
             sv = gx.near('s', vx[:, 0], vx[:, 1]).astype(np.float64); sc = float(gx.near('s', [c.x], [c.y])[0])
             side = int(gx.near('side', [c.x], [c.y])[0])
         else:   # outside the 1 m grid: nearest point on the route, wide DEM for the base
-            if R.distance(c) > EDGE_MAX + BANDS[-1][1]: continue
+            if R.distance(c) > EDGE_MAX + BANDS[-1][1]: cv['why'] = 'more than %d m from the route, off the 1 m grid' % (EDGE_MAX + BANDS[-1][1]); continue
             sc = float(R.project(c)); sv = np.array([sc]); side = 0
         if side == 0:
             sp = R.project(c); a = R.interpolate(max(0, sp - 3)); b = R.interpolate(min(R.length, sp + 3))
             side = 1 if (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) > 0 else -1
             if sc <= 0.5: sc = float(sp)
-        if sc <= 0.5 or sc >= LEN - 0.5: continue
+        if sc <= 0.5 or sc >= LEN - 0.5: cv['why'] = 'upstream of the dam' if sc <= 0.5 else 'past the end of the route'; continue
         wd = math.sqrt(max(geo.area, 1.0))
+        # the long side of the footprint (minimum rotated rectangle): a long mill keeps its whole s range
+        mr = np.array(geo.minimum_rotated_rectangle.exterior.coords)
+        lng = max(math.hypot(*(mr[1] - mr[0])), math.hypot(*(mr[2] - mr[1])))
         s0, s1 = float(sv.min()), float(sv.max())
-        if s1 - s0 > 2 * wd + 30: s0, s1 = sc - wd / 2, sc + wd / 2       # inside a bend the s of a footprint is ambiguous
+        if s1 - s0 > max(2 * wd, 1.5 * lng) + 30: s0, s1 = sc - wd / 2, sc + wd / 2       # inside a bend the s of a footprint is ambiguous
         k = int(np.clip(round(sc / DS), 0, len(edge[side]) - 1)) if not quick else int(np.clip(round(sc / (DS * 10)), 0, n - 1))
         d = R.distance(c) - edge[side][k]
         band = int(np.searchsorted([b for _, b in BANDS], max(0.0, d), side='right'))
         zb, _ = elev(vx[:, 0], vx[:, 1])
         wsl = float(gx.lin('ws', [c.x], [c.y])[0])
         occ = pr.get('occ') or 'Other'
+        if prim not in PRIM: PRIM.append(prim)
         blds.append([round(max(0.0, s0), 1), round(min(LEN, s1), 1), side, min(band, len(BANDS)), round(float(np.nanmin(zb)) - wsl, 2),
-                     round(float(pr.get('height_m') or 6.0), 1), OCC.index(occ) if occ in OCC else len(OCC) - 1, round(max(0.0, d), 1)])
+                     round(float(pr.get('height_m') or 6.0), 1), OCC.index(occ) if occ in OCC else len(OCC) - 1, round(max(0.0, d), 1),
+                     PRIM.index(prim), bid if bid is not None else -1])
+        cv.update(kept=True, s=round(sc, 1), side=side, d_edge_m=round(max(0.0, d), 1), band=min(band, len(BANDS)), s0=blds[-1][0], s1=blds[-1][1])
+        cv['why'] = 'drawn' if band <= 3 else 'kept in the pack, not drawn: more than 700 m behind the water edge'
     blds.sort(key=lambda b: (b[0], b[2]))
     log('buildings kept', len(blds), 'of', sum(1 for f in base if f['properties'].get('kind') == 'building'))
+    # structures that are points only in the data: dikes from the national dam inventory, at their station
+    structures = nid_structures(R, LEN)
+    log('structures', structures)
     asm = json.load(io.open(SRC['assembly'], encoding='utf-8'))
     bgeo = [f for f in base if f['properties'].get('kind') == 'bridge']
     bridges = []
@@ -319,8 +386,11 @@ def build(design=False, quick=False):
         'band_value': 'maximum ground elevation inside the band along the station normal, water cells excluded',
         'canopy': 'share of tree canopy cells (land cover class 2) inside the band along the normal',
         'bed': 'measured depth contours interpolated where they cover the centreline (bed_measured 1), the estimated bed proxy elsewhere (0)',
-        'buildings_fields': ['s0', 's1', 'side', 'band', 'base_h', 'height_m', 'occ', 'd_from_edge_m'],
-        'occ_codes': OCC,
+        'buildings_fields': ['s0', 's1', 'side', 'band', 'base_h', 'height_m', 'occ', 'd_from_edge_m', 'prim', 'id'],
+        'occ_codes': OCC, 'prim_codes': PRIM,
+        'building_ids': 'id and prim: build_id and primary occupancy of the structures layer the footprints came from (-1: no match)',
+        'building_span': 's0 to s1 is the footprint\'s s range, unless it is longer than 1.5 x its long side + 30 m (a bend), then its width about the centroid',
+        'structures': structures, 'plan': plan_of(R, LEN),
         'building_heights': 'estimated from footprint area, not surveyed',
         'sources': {
             'terrain': '1 m route grid (existing grade' + (', landform sequence' if design else '') + '), EPSG:32110, from 10 k and 1 k LiDAR DEM cells',
@@ -347,11 +417,15 @@ def build(design=False, quick=False):
         pack['observatories'] = obs
         pack['stations'] = [{**stations[i], 'studies': st[i]['properties'].get('studies', '')} for i in range(len(st))]
         pack['labels'] = {'existing': 'Existing Grade (before landform)', 'design': 'Landform Sequence (after landform)'}
+    pack['_coverage'] = cover
     return pack, A, t0
 
 
 def write(pack, A, out, preview=True):
     os.makedirs(out, exist_ok=True)
+    cover = pack.pop('_coverage', None)
+    if cover is not None:   # every footprint and what happened to it (A2), next to the pack, not in it
+        io.open(os.path.join(out, 'coverage.json'), 'w', encoding='utf-8', newline='\n').write(json.dumps({'footprints': cover}, ensure_ascii=False, indent=0))
     index, blobs, off = [], [], 0
     for k, v in A.items():
         v = np.asarray(v)

@@ -47,6 +47,12 @@ body.clean { cursor: none; }
 #hud-facts:empty { display: none; }
 .reach-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; contain: strict; }
 .reach-labels[hidden] { display: none; }
+/* the map inset (P6): bottom left above the bar, squared, clickable */
+.map-inset { position: absolute; left: var(--pad); bottom: 120px; z-index: 3; box-shadow: 0 0 0 1px var(--bor); }
+.map-inset canvas { display: block; }
+.map-inset canvas + canvas { position: absolute; left: 0; top: 0; cursor: pointer; }
+.map-inset[hidden] { display: none; }
+body.uihidden .map-inset { bottom: var(--pad); }
 .reach-ticks .rt { position: absolute; left: 0; bottom: 0; width: 0; height: 12px; border-left: 1px solid rgba(236, 238, 242, 0.85); will-change: transform; }
 .reach-ticks .rt.major { height: 22px; border-left-width: 2px; }
 .reach-ticks .rt span { position: absolute; left: 6px; bottom: 2px; font: 500 18px 'Plex Cond', sans-serif; color: #07090e; background: rgba(236, 238, 242, 0.88); padding: 0 6px; white-space: nowrap; }

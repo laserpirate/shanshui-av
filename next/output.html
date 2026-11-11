@@ -21,6 +21,10 @@ body.idle { cursor: none; }
 .playhead { position: fixed; top: 0; bottom: 0; left: 50%; width: 0; border-left: 2px solid rgba(46, 74, 140, 0.85); pointer-events: none; }
 .section-inset { position: fixed; right: 16px; top: 16px; pointer-events: none; }
 .playhead[hidden], .section-inset[hidden] { display: none; }
+.map-inset { position: fixed; left: 16px; bottom: 56px; pointer-events: none; }
+.map-inset canvas { display: block; }
+.map-inset canvas + canvas { position: absolute; left: 0; top: 0; }
+.map-inset[hidden] { display: none; }
 #facts { position: fixed; left: 16px; bottom: 12px; font: 500 18px 'IBM Plex Sans Condensed', sans-serif; color: #07090e; background: rgba(236, 238, 242, 0.88); padding: 4px 8px; pointer-events: none; }
 </style>
 </head>
@@ -35,6 +39,6 @@ body.idle { cursor: none; }
 <div id="wallblend" class="wall-blend-root"></div>
 <canvas id="wallcard" class="wall-card" hidden></canvas>
 <div id="black"></div>
-<script type="module" src="src/output.js?v=27df0e1"></script>
+<script type="module" src="src/output.js?v=a7988f9"></script>
 </body>
 </html>

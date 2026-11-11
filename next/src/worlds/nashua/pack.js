@@ -2,13 +2,18 @@
 // pack.json holds the manifest, objects and an index into pack.bin (Float32 and Uint8 arrays). See
 // tools/nashua/build-pack.py for what each array means. Heights are m above the local water surface ws(s).
 //
-// Scroll space:  x = s * HX (left bank view, downstream to the right) or (len - s) * HX (right bank view, the
+// Scroll space:  x = s * hx (left bank view, downstream to the right) or (len - s) * hx (right bank view, the
 // mirror: standing in the river facing the right bank, downstream is on your left).
-//                y = YW - h * HX * ve   (h in m above ws(s); ve the vertical exaggeration)
+//                y = YW - h * hx * ve   (h in m above ws(s); ve the vertical exaggeration)
+// hx (world px per m along the river) is a setting since P6: the pack a world draws carries it as pack.hx
+// (packFor sets it from opts.hx), so every reader of the same pack agrees on the scale.
 
-export const HX = 2;              // world px per m along the river (the finite scroll's own scale)
+export const HX_DEF = 8, HX_MIN = 2, HX_MAX = 12;
+export const HX = HX_DEF;         // the default scale (readers of a loaded pack use hxOf(pack))
+export const hxOf = pack => (pack && pack.hx) || HX_DEF;
+export const clampHX = v => Math.max(HX_MIN, Math.min(HX_MAX, Math.round(+v) || HX_DEF));
 export const YW = 600;            // world y of the local water surface ws(s)
-export const VE_DEF = 10, VE_MIN = 1, VE_MAX = 20;
+export const VE_DEF = 2, VE_MIN = 1, VE_MAX = 20;
 export const PACK_URL = new URL('../../../data/nashua/existing/pack.json', import.meta.url).href;
 // a second reach from the same pipeline (tools/nashua/build-reach.py): the Merrimack below the confluence
 export const REACHES = { nashua: PACK_URL, merrimack: new URL('../../../data/nashua/merrimack/pack.json', import.meta.url).href };
@@ -61,15 +66,16 @@ export function blendPacks(a, b, t) {
 export async function packFor(opts = {}) {
   const r = reachOf(opts.reach);
   const p = await loadPack(REACHES[r]);
-  if (r !== 'nashua' || !(opts.morph > 0)) return { pack: p, designMissing: false };
+  const hx = clampHX(opts.hx || HX_DEF);
+  if (r !== 'nashua' || !(opts.morph > 0)) return { pack: { ...p, hx }, designMissing: false };
   const d = await loadPack(DESIGN_URL).catch(() => null);
-  return { pack: d ? blendPacks(p, d, opts.morph) : p, designMissing: !d };
+  return { pack: { ...(d ? blendPacks(p, d, opts.morph) : p), hx }, designMissing: !d };
 }
 
 export const bankKey = bank => bank === 'R' ? 'R' : 'L';
-export const reachW = pack => pack.route_len_m * HX;
-export const xOf = (pack, s, bank) => (bank === 'R' ? pack.route_len_m - s : s) * HX;
-export const sOf = (pack, x, bank) => bank === 'R' ? pack.route_len_m - x / HX : x / HX;
+export const reachW = pack => pack.route_len_m * hxOf(pack);
+export const xOf = (pack, s, bank) => (bank === 'R' ? pack.route_len_m - s : s) * hxOf(pack);
+export const sOf = (pack, x, bank) => bank === 'R' ? pack.route_len_m - x / hxOf(pack) : x / hxOf(pack);
 
 // linear sample of a per-station array at s (clamped to the reach)
 export function at(pack, name, s) {
@@ -93,7 +99,7 @@ export function waterLine(pack, { bank = 'L', ve = VE_DEF } = {}, lv = 0) {
   for (let i = 0; i < WL_N; i++) {
     const x = x0 + (i + 0.5) / WL_N * w;
     const s = Math.max(0, Math.min(pack.route_len_m, sOf(pack, x, bank)));
-    out[i] = YW - levelAt(pack, lv, s) * HX * ve;
+    out[i] = YW - levelAt(pack, lv, s) * hxOf(pack) * ve;
   }
   return { data: out, x0, w };
 }

@@ -159,6 +159,7 @@ def build(quick=False):
 
     # buildings and bridges where the layer reaches
     base = json.load(io.open(SRC['base'], encoding='utf-8'))['features']
+    orn, oc = bp.ornl_index()
     blds = []
     for f in base:
         pr = f['properties']
@@ -166,6 +167,7 @@ def build(quick=False):
         geo = shape(f['geometry'])
         if geo.geom_type == 'MultiPolygon': geo = max(geo.geoms, key=lambda g: g.area)
         c = geo.centroid
+        prim, bid = bp.ornl_of(orn, oc, c)
         if R.distance(c) > EDGE_MAX + BANDS[-1][1]: continue
         sc = float(R.project(c))
         if sc <= 0.5 or sc >= LEN - 0.5: continue
@@ -180,8 +182,12 @@ def build(quick=False):
         occ = pr.get('occ') or 'Other'
         blds.append([round(max(0.0, sc - wd / 2), 1), round(min(LEN, sc + wd / 2), 1), side, min(band, len(BANDS)), round(float(np.nanmin(zb)) - float(ws[k]), 2),
                      round(float(pr.get('height_m') or 6.0), 1), OCC.index(occ) if occ in OCC else len(OCC) - 1, round(max(0.0, d), 1)])
+        if prim not in bp.PRIM: bp.PRIM.append(prim)
+        blds[-1] += [bp.PRIM.index(prim), bid if bid is not None else -1]
     blds.sort(key=lambda b: (b[0], b[2]))
     log('buildings kept', len(blds))
+    structures = bp.nid_structures(R, LEN)
+    log('structures', structures)
     bridges = []
     for f in base:
         if f['properties'].get('kind') != 'bridge': continue
@@ -219,7 +225,8 @@ def build(quick=False):
         'smoothing': first['smoothing'], 'bands_m_from_water_edge': BANDS, 'far_m_from_water_edge': FAR,
         'band_value': first['band_value'], 'canopy': first['canopy'],
         'bed': 'no measurements on this reach: the estimated proxy (0.9 m at the bank to 4.3 m mid-channel)',
-        'buildings_fields': first['buildings_fields'], 'occ_codes': OCC, 'building_heights': first['building_heights'],
+        'buildings_fields': first['buildings_fields'], 'occ_codes': OCC, 'prim_codes': bp.PRIM, 'building_ids': first.get('building_ids'),
+        'building_heights': first['building_heights'], 'structures': structures, 'plan': bp.plan_of(R, LEN),
         'sources': {
             'centreline': 'medial path of the land cover water class, smoothed over 200 m',
             'terrain': 'wide LiDAR DEM 4 m cells (feet, converted), EPSG:32110',
