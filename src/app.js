@@ -155,7 +155,7 @@ function setSeed(seed, { history = true, why = '', world = cur.world, keepX } = 
   renderSeed(); renderWorld();
   log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
-function reseed(why) { setSeed(newSeed(), { why }); }
+function reseed(why) { setSeed(newSeed(), isData() ? { why, keepX: pb.x } : { why }); }
 function setWorld(w, why = 'world') {
   if (!WORLDS[w] || w === cur.world) return;
   setSeed(cur.seed, { world: w, why });
@@ -770,18 +770,29 @@ function setVE(v, now) {
 }
 function setLevel(i) { cfg.nashua.level = Math.max(0, Math.min(nLevels() - 1, i)); lvScrub = false; persist(); renderReach(); }
 function scrubLevel(v) { cfg.nashua.level = lvShown = Math.max(0, Math.min(1, v)) * (nLevels() - 1); renderReach(); persist(); }
-let endsArmed = true;
+let endsArmed = true, pingLogged = -Infinity;
 function endsTick() {
-  if (!isData() || fade) return;
+  if (!isData()) return;
   const P = curPack(); if (!P) return;
-  const W = reachW(P), vw = viewW(), xc = pb.x + vw / 2, v = pb.velocity;
+  const W = reachW(P), vw = viewW(), xc = pb.x + vw / 2, v = pb.velocity, mode = cfg.nashua.ends;
+  // ping-pong is a rule on the travel direction, so it holds through fades and reseeds: past an end and heading out,
+  // turn back (setting the direction again is harmless)
+  if (mode === 'pingpong') {
+    const turn = xc < 0 && pb.dir < 0 ? 1 : xc > W && pb.dir > 0 ? -1 : 0;
+    if (turn) {
+      setDir(turn); pb.k = 0;
+      const now = performance.now();
+      if (now - pingLogged > 60000) { pingLogged = now; log('info', 'ping-pong at the ' + (turn > 0 ? 'left' : 'right') + ' end (logged once a minute)'); }
+    }
+    return;
+  }
+  if (fade) return;
   const out = (xc > W && v > 0) || (xc < 0 && v < 0);
   if (!out) { if (xc >= 0 && xc <= W) endsArmed = true; return; }
   if (!endsArmed) return;
   endsArmed = false;
-  const right = xc > W, mode = cfg.nashua.ends;
-  if (mode === 'pingpong') { setDir(-pb.dir); pb.k = 0; log('info', 'ping-pong at the ' + (right ? 'right' : 'left') + ' end'); }
-  else if (mode === 'loop') setSeed(cur.seed, { world: cur.world, keepX: right ? -vw / 2 : W - vw / 2, history: false, why: 'loop' });
+  const right = xc > W;
+  if (mode === 'loop') setSeed(cur.seed, { world: cur.world, keepX: right ? -vw / 2 : W - vw / 2, history: false, why: 'loop' });
   else setSeed(cur.seed, { world: 'shanshui', history: false, why: 'end of the reach, hand over' });
 }
 let factAt = 0;

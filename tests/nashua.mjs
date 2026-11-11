@@ -139,6 +139,26 @@ await test('nashua-levels', async () => {
   return { levels: out[0].levels, y: out.map(o => +o.y.toFixed(1)), scrubMid: +mid.y.toFixed(1), meanDiff: +d.toFixed(2) };
 });
 
+await test('nashua-pingpong-reseed', async () => {
+  // ping-pong at show speed with a reseed every 1.5 s: the view centre stays within half a view of the reach
+  // (the 30 min soak found it running off the left end when a reseed crossfade met a turn)
+  const { ctx, page } = await newPage(BASE, '?i=nt-pp&seed=1&world=nashua&ends=pingpong', { w: 1600, h: 900 });
+  await page.evaluate(LOOK); await settle(page);
+  await page.evaluate(() => { SSAV.cfg.speed = 1500; SSAV.pb.speed = 1500; SSAV.pb.play(); });
+  const xs = [];
+  for (let i = 0; i < 64; i++) {
+    await page.waitForTimeout(250);
+    if (i % 6 === 5) await page.evaluate(() => SSAV.reseed('test'));
+    xs.push(await page.evaluate(() => { const w = SSAV.world(), P = w && w.pack; return { xc: SSAV.x + SSAV.viewW() / 2, W: P ? P.route_len_m * 2 : 4917.6, vw: SSAV.viewW(), world: SSAV.worldName }; }));
+  }
+  await page.evaluate(() => SSAV.pb.pause());
+  await ctx.close();
+  const W = xs[0].W, vw = xs[0].vw, mn = Math.min(...xs.map(o => o.xc)), mx = Math.max(...xs.map(o => o.xc));
+  assert(xs.every(o => o.world === 'nashua'), 'left the world');
+  assert(mn > -vw / 2 && mx < W + vw / 2, 'ran off the reach: centre from ' + mn.toFixed(0) + ' to ' + mx.toFixed(0) + ' (reach 0 to ' + W.toFixed(0) + ')');
+  return { min: Math.round(mn), max: Math.round(mx), reach: Math.round(W), turnsSeen: xs.filter((o, i) => i > 1 && Math.sign(o.xc - xs[i - 1].xc) !== Math.sign(xs[i - 1].xc - xs[i - 2].xc)).length };
+});
+
 await test('nashua-labels', async () => {
   const { ctx, page } = await newPage(BASE, '?i=nt-lab&seed=1&world=nashua');
   await page.evaluate(LOOK); await goS(page, 870); await settle(page);

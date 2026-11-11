@@ -56,8 +56,10 @@ function walk(dir, base = dir, out = []) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const dir = process.argv[2] ? path.resolve(process.argv[2]) : null;
-  const files = dir ? walk(dir) : execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  const arg = process.argv[2] ? path.resolve(process.argv[2]) : null;
+  const single = arg && fs.statSync(arg).isFile();          // one file, or a folder walked, or the repo's files
+  const dir = arg ? (single ? path.dirname(arg) : arg) : null;
+  const files = single ? [path.basename(arg)] : dir ? walk(dir) : execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   const base = dir || ROOT;
   const hits = [], vendor = [];
   for (const f of files) {
