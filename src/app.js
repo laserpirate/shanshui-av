@@ -5,7 +5,7 @@ import { loadPalettes, hexRgb } from './core/palettes.js';
 import { Scene, viewOf } from './core/scene.js';
 import { Playback, pxToWorld } from './core/playback.js';
 import { INSTANCE, load, save, saveNow } from './core/store.js';
-import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download } from './export/export.js';
+import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download, scaleWindow } from './export/export.js';
 import { drawTestCard } from './ui/testcard.js';
 import { KEYS } from './ui/keys.js';
 import { Midi, MIDI_TARGETS, PRESETS, presetFor, mapOf } from './ui/midi.js';
@@ -14,10 +14,12 @@ import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
 import { ReachOverlay, factLine } from './ui/reach.js';
 import { SectionInset } from './ui/section.js';
-import { xOf, sOf, reachW } from './worlds/nashua/pack.js';
+import { xOf, sOf, reachW, HX } from './worlds/nashua/pack.js';
 import { MODES, MODE_ORDER, MODE_DEFAULT, LAYERS, layersOf } from './worlds/nashua/modes.js';
 import { wsSync } from './wall.js';
 import { loadGauge, dayOf, isoOf, qAt, lvOfQ, timeFact, MARCH_1936 } from './worlds/nashua/gauge.js';
+import { sunElev, lightOfElev, doyOf, hhmm, FAST as DAY_FAST } from './worlds/nashua/sun.js';
+import { TagStream } from './worlds/nashua/tags.js';
 import { offline } from './offline.js';
 import { Ladder } from './core/ladder.js';
 
@@ -33,14 +35,14 @@ const DEF = {
   q: 'auto', big: false,
   gradient: null,
   midi: {}, midiDev: {}, master: 1,
-  exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150, lights: true, rain: false },
+  exp: { format: 'archd', portrait: false, fit: 1, yAlign: 0.5, margin: 0.5, border: false, label: false, dpi: 150, lights: true, rain: false, sheet: 'archd', scaleN: 1000 },
   weather: { mode: 'auto', period: 360, holds: {} },
   // slit-scan / time-smear (off by default): mode off|strip|smear|displace, source scroll|video
   fx: { mode: 'off', source: 'scroll', slit: 0.5, width: 2, dir: 1, depth: 64, mix: 1, freeze: false, axis: 'x', slope: 1 },
   // data world (nashua): bank in view, vertical exaggeration, water level position (0 = first named level),
   // what happens at the ends of the reach, labels in the controller and on the output, fact line on the output
   // mode: a list of layers (modes.js); sections: the live section toggle (X) on top of any mode
-  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false, mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false } },
+  nashua: { bank: 'L', ve: 10, level: 0, ends: 'handover', labels: true, outLabels: false, outFacts: false, mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false, dayCycle: false, hold: 21 } },
 };
 const saved = load();
 const cfg = deepMerge(structuredClone(DEF), saved.cfg || {});
@@ -258,6 +260,7 @@ function showTick(now, dt, vWorld) {
 // ---------- quality ----------
 // the ladder (core/ladder.js) when quality is auto; the output runs its own
 const ladder = new Ladder((l, m) => log(l, m));
+ladder.startFrom(scene.renderer.gl);
 function qualityTick(now) {
   const want = cfg.q === 'auto' ? ladder.tick(now, scene.fps, !flags.blackout && !document.hidden).q : +cfg.q;
   scene.q = want * (out.connected && !out.fullPreview ? 0.5 : 1);
@@ -310,7 +313,7 @@ function frameState(now) {
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
     u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign, master: cfg.master },
     time: (now - time0) / 1000,
-    weather: weather.values(),
+    weather: weatherNow(),
     v: pb.velocity, t: Date.now(),
     fx: cfg.fx.mode !== 'off' ? { ...cfg.fx, vt: fxVideo.currentTime || 0 } : null,
   };
@@ -329,6 +332,7 @@ function tick(now) {
     if (!lvScrub) lvShown += (cfg.nashua.level - lvShown) * Math.min(1, dt * 1.5);
     if (Math.abs(cfg.nashua.level - lvShown) < 1e-4) lvShown = cfg.nashua.level;
     endsTick();
+    tagsTick(now);
     if (outgoing) outgoing.x += v0 * dt;
     // reseed fade starts when the new world covers the view (or after 4 s)
     if (fade && !fade.t0) {
@@ -735,6 +739,15 @@ const midiOut = new MidiOut({ onLog: log });
 $('m-out').onclick = () => { midiOut.setOn(!midiOut.on); renderMidi(); };
 $('m-outch').onchange = e => { midiOut.ch = +e.target.value - 1; };
 setInterval(() => { if (midiOut.on) midiOut.tick(midiScene()); }, 1000 / 60);
+// the tag stream for a score (worlds/nashua/tags.js, docs/nashua/score-tags.md): ?tags=1, data worlds only
+const tagStream = new URLSearchParams(location.search).get('tags') === '1' ? new TagStream(INSTANCE) : null;
+function tagsTick(now) {
+  if (!tagStream) return;
+  const P = isData() ? curPack() : null;
+  if (!P) { tagStream.reset(); return; }
+  const b = cfg.nashua.bank, vw = viewW();
+  tagStream.frame({ P, bank: b, s: sOf(P, pb.x + vw / 2, b), sL: sOf(P, pb.x, b), sR: sOf(P, pb.x + vw, b), lv: lvShown, x: pb.x, velocity: pb.velocity, weather: weatherNow(), now });
+}
 // what MIDI out reads at the playhead; per pack and bank the terrain and density curves are worked out once
 let msPrep = null;
 function midiPrep(P, bank) {
@@ -753,7 +766,7 @@ function midiPrep(P, bank) {
 }
 let seedByte = { seed: null, v: 0 };
 function midiScene() {
-  const w = weather.values();
+  const w = weatherNow();
   if (seedByte.seed !== cur.seed) { let h = 0; for (const ch of String(cur.seed)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; seedByte = { seed: cur.seed, v: (h % 128) / 127 }; }
   const cc = { [OUT_CC.light]: w.light, [OUT_CC.rain]: w.rain, [OUT_CC.seed]: seedByte.v, [OUT_CC.play]: pb.playing ? 1 : 0 };
   let s = null, features = null;
@@ -812,6 +825,8 @@ $('grad-reset').onclick = () => { cfg.gradient = null; applyGradient(); persist(
 // ---------- export ----------
 const E = cfg.exp;
 bindSeg('e-format', () => E.format, v => { E.format = v; renderExport(); });
+bindSeg('e-sheet', () => E.sheet, v => { E.sheet = v; renderExport(); });
+bindSeg('e-scale', () => String(E.scaleN), v => { E.scaleN = +v; renderExport(); });
 bindSeg('e-orient', () => E.portrait ? 'portrait' : 'landscape', v => { E.portrait = v === 'portrait'; renderExport(); });
 bindRange('e-fit', 'fit', f2, E, renderExport);
 bindRange('e-yalign', 'yAlign', f2, E, renderExport);
@@ -832,20 +847,29 @@ function viewForExport() {
   const v = viewOf(W, H, cfg.zoom, cfg.yAlign);
   return { W, H, scale: v.scale, camX: pb.x, camY: v.camY };
 }
-function geom() { return frameGeom(E, viewForExport()); }
+// to scale (data worlds only): the world's px per m, the exaggeration and the reach length go into the geometry
+function geom() {
+  const scaled = E.format === 'scale' && isData() && curPack();
+  return frameGeom(scaled ? { ...E, hx: HX, ve: cfg.nashua.ve, reachW: reachW(curPack()) } : { ...E, format: E.format === 'scale' ? 'archd' : E.format }, viewForExport());
+}
 function renderExport() {
   const g = geom();
   const dpi = E.dpi;
   const px = g.unit === 'in' ? [Math.round(g.pageW * dpi), Math.round(g.pageH * dpi)] : [g.pageW * 2, g.pageH * 2];
-  $('e-info').textContent = (g.unit === 'in' ? `Arch D ${g.pageW} x ${g.pageH} in, print ${g.printW} x ${g.printH} in, ` : `View ${g.pageW} x ${g.pageH}, `) +
-    `scroll ${Math.round(g.worldW)} px wide, PNG ${px[0]} x ${px[1]}`;
+  $('e-info').textContent = g.scale ? scaleWindow(g) + `; PNG ${px[0]} x ${px[1]}`
+    : (E.format === 'scale' ? 'To scale: data worlds only (nashua); this is Arch D. ' : '') +
+      (g.unit === 'in' ? `Arch D ${g.pageW} x ${g.pageH} in, print ${g.printW} x ${g.printH} in, ` : `View ${g.pageW} x ${g.pageH}, `) + `scroll ${Math.round(g.worldW)} px wide, PNG ${px[0]} x ${px[1]}`;
   $('e-orient').style.display = $('e-margin').parentElement.style.display = $('e-dpi').style.display = $('e-here').style.display = g.unit === 'in' ? '' : 'none';
-  $('e-fit').parentElement.style.display = $('e-yalign').parentElement.style.display = g.unit === 'in' ? '' : 'none';
+  $('e-yalign').parentElement.style.display = g.unit === 'in' ? '' : 'none';
+  // a stated scale has no fit
+  $('e-fit').parentElement.style.display = g.unit === 'in' && !g.scale ? '' : 'none';
+  $('e-sheet').style.display = $('e-scale').style.display = E.format === 'scale' ? '' : 'none';
+  if (g.scale && g.scale.sheet === 'roll') $('e-orient').style.display = 'none';
 }
 // frame overlay: what an Arch D export will contain, in screen space
 function frameTick() {
   const el = $('frame');
-  const show = !$('p-export').hidden && E.format === 'archd' && lastView;
+  const show = !$('p-export').hidden && (E.format === 'archd' || E.format === 'scale') && lastView;
   el.hidden = !show;
   if (!show) return;
   const g = geom(), s = cssScale(), v = viewForExport();
@@ -853,7 +877,7 @@ function frameTick() {
   el.style.top = ((g.y0 - v.camY) * s) + 'px';
   el.style.width = (g.worldW * s) + 'px';
   el.style.height = (g.worldH * s) + 'px';
-  $('frame-tag').textContent = `Arch D ${g.pageW} x ${g.pageH} in   x ${Math.round(g.x0)}`;
+  $('frame-tag').textContent = g.scale ? `1:${g.scale.N} ${g.scale.sheet === 'roll' ? 'roll ' + g.pageW.toFixed(0) + ' in' : 'Arch D'}   x ${Math.round(g.x0)}` : `Arch D ${g.pageW} x ${g.pageH} in   x ${Math.round(g.x0)}`;
 }
 let exporting = false;
 async function runExport(kind) {
@@ -892,6 +916,8 @@ async function runExport(kind) {
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     st.textContent = `Saved ${name}${extra}, ${(blob.size / 1048576).toFixed(1)} MB, ${secs} s`;
     log('info', 'export ' + name + ' ' + secs + ' s');
+    // a stated-scale print logs its window (what was cropped or cut, never rescaled)
+    if (g.scale) { const w = scaleWindow(g); log('info', 'export window: ' + w); window.__lastExport.window = w; window.__lastExport.scale = { ...g.scale, k: g.k, pageW: g.pageW, pageH: g.pageH }; }
   } catch (e) {
     st.textContent = 'Export failed: ' + e.message;
     log('error', 'export: ' + e.message);
@@ -977,6 +1003,10 @@ loadGauge().then(g => {
   const T = cfg.nashua.time;
   if (TQ && /^\d{4}-\d{2}-\d{2}$/.test(TQ)) { T.on = true; T.d = dayOf(g, TQ); }
   if (!(T.d >= 0 && T.d < g.qf.length)) T.d = dayOf(g, MARCH_1936) - 19;
+  // ?daycycle=1 and ?hour=HH[.h] (local standard time) for the day cycle
+  const UQ = new URLSearchParams(location.search), HQ = UQ.get('hour');
+  if (UQ.has('daycycle')) T.dayCycle = UQ.get('daycycle') !== '0';
+  if (HQ != null && isFinite(+HQ)) { T.d = Math.floor(T.d) + Math.max(0, Math.min(23.99, +HQ)) / 24; T.hold = +HQ; }
   $('r-time').max = g.qf.length - 1;
   renderTime();
 }).catch(e => log('warn', 'time scroll: gauge record not loaded (' + (e && e.message || e) + ')'));
@@ -986,8 +1016,10 @@ function setTime(o) {
   if (o.on != null) T.on = o.on;
   if (o.run != null) T.run = o.run;
   if (o.rate != null) T.rate = o.rate;
-  if (gauge && o.iso) T.d = dayOf(gauge, o.iso);
-  if (gauge && o.frac != null) T.d = Math.round(o.frac * (gauge.qf.length - 1));
+  // a new date keeps the hour of the day (the day cycle's clock)
+  const hr = T.d - Math.floor(T.d);
+  if (gauge && o.iso) T.d = dayOf(gauge, o.iso) + hr;
+  if (gauge && o.frac != null) T.d = Math.round(o.frac * (gauge.qf.length - 1)) + hr;
   if (!T.on) T.run = false;
   persist(); renderTime();
 }
@@ -996,23 +1028,40 @@ function timeTick(dt) {
   if (!T.on || !gauge || !isData()) return;
   const P = curPack(); if (!P) return;
   if (T.run && !flags.blackout) { T.d += T.rate * dt; if (T.d >= gauge.qf.length - 1) T.d = 0; }
+  if (!dayFast()) T.hold = (T.d - Math.floor(T.d)) * 24;
   cfg.nashua.level = lvShown = lvOfQ(gauge, P, qAt(gauge, T.d));
   const now = performance.now();
   if (now - timeShownAt > 250) { timeShownAt = now; renderTime(); }
 }
-const timeText = () => (cfg.nashua.time.on && gauge && isData() ? timeFact(gauge, cfg.nashua.time.d) : null);
+// day cycle: the hour inside the scroll's day (held above DAY_FAST day/s) and the light of the sun at the reach
+const dayFast = () => cfg.nashua.time.run && cfg.nashua.time.rate > DAY_FAST;
+const dayOn = () => cfg.nashua.time.on && cfg.nashua.time.dayCycle && !!gauge && isData();
+function dayLight() {
+  if (!dayOn()) return null;
+  const T = cfg.nashua.time;
+  return lightOfElev(sunElev(doyOf(gauge.d0 + Math.floor(T.d)), T.hold));
+}
+// the weather this frame: the day cycle owns the light when it is on (rain, wind, water and fog stay the weather's)
+function weatherNow() { const w = weather.values(), l = dayLight(); return l == null ? w : { ...w, light: l }; }
+const timeText = () => {
+  if (!(cfg.nashua.time.on && gauge && isData())) return null;
+  const T = cfg.nashua.time, f = timeFact(gauge, T.d);
+  return dayOn() ? f + '  ' + hhmm(T.hold) + ' EST, day cycle' + (dayFast() ? ' (hour held at this rate)' : '') : f;
+};
 function renderTime() {
   const T = cfg.nashua.time;
   $('r-time-on').classList.toggle('on', T.on); $('r-time-on').textContent = T.on ? 'Time on' : 'Time off';
   $('r-time-run').classList.toggle('on', T.run); $('r-time-run').textContent = T.run ? 'Pause' : 'Run';
+  $('r-time-day').classList.toggle('on', !!T.dayCycle);
   for (const b of $('r-time-rate').children) b.classList.toggle('on', +b.dataset.v === T.rate);
   if (gauge) { $('r-time').value = Math.round(T.d); $('r-time-out').textContent = isoOf(gauge, T.d); }
 }
 $('r-time-on').onclick = () => setTime({ on: !cfg.nashua.time.on });
 $('r-time-run').onclick = () => setTime({ on: true, run: !cfg.nashua.time.run });
 $('r-time-1936').onclick = () => setTime({ on: true, run: true, iso: '1936-03-01' });
+$('r-time-day').onclick = () => { cfg.nashua.time.dayCycle = !cfg.nashua.time.dayCycle; setTime({ on: true }); };
 for (const b of $('r-time-rate').children) b.onclick = () => setTime({ rate: +b.dataset.v });
-$('r-time').addEventListener('input', e => { cfg.nashua.time.d = +e.target.value; setTime({ on: true, run: false }); });
+$('r-time').addEventListener('input', e => { const T = cfg.nashua.time; T.d = +e.target.value + (T.d - Math.floor(T.d)); setTime({ on: true, run: false }); });
 let endsArmed = true, pingLogged = -Infinity;
 function endsTick() {
   if (!isData()) return;
@@ -1259,5 +1308,5 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
+  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get tags() { return tagStream ? tagStream.ring.slice() : null; }, tagScene: () => (tagStream ? tagStream.scene : null), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

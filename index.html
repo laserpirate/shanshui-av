@@ -80,8 +80,8 @@
     <div id="r-levels" class="list rlevels"></div>
     <label class="sl">Level <input type="range" id="r-level" min="0" max="4" step="0.01"><output></output></label>
     <h4>Time (Nashua River at East Pepperell, upstream proxy)</h4>
-    <div class="row"><button id="r-time-on">Time off</button><button id="r-time-run">Run</button><button id="r-time-1936">March 1936</button></div>
-    <div class="row seg" id="r-time-rate"><button data-v="1">1 day/s</button><button data-v="30">30 days/s</button><button data-v="365">1 year/s</button></div>
+    <div class="row"><button id="r-time-on">Time off</button><button id="r-time-run">Run</button><button id="r-time-1936">March 1936</button><button id="r-time-day">Day cycle</button></div>
+    <div class="row seg" id="r-time-rate"><button data-v="0.0166667">1 day/min</button><button data-v="1">1 day/s</button><button data-v="30">30 days/s</button><button data-v="365">1 year/s</button></div>
     <label class="sl">Date <input type="range" id="r-time" min="0" max="1" step="1"><output id="r-time-out"></output></label>
     <h4>Morph</h4>
     <label class="sl morph"><input type="range" id="r-morph" min="0" max="1" step="0.05"><output></output></label>
@@ -144,7 +144,9 @@
 
   <section id="p-export" class="panel" hidden>
     <h3>Export</h3>
-    <div class="row seg" id="e-format"><button data-v="view">View</button><button data-v="archd">Arch D</button></div>
+    <div class="row seg" id="e-format"><button data-v="view">View</button><button data-v="archd">Arch D</button><button data-v="scale">To scale</button></div>
+    <div class="row seg" id="e-sheet"><button data-v="archd">Arch D</button><button data-v="roll">Roll 36 in</button></div>
+    <div class="row seg" id="e-scale"><button data-v="500">1:500</button><button data-v="1000">1:1000</button><button data-v="2000">1:2000</button></div>
     <div class="row seg" id="e-orient"><button data-v="landscape">Landscape</button><button data-v="portrait">Portrait</button></div>
     <label class="sl">Fit <input type="range" id="e-fit" min="0.25" max="3" step="0.01"><output></output></label>
     <label class="sl">Vertical <input type="range" id="e-yalign" min="0" max="1" step="0.01"><output></output></label>

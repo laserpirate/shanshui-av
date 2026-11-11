@@ -22,8 +22,10 @@ const W = 960, H = 540, OV = 64;
 
 const results = [], consoleProblems = [];
 const browser = await chromium.launch({ headless: false, args: [...GPU, '--window-size=1000,640'] });
+// the relay-kill test stops its relay on purpose: the browser's own connection errors to that port are expected
+const KILL_PORT = 8199, EXPECTED = new RegExp(`WebSocket connection to 'ws://127\\.0\\.0\\.1:${KILL_PORT}/' failed`);
 function watch(page) {
-  page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') consoleProblems.push({ url: page.url(), text: m.text().slice(0, 300) }); });
+  page.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !EXPECTED.test(m.text())) consoleProblems.push({ url: page.url(), text: m.text().slice(0, 300) }); });
   page.on('pageerror', e => consoleProblems.push({ url: page.url(), text: 'pageerror: ' + e.message }));
 }
 const assert = (c, msg) => { if (!c) throw new Error(msg); };
@@ -153,7 +155,9 @@ await test('wall-blend-and-card', async () => {
   const cardOff = await a.evaluate(() => document.getElementById('wallcard').hidden);
   await b.keyboard.press('c');
   const cardB = await b.evaluate(() => !document.getElementById('wallcard').hidden);
+  const status = await b.evaluate(() => SSOUT.cardStatus());
   await shot(b, 'card-col1');
+  assert(/^clock mode .*offset .*drift .*frames/.test(status), 'card status line: ' + status);
   await ctx.close();
   assert(ra.length === 1 && ra[0].side === 'right' && ra[0].w === '200px', 'col 0 blend ' + JSON.stringify(ra));
   assert(rb.length === 1 && rb[0].side === 'left' && rb[0].w === '200px', 'col 1 blend ' + JSON.stringify(rb));
@@ -169,6 +173,115 @@ await test('wall-blend-and-card', async () => {
   assert(worst < 0.01, 'blend light does not sum to 1, worst ' + worst.toFixed(4));
   assert(cardOn && cardOff && cardB, 'card toggles: start ' + cardOn + ', C hides ' + cardOff + ', C shows ' + cardB);
   return { worstLightSumErr: +worst.toFixed(5), mid: A[8] };
+});
+
+// 3 x 1 wall against one canvas: three nodes (no overlap, no bezel) and one output as wide as the whole wall, all
+// from the same frozen frame. At each seam the columns either side must be the reference's columns.
+await test('wall-3x1-seam', async () => {
+  const w = 640, h = 360, ctx = await browser.newContext({ viewport: { width: w, height: h } });
+  const ctl = await page(ctx, '?i=wall-3&seed=7&world=shanshui&palette=original');
+  await ctl.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.scene.stats().tiles >= 1, null, { timeout: 60000 });
+  await ctl.evaluate(() => { SSAV.pb.pause(); SSAV.pb.x = 1500; SSAV.cfg.weather && Object.assign(SSAV.cfg.weather, { rain: 0, fog: 0 }); });
+  const n = [];
+  for (let c = 0; c < 3; c++) n.push(await page(ctx, `output.html?i=wall-3&wall=3x1&col=${c}&row=0&overlap=0&bezel=0`));
+  const ref = await ctx.newPage(); watch(ref); await ref.setViewportSize({ width: 3 * w, height: h }); await ref.goto(BASE + 'output.html?i=wall-3');
+  for (const p of [...n, ref]) await tilesUp(p);
+  await ctl.waitForTimeout(2500);
+  await ctl.evaluate(() => { window.requestAnimationFrame = () => 0; });
+  await ctl.waitForTimeout(3000);
+  const S = []; for (let c = 0; c < 3; c++) S.push(await shot(n[c], 'seam-col' + c));
+  const R = await shot(ref, 'seam-ref');
+  await ctx.close();
+  const B = 4, seams = [];
+  for (let c = 0; c < 2; c++) {
+    const left = bandDiff(S[c], w - B, R, (c + 1) * w - B, B), right = bandDiff(S[c + 1], 0, R, (c + 1) * w, B);
+    seams.push({ seam: c + 1, left: +left.toFixed(3), right: +right.toFixed(3) });
+  }
+  // an unrelated band of the reference, to show the match is informative
+  const ctrl = bandDiff(S[1], 0, R, 0, B);
+  assert(S.every(s => spread(s) > 30) && spread(R) > 30, 'a window is blank');
+  assert(seams.every(s => s.left < 2 && s.right < 2), 'seams differ from the single canvas: ' + JSON.stringify(seams));
+  assert(ctrl > 4, 'the seam match is not informative (unrelated band differs by ' + ctrl.toFixed(2) + ')');
+  return { seams, unrelated: +ctrl.toFixed(2) };
+});
+
+// the relay dies mid-run and comes back: the node runs on at the last speed, then follows the relay again
+async function relay(port) {
+  const srv = spawn(process.execPath, [path.join(ROOT, 'tools', 'wall-server.mjs'), '--port', String(port), '--host', '127.0.0.1'], { stdio: ['ignore', 'pipe', 'inherit'] });
+  await new Promise(r => srv.stdout.once('data', r));
+  return srv;
+}
+// the controller keeps (Date.now, x) for every frame; at the node's (t, x) the error is x minus the controller's x
+// at t, interpolated (one machine: the relay's clock offset is under a millisecond here, and reported)
+const RECORD = () => { window.__rec = []; const f = () => { __rec.push([Date.now(), SSAV.pb.x]); if (__rec.length > 600) __rec.splice(0, 300); requestAnimationFrame(f); }; requestAnimationFrame(f); };
+const ctlAt = (ctl, t) => ctl.evaluate(t => { const r = __rec; for (let i = r.length - 1; i > 0; i--) if (r[i - 1][0] <= t && r[i][0] >= t) { const k = r[i][0] === r[i - 1][0] ? 0 : (t - r[i - 1][0]) / (r[i][0] - r[i - 1][0]); return r[i - 1][1] + k * (r[i][1] - r[i - 1][1]); } return null; }, t);
+async function nodeErr(ctl, p) {
+  const s = await p.evaluate(() => ({ x: SSOUT.shown.x, t: SSOUT.shown.t - (SSOUT.sync ? SSOUT.sync.offset : 0), fb: SSOUT.fallback, open: SSOUT.sync && SSOUT.sync.open, off: SSOUT.sync ? SSOUT.sync.offset : 0 }));
+  await ctl.waitForTimeout(50);
+  const cx = await ctlAt(ctl, Math.round(s.t));
+  return { ...s, err: cx == null ? null : s.x - cx };
+}
+
+await test('wall-relay-kill-recover', async () => {
+  let srv = await relay(KILL_PORT);
+  const sync = `&sync=ws://127.0.0.1:${KILL_PORT}`, V = 120;
+  const c0 = await browser.newContext({ viewport: { width: W, height: H } }), c1 = await browser.newContext({ viewport: { width: W, height: H } });
+  try {
+    const ctl = await page(c0, `?i=wall-kill&seed=5&world=shanshui${sync}`);
+    await ctl.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.scene.stats().tiles >= 1, null, { timeout: 60000 });
+    const nd = await page(c1, node(0, sync));
+    await tilesUp(nd);
+    await ctl.evaluate(V => { SSAV.cfg.speed = V; SSAV.pb.speed = V; SSAV.pb.play(); }, V);
+    await ctl.evaluate(RECORD);
+    await ctl.waitForTimeout(4000);
+    const before = await nodeErr(ctl, nd), VW = await ctl.evaluate(() => SSAV.pb.velocity);
+    srv.kill(); srv = null;
+    await ctl.waitForTimeout(3500);
+    const lost1 = await nodeErr(ctl, nd);
+    await ctl.waitForTimeout(1000);
+    const lost2 = await nodeErr(ctl, nd);
+    srv = await relay(KILL_PORT);
+    await nd.waitForFunction(() => SSOUT.sync.open && !SSOUT.fallback, null, { timeout: 15000 });
+    await ctl.waitForTimeout(2500);
+    const after = await nodeErr(ctl, nd);
+    const logs = await ctl.evaluate(() => [...document.querySelectorAll('#log li, #log div, .log li')].map(e => e.textContent).filter(t => /wall sync/.test(t)).slice(-4));
+    assert(Math.abs(before.err) < 3 && !before.fb, 'before the kill: ' + JSON.stringify(before));
+    assert(lost1.fb && !lost1.open && lost2.fb, 'the node did not notice the relay was gone: ' + JSON.stringify([lost1, lost2]));
+    const ran = lost2.x - lost1.x, dtS = (lost2.t - lost1.t) / 1000;
+    assert(Math.abs(ran / dtS - VW) < VW * 0.1, 'the node stopped or ran at the wrong speed without the relay: ' + (ran / dtS).toFixed(1) + ' px/s, controller ' + VW.toFixed(1));
+    assert(Math.abs(lost2.err) < 30, 'without the relay the node wandered ' + lost2.err.toFixed(1) + ' px from the controller');
+    assert(Math.abs(after.err) < 3 && after.open && !after.fb, 'after the relay came back: ' + JSON.stringify(after));
+    return { errBefore: +before.err.toFixed(2), errLost: +lost2.err.toFixed(2), speedLost: +(ran / dtS).toFixed(1), speedController: +VW.toFixed(1), errAfter: +after.err.toFixed(2), logs };
+  } finally { if (srv) srv.kill(); await c0.close(); await c1.close(); }
+});
+
+// drift over time: a 3 x 1 wall on the relay, the controller playing at constant speed; every 5 s each node's drawn x
+// is checked against the controller's x at the same instant. Must stay under one frame of travel (world speed / 60).
+const DRIFT_MIN = +((args.find(a => a.startsWith('--drift-min=')) || '').slice(12) || 10);
+await test('wall-drift', async () => {
+  const PORT = 8197, srv = await relay(PORT), sync = `&sync=ws://127.0.0.1:${PORT}`, V = 120;
+  const ctxs = [], nodes = [];
+  try {
+    const c0 = await browser.newContext({ viewport: { width: 640, height: 360 } }); ctxs.push(c0);
+    const ctl = await page(c0, `?i=wall-drift&seed=9&world=shanshui${sync}`);
+    await ctl.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.scene.stats().tiles >= 1, null, { timeout: 60000 });
+    for (let c = 0; c < 3; c++) { const cx = await browser.newContext({ viewport: { width: 640, height: 360 } }); ctxs.push(cx); nodes.push(await page(cx, `output.html?wall=3x1&col=${c}&row=0&overlap=0${sync}`)); }
+    for (const p of nodes) await tilesUp(p);
+    await ctl.evaluate(V => { SSAV.cfg.speed = V; SSAV.pb.speed = V; SSAV.pb.play(); }, V);
+    await ctl.evaluate(RECORD);
+    await ctl.waitForTimeout(5000);
+    const vw = await ctl.evaluate(() => SSAV.pb.velocity), frame = vw / 60;   // one frame of travel, world px
+    const errs = [], t0 = Date.now();
+    while (Date.now() - t0 < DRIFT_MIN * 60000) {
+      for (const p of nodes) { const e = await nodeErr(ctl, p); if (e.err != null) errs.push(Math.abs(e.err)); }
+      await ctl.waitForTimeout(5000);
+    }
+    const worst = Math.max(...errs), mean = errs.reduce((a, b) => a + b, 0) / errs.length;
+    const offs = await Promise.all(nodes.map(p => p.evaluate(() => SSOUT.sync.offset)));
+    assert(errs.length >= 3 * Math.floor(DRIFT_MIN * 6), 'too few samples: ' + errs.length);
+    assert(worst < frame, `drift ${worst.toFixed(2)} px is a frame or more (${frame.toFixed(2)} px at ${vw.toFixed(1)} world px/s)`);
+    return { minutes: DRIFT_MIN, samples: errs.length, worstPx: +worst.toFixed(3), meanPx: +mean.toFixed(3), worstFrames: +(worst / frame).toFixed(3), offsetsMs: offs };
+  } finally { srv.kill(); for (const c of ctxs) await c.close(); }
 });
 
 await browser.close();

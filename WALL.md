@@ -37,7 +37,9 @@ Open `output.html` with:
 Use either bezel (flat screens) or overlap (projectors), not both. Every node of a wall must have the same size in css px.
 
 The calibration card shows a 100 px grid, the node's place, the overlap band, the frame and a centre cross. Line up
-neighbouring grids across the band, then press C.
+neighbouring grids across the band, then press C. Its bottom line, updated twice a second: how the node is synced
+(same machine, relay, relay lost, clock mode), its clock offset to the relay, the drift (how far each new frame
+landed from where the node had extrapolated, worst of the last 10 s, in px and in frames) and its fps.
 
 ## Keep the nodes together
 
@@ -50,6 +52,9 @@ Three ways, pick one:
    its clock offset to the relay by ping (best of the last 8 by round trip), so all nodes extrapolate the scroll to
    the same instant. The relay has no dependencies and no authentication: keep it on a closed show network.
    `http://<that machine>:8097/` reports clients and frames relayed.
+   If the relay goes (closed, or 2 s without a frame), each node runs on from the last frame at its speed, turning
+   at the nashua reach ends, and reconnects every second; give the nodes `&t0=` as well and they switch to clock mode
+   instead. Blackout and panic need the relay: they reach a node only while it is connected.
 3. **Clock mode (no network).** Give every node the same `&t0=<epoch ms>&speed=<px/s>` plus `world`, `seed`,
    `palette`. The position is a function of UTC time alone: nashua ping-pongs over the whole reach, the endless
    worlds scroll on. Nodes stay together as long as their clocks do (sync them to the same NTP server). No controller.
@@ -79,6 +84,13 @@ output.html?wall=2x1&col=1&row=0&bezel=30&world=nashua&seed=1&t0=1794355200000&s
 - a controller and two nodes in separate browser contexts stay together through `tools/wall-server.mjs`
 - the keystone puts the four corners where asked
 - the two blend ramps add to full light across the band at gamma 2.2
-- the calibration card starts with `cal=1` and toggles with C
+- the calibration card starts with `cal=1` and toggles with C, and carries the sync and drift line
+- a 3 x 1 wall against one output as wide as the whole wall: the columns either side of each seam are the reference's
+- the relay is killed mid-run: the node runs on at the controller's speed, and follows again when the relay is back
+- drift over 10 min on a 3 x 1 wall through the relay: every node within one frame of travel of the controller
+
+Not tested here: several machines, real projectors, real clocks drifting apart. To test on the night: open the
+calibration card on every node, check the drift line stays under one frame, then pull the relay's network cable for
+10 s and watch the nodes run on and rejoin.
 
 `node tests/wall-server.mjs` checks the relay itself: ping clock, relay to every output, 200 kB frames, a client leaving.
