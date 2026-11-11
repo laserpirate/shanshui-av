@@ -1,6 +1,7 @@
 // Local static server for offline shows: no internet, no dependencies.
 // Adapted from posthuman-vj/serve.mjs (laserpirate/posthuman).
-//   node tools/serve.mjs [--port 8080]   ->  http://localhost:8080/
+//   node tools/serve.mjs [--port 8080] [--host 0.0.0.0]   ->  http://localhost:8080/
+// The default listens on this machine only; --host 0.0.0.0 serves a LAN wall (a closed show network: no auth).
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
@@ -9,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const i = process.argv.indexOf('--port');
 const PORT = i > -1 ? Number(process.argv[i + 1]) : 8080;
+const hi = process.argv.indexOf('--host');
+const HOST = hi > -1 ? process.argv[hi + 1] : '127.0.0.1';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -28,7 +31,8 @@ http.createServer((req, res) => {
     return res.end(JSON.stringify(list));
   }
   const p = path.join(ROOT, rel.replace(/\/$/, '/index.html'));
-  if (!p.startsWith(ROOT) || /[\/\\](node_modules|\.git)([\/\\]|$)/.test(p) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
+  // inside the folder only; never git, packages or the local source paths (tools/nashua/sources.local.json)
+  if (!p.startsWith(ROOT + path.sep) || /[\/\\](node_modules|\.git)([\/\\]|$)|\.local\.json$/i.test(p) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
   const type = TYPES[path.extname(p).toLowerCase()] || 'application/octet-stream', size = fs.statSync(p).size;
   // byte ranges, so a video can seek and loop
   const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
@@ -41,4 +45,4 @@ http.createServer((req, res) => {
   }
   res.writeHead(200, { 'content-type': type, 'accept-ranges': 'bytes', 'content-length': size, 'cache-control': 'no-store' });
   fs.createReadStream(p).pipe(res);
-}).listen(PORT, '127.0.0.1', () => console.log(`serving ${ROOT} at http://localhost:${PORT}/  (Ctrl+C to stop)`));
+}).listen(PORT, HOST, () => console.log(`serving ${ROOT} at http://${HOST === '127.0.0.1' ? 'localhost' : HOST}:${PORT}/  (Ctrl+C to stop)`));
