@@ -95,13 +95,15 @@ let factAt = 0;
 function reach(fs) {
   const top = fs.worlds[fs.worlds.length - 1], w = top ? scene.peek(top.key) : null;
   const R = fs.reach || {}, data = !!(w && w.meta && w.meta.data);
+  // labels and the section inset follow the live scroll; over a slit-scan picture they would float, so they rest
+  const fxOn = !!(fs.fx && fs.fx.mode && fs.fx.mode !== 'off');
   const c = $('gl'), LF = scene.lastFrame, q = scene.q || 1;
   // on a wall node, the scene's own view (its slice); css px = buffer px / q
   const v = LF && LF.v ? { scale: LF.v.scale / q, viewW: LF.v.viewW, camY: LF.v.camY } : viewOf(c.clientWidth, c.clientHeight, fs.u.zoom, fs.u.yAlign);
   const camX = (top ? top.x : 0) + (LF ? LF.dx || 0 : 0);
-  overlay.update(w, { cssScale: v.scale, camX, camY: v.camY, W: c.clientWidth }, data && R.labels && !flags.blackout);
+  overlay.update(w, { cssScale: v.scale, camX, camY: v.camY, W: c.clientWidth }, data && R.labels && !flags.blackout && !fxOn);
   const P = data ? w.pack : null, o = (top && top.opts) || {};
-  section.update(P, { s: P ? sOf(P, top.x + v.viewW / 2, o.bank) : 0, lv: fs.level || 0, ve: o.ve || 10, show: data && !flags.blackout && !!(top.layers && top.layers.includes('sections')), W: c.clientWidth });
+  section.update(P, { s: P ? sOf(P, top.x + v.viewW / 2, o.bank) : 0, lv: fs.level || 0, ve: o.ve || 10, show: data && !flags.blackout && !fxOn && !!(top.layers && top.layers.includes('sections')), W: c.clientWidth });
   const f = $('facts'), on = data && R.facts && !flags.blackout;
   if (f.hidden === on) f.hidden = !on;
   const now = performance.now();

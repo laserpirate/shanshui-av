@@ -648,7 +648,7 @@ function midiPanic() {
 }
 // clean full-window: no controls, the stage fills the window (browsers refuse real full screen from MIDI; F does that)
 function toggleClean() { flags.clean = !flags.clean; body.classList.toggle('clean', flags.clean); if (flags.clean !== flags.uiHidden) toggleUI(); }
-let midiNote = '';
+let midiNote = '', midiPicked = false;
 const midiDev = () => midi.devices[0] || '';
 const midi = new Midi({
   map: cfg.midi, onLog: log,
@@ -666,7 +666,8 @@ const midi = new Midi({
   },
   onChange() {
     cfg.midi = { ...midi.map };
-    const d = midiDev(); if (d) { cfg.midiDev = cfg.midiDev || {}; cfg.midiDev[d] = { map: cfg.midi, preset: midi.presetName }; }
+    // per-device maps are kept only once Enable has picked this device's map (wiring the ports calls this first)
+    const d = midiDev(); if (d && midiPicked) { cfg.midiDev = cfg.midiDev || {}; cfg.midiDev[d] = { map: cfg.midi, preset: midi.presetName }; }
     persist(); renderMidi();
   },
 });
@@ -688,6 +689,8 @@ async function enableMidi() {
   const d = midiDev(), saved = d && cfg.midiDev && cfg.midiDev[d];
   if (saved && saved.map) { midi.setMap(saved.map, saved.preset || null); log('info', 'MIDI: the map learned for ' + d); }
   else if (d) applyPreset(presetFor(d), 'picked by port name ' + d);
+  midiPicked = true;
+  if (d) { cfg.midiDev = cfg.midiDev || {}; cfg.midiDev[d] = { map: { ...midi.map }, preset: midi.presetName }; persist(); }
   midiOut.enable(midi.access);
   renderMidi();
 }
@@ -1040,9 +1043,9 @@ function reachTick() {
   const w = scene.peek(cur.key);
   // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
   const vs = lastView ? (lastView.H / WORLD_H) * cfg.zoom : cssScale();
-  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels);
+  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off');
   const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
-  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || 10, show: isData() && !flags.blackout && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
+  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || 10, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
   const now = performance.now();
   if (now - factAt < 250) return;
   factAt = now;
@@ -1256,5 +1259,5 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
+  setBank, setVE, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

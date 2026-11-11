@@ -217,8 +217,10 @@ await test('midi-out', async () => {
   const x0 = await p.evaluate(async () => { const m = await import(new URL('src/worlds/nashua/pack.js', location.href).href); return m.xOf(SSAV.world().pack, 869.7, 'L') - SSAV.viewW() / 2 - 400; });
   await p.evaluate(x => { SSAV.pb.x = x; }, x0);
   await p.waitForTimeout(300);
+  const sFrom = await p.evaluate(() => SSAV.midiScene().s);
   for (let i = 0; i < 20; i++) { await p.evaluate(() => { SSAV.pb.x += 40; }); await p.waitForTimeout(40); }
   await p.waitForTimeout(1000);
+  const sTo = await p.evaluate(() => SSAV.midiScene().s);
   const sent = await p.evaluate(() => window.__sent);
   await p.click('#m-out');
   await ctx.close();
@@ -226,7 +228,7 @@ await test('midi-out', async () => {
   const ons = sent.filter(m => (m[0] & 0xf0) === 0x90 && m[2] > 0).length, offs = sent.filter(m => (m[0] & 0xf0) === 0x80).length;
   assert(offSent === 0, 'MIDI out sent ' + offSent + ' messages while off');
   for (const n of [20, 21, 22, 23, 24, 26]) assert(ccs.has(n), 'CC ' + n + ' never sent: ' + [...ccs]);
-  assert(ons >= 1 && offs >= 1, 'no note for the bridge (on ' + ons + ', off ' + offs + ')');
+  assert(ons >= 1 && offs >= 1, 'no note for the bridge (on ' + ons + ', off ' + offs + ', s ' + sFrom + ' to ' + sTo + ', x0 ' + x0 + ')');
   return { messages: sent.length, ccs: [...ccs].sort((a, b) => a - b), noteOns: ons };
 });
 

@@ -54,7 +54,8 @@ await test('wall-overlap-broadcast', async () => {
   const ctl = await page(ctx, '?i=wall-bc&seed=7&world=shanshui&palette=original');
   await ctl.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.scene.stats().tiles >= 1, null, { timeout: 60000 });
   await ctl.evaluate(() => { SSAV.pb.pause(); SSAV.cfg.weather && Object.assign(SSAV.cfg.weather, { rain: 0, fog: 0 }); });
-  const n0 = await page(ctx, node(0)), n1 = await page(ctx, node(1));
+  // same instance as the controller: the BroadcastChannel is per instance
+  const n0 = await page(ctx, node(0, '&i=wall-bc')), n1 = await page(ctx, node(1, '&i=wall-bc'));
   await tilesUp(n0); await tilesUp(n1);
   await ctl.waitForTimeout(1500);
   // stop the controller: the nodes keep its last frame; after 1 s of silence their extrapolation stops changing
@@ -164,7 +165,8 @@ await test('wall-blend-and-card', async () => {
   // each ramp starts dark at the node's outer edge of the band; stop i of node 0 and stop 16 - i of node 1 are the same spot
   const sums = A.map((x, i) => Math.pow(1 - x, 2.2) + Math.pow(1 - B[16 - i], 2.2));
   const worst = Math.max(...sums.map(s => Math.abs(s - 1)));
-  assert(worst < 0.002, 'blend light does not sum to 1, worst ' + worst.toFixed(4));
+  // the browser keeps gradient alpha to 8 bits (1/255); at gamma 2.2 that allows about 0.009 of light
+  assert(worst < 0.01, 'blend light does not sum to 1, worst ' + worst.toFixed(4));
   assert(cardOn && cardOff && cardB, 'card toggles: start ' + cardOn + ', C hides ' + cardOff + ', C shows ' + cardB);
   return { worstLightSumErr: +worst.toFixed(5), mid: A[8] };
 });

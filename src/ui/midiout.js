@@ -41,7 +41,9 @@ export class MidiOut {
       if (this.sent.get(k) !== b) { this.sent.set(k, b); this.send([0xb0 | this.ch, +k, b]); }
     }
     if (sc.prog != null && this.sent.get('prog') !== sc.prog) { this.sent.set('prog', sc.prog); this.send([0xc0 | this.ch, sc.prog & 127]); }
-    if (sc.s != null && this.lastS != null && sc.features && Math.abs(sc.s - this.lastS) < 200) {
+    // every feature passed since the last tick sounds, even when a hidden window's timers run slow (a jump of
+    // more than 1 km is a world change or a jump, not travel, and plays nothing)
+    if (sc.s != null && this.lastS != null && sc.features && Math.abs(sc.s - this.lastS) < 1000) {
       for (const f of sc.features) if ((this.lastS - f.s) * (sc.s - f.s) < 0) this.note(f.note, f.vel, f.ms);
     }
     this.lastS = sc.s;

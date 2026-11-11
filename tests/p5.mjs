@@ -48,8 +48,8 @@ await test('time-low-and-run', async () => {
   await p.waitForTimeout(400);
   const lvLow = await p.evaluate(() => SSAV.lvShown);
   const d0 = await p.evaluate(() => { SSAV.setTime({ iso: '1936-03-01', rate: 30, run: true }); return SSAV.time.d; });
-  await p.waitForTimeout(2000);
-  const r = await p.evaluate(() => ({ d: SSAV.time.d, lv: SSAV.lvShown }));
+  // 2 s at 30 days/s from 1 March 1936 passes the 20 March peak: the highest level seen must reach the 1936 level
+  const r = await p.evaluate(() => new Promise(done => { let lv = 0; const t0 = performance.now(); const f = () => { lv = Math.max(lv, SSAV.lvShown); if (performance.now() - t0 < 2000) requestAnimationFrame(f); else done({ d: SSAV.time.d, lv }); }; requestAnimationFrame(f); }));
   // a level key or the level slider takes the water back by hand
   await p.keyboard.press('2');
   await p.waitForTimeout(300);
@@ -58,7 +58,7 @@ await test('time-low-and-run', async () => {
   assert(lvLow === 0, 'low flow (Nov 2026) level ' + lvLow);
   const days = r.d - d0;
   assert(days > 40 && days < 80, 'ran ' + days.toFixed(1) + ' days in 2 s at 30 days/s');
-  assert(r.lv > 3, 'mid-March 1936 level ' + r.lv.toFixed(2));
+  assert(r.lv > 3.95, 'peak level passing 1936-03-20: ' + r.lv.toFixed(3));
   assert(!after.on && after.level === 1, 'key 2 did not take the level back ' + JSON.stringify(after));
   return { lvLow, days: +days.toFixed(1), lvMarch: +r.lv.toFixed(2) };
 });
