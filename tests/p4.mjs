@@ -34,18 +34,32 @@ function diff(a, b) { let s = 0; for (let i = 0; i < a.data.length; i += 4) for 
 
 // ---------- pure ----------
 await test('ladder', async () => {
-  const { Ladder, RUNGS } = await import(pathToFileURL(path.join(ROOT, 'src', 'core', 'ladder.js')).href);
+  const { Ladder, RUNGS, rungForRenderer } = await import(pathToFileURL(path.join(ROOT, 'src', 'core', 'ladder.js')).href);
   const logs = [], L = new Ladder((l, m) => logs.push(m), 'auto');
   let t = 0;
   const run = (fps, ms) => { for (const end = t + ms; t < end; t += 100) L.tick(t, fps, true); };
   run(60, 5000); assert(L.i === 0, 'moved at 60 fps');
-  run(40, 4500); assert(L.i === 1, 'did not step down after 4 s under 50: ' + L.i);
-  run(40, 30000); assert(L.i === RUNGS.length - 1, 'did not reach the bottom: ' + L.i);
+  run(40, 30000); assert(L.i === 0, 'stepped down at 40 fps (the rule is under 24): ' + L.i);
+  run(20, 4500); assert(L.i === 0, 'stepped down before 5 s under 24: ' + L.i);
+  run(20, 1000); assert(L.i === 1, 'did not step down after 5 s under 24: ' + L.i);
+  run(20, 30000); assert(L.i === RUNGS.length - 1, 'did not reach the bottom: ' + L.i);
   run(60, 30000); assert(L.i === RUNGS.length - 1, 'stepped up within the hold');
   // the first step up comes once the hold (60 s from the last step down) is over, one rung at a time
   let n = 0; while (L.i === RUNGS.length - 1 && n++ < 600) { L.tick(t, 60, true); t += 100; }
   assert(L.i === RUNGS.length - 2, 'did not step up after the hold: ' + L.i);
-  const holdBefore = L.hold; run(40, 4500); assert(L.hold === holdBefore * 2, 'a quick fall back did not double the hold: ' + L.hold);
+  const holdBefore = L.hold; run(20, 5500); assert(L.hold === holdBefore * 2, 'a quick fall back did not double the hold: ' + L.hold);
+  // start rung from the renderer string
+  const starts = {
+    'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x00002206) Direct3D11 vs_5_0 ps_5_0, D3D11)': 0,
+    'V3D 4.2': 4, 'VideoCore IV HW': 4, 'Mali-G52': 3, 'Adreno (TM) 640': 3,
+    'ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)': 2,
+    'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)': 0, 'Apple M1': 0,
+    'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)': 0,
+  };
+  for (const [s, want] of Object.entries(starts)) assert(rungForRenderer(s) === want, 'start rung for ' + s + ': ' + rungForRenderer(s));
+  const S = new Ladder(() => {}, 'auto'); S.startFrom({ getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => 'V3D 4.2', RENDERER: 2 });
+  assert(S.rung.q === 0.5, 'a Pi did not start at the bottom rung');
+  S.reset(); assert(S.i === 4, 'reset left the start rung');
   const blackout = L.i; for (let e = t + 20000; t < e; t += 100) L.tick(t, 20, false); assert(L.i === blackout, 'judged while inactive');
   const F = new Ladder(() => {}, 'low'); for (let e = 0; e < 60000; e += 100) F.tick(e, 60, true);
   assert(F.rung.q === 0.5 && !F.auto, 'quality=low not fixed');
@@ -121,6 +135,41 @@ await test('offline-reload', async () => {
   assert(ok.controlled && ok.tiles >= 1 && ok.world === 'nashua', 'offline reload failed ' + JSON.stringify(ok));
   assert(!reg, 'a page without ?offline=1 registered a service worker');
   return ok;
+});
+
+// weak-machine proxy (not a Pi): 720p, CPU 6x throttle, GPU memory capped and GPU raster and 2D canvas acceleration
+// off by flag. The scroll plays at 120 px/s over the nashua reach, baked and live; target 30 fps baked.
+await test('baked-cpu6x', async () => {
+  execFileSync(process.execPath, [path.join(ROOT, 'tools', 'bake.mjs'), BASE, '--world=nashua', '--seed=1', '--height=720', '--headed'], { cwd: ROOT, stdio: 'inherit', timeout: 900000 });
+  const weak = await chromium.launch({ headless: false, args: [...GPU, '--window-size=1300,800', '--force-gpu-mem-available-mb=256', '--disable-gpu-rasterization', '--disable-accelerated-2d-canvas'] });
+  const out = {};
+  try {
+    for (const baked of [true, false]) {
+      const ctx = await weak.newContext({ viewport: { width: 1280, height: 720 } });
+      const p = await ctx.newPage(); watch(p);
+      await p.goto(BASE + '?i=p4-weak' + (baked ? 'b' : 'l') + '&world=nashua&seed=1' + (baked ? '&baked=1' : ''));
+      await ready(p);
+      const cdp = await ctx.newCDPSession(p);
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+      await p.evaluate(() => { SSAV.pb.x = 200; SSAV.cfg.speed = 120; SSAV.pb.speed = 120; SSAV.pb.play(); });
+      await p.waitForTimeout(4000);
+      const r = await p.evaluate(() => new Promise(done => {
+        const ts = []; const t0 = performance.now();
+        const f = t => { ts.push(t); if (t - t0 < 15000) requestAnimationFrame(f); else {
+          const d = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b);
+          done({ fps: (ts.length - 1) / ((ts[ts.length - 1] - ts[0]) / 1000), p95: d[Math.floor(d.length * 0.95)], over50: d.filter(x => x > 50).length, q: SSAV.scene.q, x: SSAV.pb.x });
+        } };
+        requestAnimationFrame(f);
+      }));
+      r.bakedTiles = await p.evaluate(() => [...SSAV.world().tiles.values()].filter(t => t.tex && t.bakedKey).length);
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      await ctx.close();
+      out[baked ? 'baked' : 'live'] = { fps: +r.fps.toFixed(1), p95ms: +r.p95.toFixed(1), framesOver50ms: r.over50, renderScale: r.q, bakedTiles: r.bakedTiles };
+    }
+  } finally { await weak.close(); }
+  assert(out.baked.bakedTiles >= 2, 'baked run drew no baked tiles: ' + JSON.stringify(out.baked));
+  assert(out.baked.fps >= 30, 'baked at 720p, CPU 6x: ' + out.baked.fps + ' fps (target 30); live ' + out.live.fps);
+  return out;
 });
 
 // MIDI: tests/midi.mjs

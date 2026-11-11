@@ -41,8 +41,30 @@ if (wall) {
 // sync: the LAN relay (?sync=ws://...), clock mode (?t0=), or the BroadcastChannel (default)
 const Q = new URLSearchParams(location.search);
 const sync = Q.get('sync') ? wsSync(Q.get('sync'), 'output', m => onMsg(m), s => say('info', 'wall sync ' + s)) : null;
-const clock = Q.has('t0');
+// ?t0= alone is clock mode; with ?sync= it is the fallback when the relay drops
+const clock = Q.has('t0') && !sync, clockBackup = !!sync && Q.has('t0');
 const now = () => (sync ? sync.serverNow() : Date.now());
+// drift: how far each new frame lands from where this node had extrapolated the last one (px), worst over 10 s
+const drift = { log: [], max: 0, last: 0, v: 0 };
+function noteDrift(prev, m) {
+  const a = prev && prev.fs.worlds[0], b = m.fs.worlds[0];
+  if (!a || !b || a.key !== b.key || !(m.fs.t > prev.fs.t)) return;
+  const err = Math.abs(b.x - (a.x + prev.fs.v * (m.fs.t - prev.fs.t) / 1000));
+  if (err > 500) return; // a seek, a turn at the reach end or a reseed, not drift
+  const t = performance.now();
+  drift.last = err; drift.v = Math.abs(m.fs.v || 0);
+  drift.log.push({ t, err }); while (drift.log.length && t - drift.log[0].t > 10000) drift.log.shift();
+  drift.max = drift.log.reduce((s, d) => Math.max(s, d.err), 0);
+}
+// relay lost for 2 s: run on from the last frame at its speed (turning at the nashua reach ends), or the clock
+let fallback = false;
+function fold(x, key) {
+  const w = scene.peek(key);
+  if (!w || !w.pack) return x;
+  const W = innerWidth, H = innerHeight, wv = wall ? wallView(wall, W, H) : { VW: W, VH: H };
+  const span = Math.max(1, reachW(w.pack) - wv.VW / (wv.VH / WORLD_H)), p = ((x % (2 * span)) + 2 * span) % (2 * span);
+  return p < span ? p : 2 * span - p;
+}
 chan.onmessage = e => { if (!sync && !clock) onMsg(e.data); else if (e.data.type === 'fxvideo') onMsg(e.data); };
 function onMsg(m) {
   if (m.type === 'fxvideo') {
@@ -52,6 +74,7 @@ function onMsg(m) {
   }
   if (m.type !== 'frame') return;
   if (m.fs.fx && m.fs.fx.source === 'video' && fxVideo.readyState >= 2 && performance.now() - fxSeekAt > 1000 && Math.abs(fxVideo.currentTime - m.fs.fx.vt) > 0.2) { fxVideo.currentTime = m.fs.fx.vt; fxSeekAt = performance.now(); }
+  if (!fallback) noteDrift(msg, m);
   msg = m; msgAt = performance.now();
   if (m.custom && m.custom.rev !== gradRev) {
     gradRev = m.custom.rev;
@@ -65,14 +88,30 @@ function onMsg(m) {
 chan.postMessage({ type: 'hello', w: innerWidth, h: innerHeight, fps: 0 });
 
 const ladder = new Ladder(say);
+ladder.startFrom(scene.renderer.gl);
+// what this node drew last: world x and the (server) time it was drawn for, for drift checks
+const shown = { x: 0, t: 0, key: null };
+// the calibration card's live line: sync, clock offset, drift (redrawn twice a second while the card is up)
+function cardStatus() {
+  const how = clock ? 'clock mode' : sync ? (fallback ? (clockBackup ? 'relay lost, clock mode' : 'relay lost, running on') : 'relay') : 'same machine';
+  const fr = drift.v > 0 ? drift.max / (drift.v / 60) : 0;
+  return `${how}   offset ${sync ? sync.offset.toFixed(1) + ' ms' : '0 ms'}   drift ${drift.max.toFixed(1)} px (${fr.toFixed(2)} frames, worst of 10 s)   ${scene.fps.toFixed(0)} fps`;
+}
+if (wall) setInterval(() => { const cv = $('wallcard'); if (!cv.hidden) drawCard(cv, wall, cardStatus()); }, 500);
 function tick() {
   requestAnimationFrame(tick);
   if (clock) msg = { fs: clockFs(), flags };
   if (!msg) return;
+  const lost = !!sync && (!sync.open || performance.now() - msgAt > 2000);
+  if (lost !== fallback) { fallback = lost; say(lost ? 'warn' : 'info', lost ? 'wall sync lost: ' + (clockBackup ? 'clock mode (?t0=)' : 'running on from the last frame at its speed') : 'wall sync back'); }
   try {
-    // extrapolate from the controller's clock (server time on the LAN), for up to 1 s without news
-    const lag = clock ? 0 : Math.max(0, Math.min(1, (now() - msg.fs.t) / 1000));
-    const fs = { ...msg.fs, worlds: msg.fs.worlds.map(w => ({ ...w, x: w.x + msg.fs.v * lag })) };
+    const fromClock = clock || (fallback && clockBackup);
+    const base = fromClock ? { fs: clockFs(), flags } : msg;
+    // extrapolate from the controller's clock (server time on the LAN): up to 1 s without news, or without limit
+    // once the relay is lost (the last frame's speed, folded at the reach ends)
+    const dt = Math.max(0, (now() - base.fs.t) / 1000), lag = fromClock ? 0 : fallback ? dt : Math.min(1, dt);
+    const fs = { ...base.fs, worlds: base.fs.worlds.map(w => ({ ...w, x: fallback && !fromClock ? fold(w.x + base.fs.v * lag, w.key) : w.x + base.fs.v * lag })) };
+    shown.x = fs.worlds[0] ? fs.worlds[0].x : 0; shown.t = now(); shown.key = fs.worlds[0] && fs.worlds[0].key;
     // this output's own quality ladder (the projector is the machine that matters)
     const rung = ladder.tick(performance.now(), scene.fps, !flags.blackout && !document.hidden);
     scene.q = rung.q;
@@ -130,4 +169,4 @@ addEventListener('resize', () => { if (flags.card) drawTestCard($('card')); });
 let idleT = 0;
 addEventListener('mousemove', () => { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => document.body.classList.add('idle'), 2000); });
 addEventListener('beforeunload', () => chan.postMessage({ type: 'bye' }));
-window.SSOUT = { scene, get msg() { return msg; }, flags, wall, get sync() { return sync; }, clock };
+window.SSOUT = { scene, get msg() { return msg; }, flags, wall, get sync() { return sync; }, clock, drift, shown, get fallback() { return fallback; }, ladder, cardStatus };

@@ -30,10 +30,14 @@ Show checklist: `SHOWNIGHT.md`. Keys: `?` in the app, or `src/ui/keys.js`.
 | `?world=derelict` | Start on the derelict world (shanshui is the default) |
 | `?world=nashua` | The Nashua reach as a section; also `&bank=L\|R`, `&ve=1..20`, `&level=0..4`, `&ends=handover\|loop\|pingpong`, `&mode=nature\|built\|design\|sections`, `&morph=0..1` (needs the local design pack) |
 | `?t=YYYY-MM-DD` | nashua: the time scroll on, at that day of the East Pepperell record (an upstream proxy) |
-| `?quality=auto\|high\|medium\|low` | The quality ladder (auto) or a fixed rung |
+| `?daycycle=1&hour=HH` | nashua with the time scroll: the light follows the sun at the reach for the hour of the scroll's day (local standard time); held above 0.1 day/s |
+| `?tags=1` | nashua: post the tag stream for a score (`docs/nashua/score-tags.md`) |
+| `?quality=auto\|high\|medium\|low` | The quality ladder (auto: start rung from the GPU, down after 5 s under 24 fps) or a fixed rung |
 | `?offline=1` | Register the service worker so the app runs with the network off |
 | `?baked=1` | Use baked tiles from `baked/` where they exist (`tools/bake.mjs`) |
-| `?sync=ws://host:8097` | Follow, or as the controller drive, a LAN wall through `tools/wall-server.mjs` |
+| `?sync=ws://host:8097` | Follow, or as the controller drive, a LAN wall through `tools/wall-server.mjs`; an output that loses the relay runs on at the last speed (or from `&t0=` if given) |
+
+Export, To scale (nashua): Arch D or a 36 in roll at 1:500, 1:1000 or 1:2000 horizontal, vertical 1:(N / exaggeration), with scale bars. Never fitted: what does not fit is cropped, and the window is shown and logged.
 
 `output.html?i=<name>` is the output window for that instance (no UI, writes nothing).
 `output.html?wall=CxR&col=&row=` is one node of a wall; `&t0=<epoch ms>&speed=` runs it from the clock alone (WALL.md).
@@ -124,11 +128,15 @@ node tools/soak.mjs 30 --world=derelict --heavy --worldevery=5 --fpsmin=50 --out
 node tools/strip.mjs             # greyscale strips of the derelict world
 node tests/nashua.mjs            # the nashua world: levels, bands, bridges and dam, old worlds byte-identical to v0.3.0
 node tests/nashua-p2.mjs         # modes, morph, live section, slit-scan and time-smear
-node tests/wall.mjs              # two wall nodes: overlap band, clock mode, LAN relay, keystone, blend, card
+node tests/wall.mjs              # wall nodes: overlap band, clock mode, LAN relay, keystone, blend, card, 3 x 1 seam against
+                                 # one canvas, relay killed and back, drift over 10 min (--drift-min=N)
 node tests/wall-server.mjs       # the relay over real sockets
 node tests/midi.mjs              # fake Web MIDI: presets, every binding, pickup, panic hold, flood, debounce, unplug, MIDI out
-node tests/p4.mjs                # quality ladder, baked tiles = live tiles, offline and a release while installed
-node tests/p5.mjs                # the time scroll
+node tests/p4.mjs                # quality ladder, baked tiles = live tiles, offline and a release while installed,
+                                 # baked at 720p under CPU 6x (a proxy, not a Pi)
+node tests/p5.mjs                # the time scroll, day cycle, tag stream, print to scale
+node tools/capture.mjs --out=C:/_av/captures   # 20 s WebM per mode (local only, never committed)
+node tools/soak.mjs 30 --world=nashua --heavy --fxevery=5      # slit-scan modes cycling; --midi sweeps a fake nanoKONTROL
 node tools/bake.mjs --world=nashua --seed=1   # bake tiles for a weak machine (?baked=1)
 node tools/nashua/gauge.mjs      # refresh the East Pepperell daily record
 ```
