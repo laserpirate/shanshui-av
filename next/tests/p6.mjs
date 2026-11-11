@@ -64,9 +64,12 @@ async function stationFrames(base, reach, { ref = false, plant = false } = {}) {
   const { ctx, p } = await open(base, q);
   await p.evaluate(() => { document.body.classList.add('uihidden'); SSAV.pb.pause(); SSAV.cfg.weather.mode = 'dry'; SSAV.cfg.weather.holds = { rain: 0, fog: 0, light: 1, wind: 0.2 }; SSAV.cfg.nashua.labels = false; });
   const out = [];
-  const len = await p.evaluate(() => SSAV.world().pack.route_len_m);
+  // P7 (B7): the Nashua pack now ends at the mouth. The stations stay where P6 froze them (eighths of the full route);
+  // the one past the mouth is no longer in the reach and is skipped
+  const [len, end] = await p.evaluate(() => { const P = SSAV.world().pack; return [P.full_len_m || P.route_len_m, P.route_len_m]; });
   for (let i = 0; i < 8; i++) {
     const s = len * (i + 0.5) / 8;
+    if (s > end) continue;
     await p.evaluate(s => { const P = SSAV.world().pack; SSAV.pb.x = s * (P.hx || 2) - SSAV.viewW() / 2; }, s);
     await settle(p); await p.waitForTimeout(500);
     const png = PNG.sync.read(await p.screenshot({ type: 'png' }));
@@ -92,7 +95,8 @@ await test('a1-no-hills', async () => {
   fs.mkdirSync(path.join(ROOT, 'test-results'), { recursive: true });
   const planted = await stationFrames(BASE, 'nashua', { plant: true });
   const caught = planted.filter(r => r.fails).length;
-  assert(caught === 8, `the planted fill was caught at ${caught} of 8 stations`);
+  // every station drawn (8 on the Merrimack, 7 on the Nashua since the P7 mouth; see stationFrames)
+  assert(caught === planted.length && caught >= 7, `the planted fill was caught at ${caught} of ${planted.length} stations`);
   let ref = null;
   if (REF) {
     ref = await stationFrames(REF, 'nashua', { ref: true });
@@ -147,8 +151,10 @@ await test('a6-pack-holds', async () => {
     const worstOf = a => { let w = 0; for (let i = 1; i + 1 < P.n; i++) { const s1 = (a[i] - a[i - 1]) * VY / seg, s2 = (a[i + 1] - a[i]) * VY / seg; w = Math.max(w, Math.abs(s2 - s1)); } return w; };
     const worst = name => worstOf(P.A[name]);
     const bands = {}; for (const sd of ['L', 'R']) for (let j = 0; j < 4; j++) bands['band' + j + '_' + sd] = worst('band' + j + '_' + sd);
-    const ridge = Array.from(P.A.band1_L, (v, i) => Math.max(v, P.A.band2_L[i], P.A.band3_L[i]));
-    return { ds_m: P.ds, seg_px: seg, worst_band: Math.max(...Object.values(bands)), ...bands, ridge_corners_reported: worstOf(ridge), control_stepped: worstOf(Array.from(P.A.band0_L, v => Math.round(v * 2) / 2)) };
+    // ADDENDUM-B B10: the ridgeline is drawn from bands 1 and 2 only, so the drawn bands are 0 (the bank), 1 and 2
+    const ridge = Array.from(P.A.band1_L, (v, i) => Math.max(v, P.A.band2_L[i]));
+    const drawn = Object.entries(bands).filter(([k]) => !k.startsWith('band3')).map(([, v]) => v);
+    return { ds_m: P.ds, seg_px: seg, worst_band: Math.max(...drawn), ...bands, ridge_corners_reported: worstOf(ridge), control_stepped: worstOf(Array.from(P.A.band0_L, v => Math.round(v * 2) / 2)) };
   });
   await ctx.close();
   assert(r.control_stepped > 0.05, 'the control (stepped) did not exceed the limit: ' + r.control_stepped);
@@ -156,6 +162,8 @@ await test('a6-pack-holds', async () => {
   // 1 m as A6 says. The rule applies to each band, the resolution of the pack. The ridge is the highest of bands 1 to 3:
   // where two bands cross it turns a corner whatever the step (0.58 at 2 m, 0.47 at 1 m), so it is reported, not held
   // to the limit.
+  // ADDENDUM-B B10 (decided by chat): draw the ridgeline from bands 1 and 2 only, do not loosen the rule. Band 3
+  // (0.058 at 1 m) is no longer drawn and is reported; the limit stays 0.05 for every drawn band.
   assert(r.ds_m === 1, 'pack step ' + r.ds_m + ' m, A6 rebuild is at 1 m');
   assert(r.worst_band < 0.05, 'blocky at 8 px/m: ' + JSON.stringify(r));
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, +v.toFixed(4)]));
@@ -194,13 +202,14 @@ await test('a2-structures', async () => {
   await p.waitForTimeout(800);
   const labels = await p.evaluate(() => [...document.querySelectorAll('#labels .rl')].map(d => d.textContent));
   await ctx.close();
-  // the dike is on the right bank (side -1): its label is in the right bank view
-  const r = await open(BASE, '?i=p6-a2c&world=nashua&seed=1&bank=R');
+  // the dike is on the right bank (side -1): its label is in the right bank view. P7 (B7): past the mouth it left the
+  // Nashua reach, so it is read in the Merrimack reach; (B8) labels are the owner's words, the id is in the tooltip
+  const r = await open(BASE, '?i=p6-a2c&world=nashua&seed=1&bank=R&reach=merrimack');
   await r.p.evaluate(() => { SSAV.pb.pause(); SSAV.setLabels('labels', true); });
   await r.p.waitForTimeout(800);
-  const labelsR = await r.p.evaluate(() => [...document.querySelectorAll('#labels .rl')].map(d => d.textContent));
+  const labelsR = await r.p.evaluate(() => [...document.querySelectorAll('#labels .rl')].map(d => d.textContent + ' | ' + d.title));
   await r.ctx.close();
-  assert(labels.some(t => t === 'Religious (structures layer ' + church[9] + ')') && labels.some(t => t.startsWith('Light industrial')) && labelsR.some(t => t.startsWith('Nashua Flood Control Levee (NID NH03813)')), 'labels ' + JSON.stringify(labels.slice(0, 30)) + ' R ' + JSON.stringify(labelsR.slice(0, 30)));
+  assert(labels.includes('Church') && labels.includes('Factory') && labelsR.some(t => t.startsWith('Levee (approximate) | Nashua Flood Control Levee (NID NH03813)')), 'labels ' + JSON.stringify(labels.slice(0, 30)) + ' R ' + JSON.stringify(labelsR.slice(0, 30)));
   return { drawn_of_in_range: m[1] + '/' + m[2], mill_span_m: [mill[0], mill[1]], church: { id: church[9], s: (church[0] + church[1]) / 2 }, dike: { s: dike.s, side: dike.side, position: dike.position }, pixel_share_with_vs_without_buildings: out };
 });
 
@@ -224,6 +233,7 @@ await test('a3-labels', async () => {
   assert(o0 === false && o1 === true && o2 === false, 'output toggle ' + [o0, o1, o2]);
   const txt = await p.evaluate(() => document.getElementById('r-labels').textContent + ' | ' + document.getElementById('r-outlabels').textContent);
   // sizes: the buttons at least 44 px high, their text at least 18 px
+  await p.click('#b-pairmenu'); await p.waitForTimeout(100);   // P7 (B2): the pair buttons are in the Pair menu
   const sz = await p.evaluate(() => ['b-labels', 'b-outlabels', 'b-map', 'r-labels', 'r-outlabels', 'r-map', 'r-outmap', 'b-pair', 'b-pairlinks'].map(id => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return [id, Math.round(r.height), parseFloat(getComputedStyle(e).fontSize)]; }));
   assert(sz.every(([, h, f]) => h >= 44 && f >= 18), 'sizes ' + JSON.stringify(sz));
   // the MIDI roles: listed as targets (Learn can bind them) and each one acts as a binding would fire it
@@ -250,12 +260,14 @@ await test('a4-map', async () => {
   await p.click('#b-map'); await p.waitForTimeout(400);
   const m = await p.evaluate(() => SSAV.mapInset);
   assert(m.on && m.w === 400, 'shown at 400 px: ' + JSON.stringify(m));
-  // the dot follows the playhead: at s 165 (S1) and s 2309 (S6) it sits on those stations' marks
+  // the dot follows the playhead: at s 165 (S1) and s 2004.5 (S5, the last station since P7 B7) it sits on those
+  // stations' marks
   const at = async s => { await p.evaluate(s => { SSAV.pb.pause(); SSAV.pb.x = s * 8 - SSAV.viewW() / 2; }, s); await p.waitForTimeout(350); return p.evaluate(() => SSAV.mapInset.dot); };
   const hits = m.hits;
-  const d1 = await at(165), d6 = await at(2309);
+  assert(hits.length === 5, 'stations on the map: ' + hits.length);
+  const d1 = await at(165), d6 = await at(2004.5);
   const near = (d, h) => Math.hypot(d[0] - (h.x0 + 14 - 8), d[1] - (h.y1 - 22 + 18 * 0.8));
-  const e1 = near(d1, hits[0]), e6 = near(d6, hits[5]);
+  const e1 = near(d1, hits[0]), e6 = near(d6, hits[4]);
   assert(e1 < 3 && e6 < 3, 'dot off its station: ' + [e1, e6]);
   // a click on S4 goes there
   const h4 = hits[3], box = await p.evaluate(() => { const r = document.querySelector('.map-inset canvas + canvas').getBoundingClientRect(); return { x: r.left, y: r.top }; });
@@ -281,6 +293,7 @@ await test('a4-map', async () => {
 await test('a5-pair', async () => {
   const { ctx, p } = await open(BASE, '?i=p6-a5&world=nashua&seed=7&reach=merrimack');
   await p.evaluate(() => { window.__opened = []; window.open = (u, n, f) => { window.__opened.push([u, f]); return null; }; });
+  await p.click('#b-pairmenu');   // P7 (B2): Open pair is in the Pair menu
   await p.click('#b-pair');
   const opened = await p.evaluate(() => window.__opened);
   const L = await p.evaluate(() => SSAV.pairLinks(1700000000000));
@@ -347,6 +360,36 @@ await test('a5-clock-drift', async () => {
   assert(k >= DRIFT_MIN * 5, 'too few samples ' + k);
   assert(worst < 2, 'clock-mode nodes drift apart by ' + worst.toFixed(2) + ' world px');
   return { minutes: DRIFT_MIN, samples: k, worst_world_px: +worst.toFixed(3), note: 'two windows on one machine share one clock; two machines add their clock offset' };
+});
+
+// ---------- loop 1: footprint widths and ?spread=1 ----------
+// Rules, set before the run: (a) at most 2 drawn footprints (bands 0 to 3) under 1 m along the reach (it was 53 of
+// 152); (b) the spread fields put fewer footprints into stacks (3 or more drawn on one side with centres within 2 m)
+// than the nearest-station fields; (c) at s 1847 the frame with ?spread=1 differs from the default in more than 1 %
+// of its pixels (more than 40 in the RGB sum), while two default frames differ in under 0.1 % (the control).
+// Spread is the default since ADDENDUM-B B10, so "default" below is ?spread=0 and "spread" is the app's default.
+await test('loop-spread', async () => {
+  const pk = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/nashua/existing/pack.json'), 'utf8'));
+  assert(pk.buildings_fields[10] === 'sv0' && pk.buildings_fields[11] === 'sv1', 'fields ' + pk.buildings_fields);
+  const drawn = pk.buildings.filter(b => b[3] <= 3), thin = drawn.filter(b => b[1] - b[0] < 1).length;
+  const stacked = k0 => { let n = 0; for (const side of [1, -1]) { const c = drawn.filter(b => b[2] === side).map(b => (b[k0] + b[k0 + 1]) / 2).sort((a, b) => a - b); let i = 0; while (i < c.length) { let j = i; while (j + 1 < c.length && c[j + 1] - c[i] <= 2) j++; if (j - i + 1 >= 3) n += j - i + 1; i = j + 1; } } return n; };
+  const st0 = stacked(0), st1 = stacked(10);
+  assert(thin <= 2, 'footprints under 1 m wide: ' + thin + ' of ' + drawn.length);
+  assert(st1 < st0, 'spread did not reduce the stacks: ' + st0 + ' -> ' + st1);
+  const shot = async q => {
+    const { ctx, p } = await open(BASE, '?i=p6-sp&world=nashua&seed=1&palette=original' + q);
+    await p.evaluate(() => { document.body.classList.add('uihidden'); SSAV.pb.pause(); SSAV.cfg.weather.mode = 'dry'; SSAV.cfg.weather.holds = { rain: 0, fog: 0, light: 1, wind: 0 }; SSAV.cfg.nashua.labels = false; SSAV.pb.x = 1847 * SSAV.world().pack.hx - SSAV.viewW() / 2; });
+    await settle(p); await p.waitForTimeout(500);
+    const png = PNG.sync.read(await p.screenshot({ type: 'png' }));
+    await ctx.close();
+    return png;
+  };
+  const diff = (a, b) => { let n = 0; for (let i = 0; i < a.data.length; i += 4) if (Math.abs(a.data[i] - b.data[i]) + Math.abs(a.data[i + 1] - b.data[i + 1]) + Math.abs(a.data[i + 2] - b.data[i + 2]) > 40) n++; return n / (a.width * a.height); };
+  const d0 = await shot('&spread=0'), d1 = await shot('&spread=0'), sp = await shot('');
+  const control = diff(d0, d1), moved = diff(d0, sp);
+  assert(control < 0.001, 'two default frames differ: ' + control);
+  assert(moved > 0.01, 'spread changed only ' + moved + ' of the frame');
+  return { under1m: thin + ' of ' + drawn.length, stackedFootprints: { nearestStation: st0, spread: st1 }, pixelShare: { spread: +moved.toFixed(4), control: +control.toFixed(5) } };
 });
 
 await browser.close();

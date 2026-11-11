@@ -125,3 +125,66 @@ The controller at s 1110 m (the church behind the lot), labels on, the map inset
 ![Controller with labels and the map inset](p6_nashua_720p_map-inset_labels.jpg)
 
 <!-- end p6 strips -->
+
+<!-- p7 frames: made by tools/nashua/review-p7.mjs -->
+## P7 frames (ADDENDUM-B)
+
+Made with `node tools/nashua/review-p7.mjs`. 1280 x 720 controller frames, seed 1, nashua-kit, day, labels on, fog 0. Before is the `.p6` state served from its own worktree.
+
+**Manual check for the owner (B7):** do the two after frames at the mouth read as two rivers meeting? The perspective past the mouth is forced and not to scale; the fact line says so while it is in view.
+
+| Frame | State | What | KB |
+| --- | --- | --- | --- |
+| [p7_mouth_bank-L_before.jpg](p7_mouth_bank-L_before.jpg) | before (.p6) | B7 before (.p6): the section runs on past the mouth into S6 | 119 |
+| [p7_mouth_bank-L_after.jpg](p7_mouth_bank-L_after.jpg) | after | B7 after: the section stops at the mouth; the Merrimack in forced perspective, not to scale | 111 |
+| [p7_mouth_bank-R_before.jpg](p7_mouth_bank-R_before.jpg) | before (.p6) | B7 before (.p6), right bank | 111 |
+| [p7_mouth_bank-R_after.jpg](p7_mouth_bank-R_after.jpg) | after | B7 after, right bank | 107 |
+| [p7_glyph_dam.jpg](p7_glyph_dam.jpg) | after | B8 Dam: a wide body, the crest gate, the spillway face with falling water, the headpond above the tailwater | 109 |
+| [p7_glyph_factory.jpg](p7_glyph_factory.jpg) | after | B8 Factory: the long mill, a sawtooth roof, the smokestack (not in the data; Owner's call); a boxcar on the rail bridge | 117 |
+| [p7_glyph_canal-st.jpg](p7_glyph_canal-st.jpg) | after | B8 Canal St: a bolder deck and pier, a car | 115 |
+| [p7_glyph_church.jpg](p7_glyph_church.jpg) | after | B8 Church: a nave, a steeple, a cross | 117 |
+| [p7_glyph_rail-bridge.jpg](p7_glyph_rail-bridge.jpg) | after | B8 rail bridge at s 1706: a boxcar | 122 |
+| [p7_glyph_cso-6.jpg](p7_glyph_cso-6.jpg) | after | B8 CSO #6 on the right bank: a pipe mouth in a headwall | 121 |
+| [p7_glyph_levee.jpg](p7_glyph_levee.jpg) | after | B8 Levee (approximate), the Merrimack reach, right bank | 99 |
+| [p7_runoff_lot_rain.jpg](p7_runoff_lot_rain.jpg) | after | B9 Rain on: sheet runoff from the lot down the bank, a plume in the water | 134 |
+| [p7_runoff_cso-9_rain.jpg](p7_runoff_cso-9_rain.jpg) | after | B9 Rain on: CSO #9 running, a plume drifting downstream | 123 |
+| [p7_runoff_cso-9_flood.jpg](p7_runoff_cso-9_flood.jpg) | after | B9 Rain on at Minor Flood: the mouth under water, a stronger plume | 125 |
+| [p7_ui_mini-menu.jpg](p7_ui_mini-menu.jpg) | after | B5 the mini menu: Play, Speed, World, Guide, Full screen, Labels, Map | 127 |
+| [p7_ui_guide.jpg](p7_ui_guide.jpg) | after | B6 the quick guide: keys, the bar, URL parameters, a pair | 160 |
+| [p7_ui_map-float.jpg](p7_ui_map-float.jpg) | after | B1 the map floated over the header | 136 |
+
+![B7 before (.p6): the section runs on past the mouth into S6](p7_mouth_bank-L_before.jpg)
+
+![B7 after: the section stops at the mouth; the Merrimack in forced perspective, not to scale](p7_mouth_bank-L_after.jpg)
+
+![B7 before (.p6), right bank](p7_mouth_bank-R_before.jpg)
+
+![B7 after, right bank](p7_mouth_bank-R_after.jpg)
+
+![B8 Dam: a wide body, the crest gate, the spillway face with falling water, the headpond above the tailwater](p7_glyph_dam.jpg)
+
+![B8 Factory: the long mill, a sawtooth roof, the smokestack (not in the data; Owner's call); a boxcar on the rail bridge](p7_glyph_factory.jpg)
+
+![B8 Canal St: a bolder deck and pier, a car](p7_glyph_canal-st.jpg)
+
+![B8 Church: a nave, a steeple, a cross](p7_glyph_church.jpg)
+
+![B8 rail bridge at s 1706: a boxcar](p7_glyph_rail-bridge.jpg)
+
+![B8 CSO #6 on the right bank: a pipe mouth in a headwall](p7_glyph_cso-6.jpg)
+
+![B8 Levee (approximate), the Merrimack reach, right bank](p7_glyph_levee.jpg)
+
+![B9 Rain on: sheet runoff from the lot down the bank, a plume in the water](p7_runoff_lot_rain.jpg)
+
+![B9 Rain on: CSO #9 running, a plume drifting downstream](p7_runoff_cso-9_rain.jpg)
+
+![B9 Rain on at Minor Flood: the mouth under water, a stronger plume](p7_runoff_cso-9_flood.jpg)
+
+![B5 the mini menu: Play, Speed, World, Guide, Full screen, Labels, Map](p7_ui_mini-menu.jpg)
+
+![B6 the quick guide: keys, the bar, URL parameters, a pair](p7_ui_guide.jpg)
+
+![B1 the map floated over the header](p7_ui_map-float.jpg)
+
+<!-- end p7 frames -->

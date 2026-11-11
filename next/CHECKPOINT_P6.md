@@ -73,10 +73,32 @@ Structures checklist: `docs/nashua/structures.md`. Judgment calls and questions:
 - A click on the map inset never arrived: the stage captured every left press for drag-scrub. Fixed. My screenshot check of the inset had not clicked it.
 - Old tests that assumed 2 px per m, 10x or the hill bands were moved to the new scale. Each change is listed in DECISIONS. The bands test was retired and replaced by a building-rows test with a control.
 
-## Owner's call
-- Names for the church (id 24170), the second Religious footprint (id 25063) and the mill (id 6000042), if they should carry names. The data has none.
-- A line for the dike NH03813 (a drawing or a GIS layer). The inventory has a point only.
-- Far footprints are placed at their nearest point on the route, so at the convex bends several stack at one s (9 at s 1847, 8 at s 1418). Projecting them north, along the view, would spread them. Not done in P6.
+## Owner's call (3 questions, each with the default taken)
+- Names for the church (id 24170), the second Religious footprint (id 25063) and the mill (id 6000042). The data has none. **Default:** labelled by kind and id ("Religious (structures layer 24170)").
+- A line for the dike NH03813 (a drawing or a GIS layer). The inventory has a point only. **Default:** a levee section at the end of each reach, marked approximate.
+- Far footprints are placed at their nearest point on the route, so at the convex bends several stack at one s (9 at s 1847, 8 at s 1418). Projecting them north, along the view, would spread them. **Default:** left as placed; it is the first candidate for the loop.
+
+## Unverified on real hardware
+A projector, two real screens side by side (the pair was tested as two windows of one Chromium), two machines in clock mode (their clock offset is not measured here), the nanoKONTROL (the P6 roles were fired in software, never from the device), a Pi, a Mac. Every number above is from one Windows machine with an RTX 3080.
+
+## Where everything landed
+| what | local | GitHub | Pages | chat only |
+| --- | --- | --- | --- | --- |
+| code, tests, tools | `C:\_av\shanshui-av-nashua` | `feat/nashua`, tag `.p6` | `/next/` | |
+| public packs (Nashua, Merrimack, 1 m) and coverage.json | `data/nashua/` | yes | `/next/data/nashua/` | |
+| design pack (1 m) | `data/local/nashua/design` | no (unpublished, A7) | no | |
+| review strips and the map frame | `docs/nashua/` | yes | `/next/docs/nashua/` | |
+| structures checklist | `docs/nashua/structures.md` | yes | yes | |
+| CHECKPOINT_P6, MORNING | repo root | yes | | copied to `_handoffs\nashua\` |
+| test results, soak and bench JSON | `test-results/` | no (ignored) | no | numbers in this file |
+| the `.p5` reference | worktree `C:\_av\shanshui-av-p5ref` (port 8098) | tag `.p5` | | |
+
+Gate grep on the built preview (`next/` of pages-preview): 0 hits in text files. Two older JPEGs (a P1 strip and a derelict review frame) match one of the gate's short patterns by chance (three bytes) inside their compressed image data; no metadata.
+
+## Next (the section 9 loop)
+1. The 12 h gate: the derelict heavy soak (started after the tag), the e2e suite on `/next/`, sections 1 and 3 re-read (done).
+2. Spread the stacked far footprints along the view direction, behind a flag, with a count of stacks before and after.
+3. The farthest band at 8 px per m (the one failing test): smooth band 3 over its 4 m source cells, or draw the ridge from bands 1 and 2 only; measure both against the frozen rule, do not move the rule.
 
 ## Settled (ADDENDUM-A A7, not asked again)
 The design pack stays unpublished. /next/ is not promoted. Pages serves from `pages-preview`. No history rewrite or force push. The Merrimack keeps levels carried from the confluence. No wss relay. The rc1 tag is held. The 25 ms measure is reported, not chased.
@@ -84,6 +106,9 @@ The design pack stays unpublished. /next/ is not promoted. Pages serves from `pa
 ## Site
 | check | result |
 | --- | --- |
-| deploy /next/ | DEPLOY |
-| root byte identity (`deploy-next.mjs --check-live`) | CHECKLIVE |
-| crawl /next/ | CRAWL |
+| deploy /next/ | pages-preview dfe1083: root = main 1f009a1, next/ = a7988f9 (the `.p6` tag); Pages build "built" |
+| root byte identity (`deploy-next.mjs --check-live`) | 134 of 134 files byte-identical to main 1f009a1 |
+| crawl /next/ | 5 pages, 58 requests, 45 linked files, 0 broken, 0 console errors; the live Nashua pack hash 6f84a65ea6634724 (the 1 m rebuild) |
+| p6 tests against the live /next/ | a6-scale, a3-labels, a4-map: 3 of 3 pass |
+
+This file's site rows were filled after the tag, in the commit that follows it.

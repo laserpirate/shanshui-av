@@ -43,13 +43,20 @@ export class World {
     this.ras.onerror = e => this._fail('raster: ' + (e.message || 'error'));
     this.gen.postMessage(this.opts ? { type: 'init', seed: this.seed, opts: this.opts } : { type: 'init', seed: this.seed });
     if (this.meta.data) {             // data worlds keep the pack on the main thread too (water line, facts, labels)
-      import('../worlds/nashua/pack.js').then(m => m.packFor(this.opts || {}).then(({ pack: p, designMissing }) => { if (!this.disposed) { this.pack = p; this.designMissing = designMissing; this._packMod = m; this.keepK = [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
+      import('../worlds/nashua/pack.js').then(m => m.packFor(this.opts || {}).then(({ pack: p, designMissing }) => { if (!this.disposed) { this.pack = p; this.designMissing = designMissing; this._packMod = m; this.keepK = p.mouth ? [-Math.ceil(m.MOUTH_W / TILE_W) - 1, Math.ceil((m.reachW(p) + m.MOUTH_W) / TILE_W)] : [-1, Math.ceil(m.reachW(p) / TILE_W)]; } }))
         .catch(e => this._fail('pack: ' + (e && e.message || e)));
       this.waterLine = lv => {
         if (!this.pack) return null;
         const o = this.opts || {}, key = (+lv).toFixed(4) + ':' + o.bank + ':' + o.ve;
         if (!this._wl || this._wl.key !== key) this._wl = { key, ...this._packMod.waterLine(this.pack, o, +lv) };
         return this._wl;
+      };
+      // ADDENDUM-B B9: the runoff sources (CSO mouths, the lot) for the shader, per bank and Vertical Exaggeration
+      this.runoff = () => {
+        if (!this.pack || !this._packMod.runoffSources) return null;
+        const o = this.opts || {}, key = o.bank + ':' + o.ve;
+        if (!this._ro || this._ro.key !== key) this._ro = { key, list: this._packMod.runoffSources(this.pack, o), dir: o.bank === 'R' ? -1 : 1 };
+        return this._ro;
       };
     }
     this._bk = new Map();             // baked indexes by bake key (null = none)
@@ -106,6 +113,7 @@ export class World {
       const t = this.tiles.get(m.key);
       if (!t || !this.onTile) return;
       t.pending = false;
+      this.rastered = (this.rastered || 0) + 1;   // tests: B9 runoff must not raster a tile again
       t.hash = m.hash; t.final = !t.dirty;
       this.onTile(t, m.grey, t.reqScale, m.aux);
       this.rasterMs = m.ms;

@@ -122,12 +122,12 @@ export function clockState(viewW, reachW) {
     x = p < span ? p : 2 * span - p; v = p < span ? speed : -speed;
   } else x = d;
   // the data world at the P6 defaults (8 px per m, 2x) unless &hx= and &ve= say otherwise
-  const opts = world === 'nashua' ? { bank: q.get('bank') === 'R' ? 'R' : 'L', hx: Math.max(2, Math.min(12, Math.round(num('hx', 8)))), ve: Math.max(1, Math.min(20, num('ve', 2))), ...(q.get('reach') === 'merrimack' ? { reach: 'merrimack' } : {}) } : undefined;
+  const opts = world === 'nashua' ? { bank: q.get('bank') === 'R' ? 'R' : 'L', hx: Math.max(2, Math.min(12, Math.round(num('hx', 8)))), ve: Math.max(1, Math.min(20, num('ve', 2))), ...(q.get('reach') === 'merrimack' ? { reach: 'merrimack' } : {}), ...(q.get('spread') !== '0' ? { spread: 1 } : {}) } : undefined;
   // nashua draws the same mode layers as the controller would (default built), so baked tiles match
   const mode = MODES[q.get('mode')] ? q.get('mode') : MODE_DEFAULT;
   const layers = world === 'nashua' ? { layers: layersOf(mode, q.get('sections') === '1' || mode === 'sections'), all: LAYERS } : {};
   return {
-    worlds: [{ key: 'clock:' + world + ':' + seed + (opts && opts.reach ? ':' + opts.reach : '') + (opts ? ':' + opts.hx + ':' + opts.ve : ''), seed, world, x, alpha: 1, opts, ...layers }],
+    worlds: [{ key: 'clock:' + world + ':' + seed + (opts && opts.reach ? ':' + opts.reach : '') + (opts ? ':' + opts.hx + ':' + opts.ve + (opts.spread ? ':spread' : '') : ''), seed, world, x, alpha: 1, opts, ...layers }],
     dir: v >= 0 ? 1 : -1, pal: { a: pal, b: pal, mix: 0 },
     u: { contrast: 1, ink: 1, paper: true, vignette: false, zoom: 1, yAlign: 0.5 },
     time: (now - t0) / 1000, weather: { rain: 0, wind: 0.2, water: num('water', 0), fog: num('fog', 0.25), light: num('light', 1) },

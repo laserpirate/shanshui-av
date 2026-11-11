@@ -90,6 +90,59 @@ def plan_of(R, LEN, step=10.0):
     return {'crs': 'EPSG:32110', 'step_m': step, 'pts': pts, 'note': 'route centreline; the banks are drawn from edge_L and edge_R along its normals'}
 
 
+SPREAD_FROM_M, SPREAD_W = 120.0, 300.0   # P6 loop: footprints farther than this behind the water edge; smoothing window
+
+
+class Spread:
+    """The route smoothed over SPREAD_W m (a moving average of its points every 5 m), still indexed by the real s.
+    A far footprint projected onto it lands where the view across the river meets it, instead of on the one station
+    nearest to it behind a convex bend (where many far footprints pile onto one s)."""
+    def __init__(self, R, LEN, step=5.0):
+        s = np.arange(0, LEN + 1e-6, step)
+        p = np.array([[R.interpolate(float(v)).x, R.interpolate(float(v)).y] for v in s])
+        h = int(round(SPREAD_W / 2 / step))
+        q = np.array([p[max(0, i - h):i + h + 1].mean(0) for i in range(len(p))])
+        self.s, self.q = s, q
+
+    def s_of(self, x, y):
+        a, b = self.q[:-1], self.q[1:]
+        ab = b - a; L2 = np.maximum((ab ** 2).sum(1), 1e-9)
+        t = np.clip(((x - a[:, 0]) * ab[:, 0] + (y - a[:, 1]) * ab[:, 1]) / L2, 0, 1)
+        px, py = a[:, 0] + t * ab[:, 0], a[:, 1] + t * ab[:, 1]
+        i = int(np.argmin((px - x) ** 2 + (py - y) ** 2))
+        self.side = 1 if ab[i, 0] * (y - a[i, 1]) - ab[i, 1] * (x - a[i, 0]) > 0 else -1   # left of the smoothed route
+        return float(self.s[i] + t[i] * (self.s[i + 1] - self.s[i]))
+
+
+SPREAD_CROSSED = []   # footprints whose side of the smoothed route is not their side of the river (kept unspread)
+
+
+def spread_fields(sp, c, s0, s1, d, LEN, side=0):
+    """sv0, sv1: the footprint's s range placed on the smoothed route when it is far behind the water edge, its own
+    width kept; near footprints keep their own range. A footprint that the smoothed route would put across the water
+    (its side of the smoothed route differs from its side of the river) keeps its own range too."""
+    if d <= SPREAD_FROM_M: return [round(s0, 1), round(s1, 1)]
+    m, h = sp.s_of(c.x, c.y), (s1 - s0) / 2
+    if side and sp.side != side: SPREAD_CROSSED.append(round((s0 + s1) / 2, 1)); return [round(s0, 1), round(s1, 1)]
+    m = min(max(m, 0.5 + h), LEN - 0.5 - h)
+    return [round(max(0.0, m - h), 1), round(min(LEN, m + h), 1)]
+
+
+def stacks(blds, max_band=3, tol=2.0, k0=0):
+    """drawn footprints (band <= max_band) on one side whose centre s values lie within tol m of each other, in
+    groups of 3 or more: (groups, footprints in them)"""
+    out = []
+    for side in (1, -1):
+        c = sorted((b[k0] + b[k0 + 1]) / 2 for b in blds if b[2] == side and b[3] <= max_band)
+        i = 0
+        while i < len(c):
+            j = i
+            while j + 1 < len(c) and c[j + 1] - c[i] <= tol: j += 1
+            if j - i + 1 >= 3: out.append(j - i + 1)
+            i = j + 1
+    return len(out), sum(out)
+
+
 def log(*a):
     print(time.strftime('%H:%M:%S'), *a, flush=True)
 
@@ -283,6 +336,7 @@ def build(design=False, quick=False):
     # P6: the structures layer the footprints came from (same polygons, EPSG:32110) gives each one an id and a primary
     # occupancy; joined by nearest centroid within 2 m
     orn, oc = ornl_index()
+    spread = Spread(R, LEN)
     blds = []; cover = []
     for f in base:
         pr = f['properties']
@@ -315,6 +369,12 @@ def build(design=False, quick=False):
         lng = max(math.hypot(*(mr[1] - mr[0])), math.hypot(*(mr[2] - mr[1])))
         s0, s1 = float(sv.min()), float(sv.max())
         if s1 - s0 > max(2 * wd, 1.5 * lng) + 30: s0, s1 = sc - wd / 2, sc + wd / 2       # inside a bend the s of a footprint is ambiguous
+        # P6 loop: behind a bend every vertex can take the same nearest station, collapsing the s range (53 of 152 drawn
+        # footprints were under 1 m wide). Then the width is the footprint's own extent along the river at sc.
+        ta, tb = R.interpolate(max(0.0, sc - 3)), R.interpolate(min(R.length, sc + 3))
+        tl = math.hypot(tb.x - ta.x, tb.y - ta.y) or 1.0
+        ext = float(np.ptp(((vx[:, 0] - c.x) * (tb.x - ta.x) + (vx[:, 1] - c.y) * (tb.y - ta.y)) / tl))
+        if s1 - s0 < 0.5 * ext: s0, s1 = sc - ext / 2, sc + ext / 2
         k = int(np.clip(round(sc / DS), 0, len(edge[side]) - 1)) if not quick else int(np.clip(round(sc / (DS * 10)), 0, n - 1))
         d = R.distance(c) - edge[side][k]
         band = int(np.searchsorted([b for _, b in BANDS], max(0.0, d), side='right'))
@@ -325,10 +385,14 @@ def build(design=False, quick=False):
         blds.append([round(max(0.0, s0), 1), round(min(LEN, s1), 1), side, min(band, len(BANDS)), round(float(np.nanmin(zb)) - wsl, 2),
                      round(float(pr.get('height_m') or 6.0), 1), OCC.index(occ) if occ in OCC else len(OCC) - 1, round(max(0.0, d), 1),
                      PRIM.index(prim), bid if bid is not None else -1])
+        blds[-1] += spread_fields(spread, c, blds[-1][0], blds[-1][1], max(0.0, d), LEN, side)
         cv.update(kept=True, s=round(sc, 1), side=side, d_edge_m=round(max(0.0, d), 1), band=min(band, len(BANDS)), s0=blds[-1][0], s1=blds[-1][1])
         cv['why'] = 'drawn' if band <= 3 else 'kept in the pack, not drawn: more than 700 m behind the water edge'
     blds.sort(key=lambda b: (b[0], b[2]))
     log('buildings kept', len(blds), 'of', sum(1 for f in base if f['properties'].get('kind') == 'building'))
+    log('stacks (groups, footprints): nearest station', stacks(blds), 'spread', stacks(blds, k0=10))
+    log('spread: footprints the smoothed route would put across the water, kept unspread', len(SPREAD_CROSSED), SPREAD_CROSSED[:20])
+    log('drawn footprints under 1 m wide', sum(1 for b in blds if b[3] <= 3 and b[1] - b[0] < 1), 'of', sum(1 for b in blds if b[3] <= 3))
     # structures that are points only in the data: dikes from the national dam inventory, at their station
     structures = nid_structures(R, LEN)
     log('structures', structures)
@@ -386,7 +450,8 @@ def build(design=False, quick=False):
         'band_value': 'maximum ground elevation inside the band along the station normal, water cells excluded',
         'canopy': 'share of tree canopy cells (land cover class 2) inside the band along the normal',
         'bed': 'measured depth contours interpolated where they cover the centreline (bed_measured 1), the estimated bed proxy elsewhere (0)',
-        'buildings_fields': ['s0', 's1', 'side', 'band', 'base_h', 'height_m', 'occ', 'd_from_edge_m', 'prim', 'id'],
+        'buildings_fields': ['s0', 's1', 'side', 'band', 'base_h', 'height_m', 'occ', 'd_from_edge_m', 'prim', 'id', 'sv0', 'sv1'],
+        'building_spread': 'sv0, sv1: the s range on the route smoothed over %d m, for footprints more than %d m behind the water edge (others: s0, s1); drawn with ?spread=1' % (SPREAD_W, SPREAD_FROM_M),
         'occ_codes': OCC, 'prim_codes': PRIM,
         'building_ids': 'id and prim: build_id and primary occupancy of the structures layer the footprints came from (-1: no match)',
         'building_span': 's0 to s1 is the footprint\'s s range, unless it is longer than 1.5 x its long side + 30 m (a bend), then its width about the centroid',

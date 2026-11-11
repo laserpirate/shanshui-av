@@ -160,6 +160,7 @@ def build(quick=False):
     # buildings and bridges where the layer reaches
     base = json.load(io.open(SRC['base'], encoding='utf-8'))['features']
     orn, oc = bp.ornl_index()
+    spread = bp.Spread(R, LEN)
     blds = []
     for f in base:
         pr = f['properties']
@@ -184,8 +185,10 @@ def build(quick=False):
                      round(float(pr.get('height_m') or 6.0), 1), OCC.index(occ) if occ in OCC else len(OCC) - 1, round(max(0.0, d), 1)])
         if prim not in bp.PRIM: bp.PRIM.append(prim)
         blds[-1] += [bp.PRIM.index(prim), bid if bid is not None else -1]
+        blds[-1] += bp.spread_fields(spread, c, blds[-1][0], blds[-1][1], max(0.0, d), LEN, side)
     blds.sort(key=lambda b: (b[0], b[2]))
     log('buildings kept', len(blds))
+    log('stacks (groups, footprints): nearest station', bp.stacks(blds), 'spread', bp.stacks(blds, k0=10))
     structures = bp.nid_structures(R, LEN)
     log('structures', structures)
     bridges = []
@@ -225,7 +228,7 @@ def build(quick=False):
         'smoothing': first['smoothing'], 'bands_m_from_water_edge': BANDS, 'far_m_from_water_edge': FAR,
         'band_value': first['band_value'], 'canopy': first['canopy'],
         'bed': 'no measurements on this reach: the estimated proxy (0.9 m at the bank to 4.3 m mid-channel)',
-        'buildings_fields': first['buildings_fields'], 'occ_codes': OCC, 'prim_codes': bp.PRIM, 'building_ids': first.get('building_ids'),
+        'buildings_fields': first['buildings_fields'], 'occ_codes': OCC, 'prim_codes': bp.PRIM, 'building_ids': first.get('building_ids'), 'building_spread': first.get('building_spread'),
         'building_heights': first['building_heights'], 'structures': structures, 'plan': bp.plan_of(R, LEN),
         'sources': {
             'centreline': 'medial path of the land cover water class, smoothed over 200 m',

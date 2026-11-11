@@ -1,7 +1,17 @@
 # MORNING · shanshui-av nashua · 2026-11-11
 
 Preview: **https://laserpirate.github.io/shanshui-av/next/?world=nashua** (the stock app at the root is unchanged, byte for byte).
-Branch `feat/nashua`. Tags `.p1` the nashua world, `.p2` modes, morph, live section and slit-scan, `.p3` the wall, `.p4` platforms and MIDI, `.p5` night river, tag stream, print to scale, a second reach and three small tools, `.p6` ADDENDUM-A. One file each: `CHECKPOINT_P1.md` to `CHECKPOINT_P6.md`.
+Branch `feat/nashua`. Tags `.p1` the nashua world, `.p2` modes, morph, live section and slit-scan, `.p3` the wall, `.p4` platforms and MIDI, `.p5` night river, tag stream, print to scale, a second reach and three small tools, `.p6` ADDENDUM-A, `.p7` ADDENDUM-B. One file each: `CHECKPOINT_P1.md` to `CHECKPOINT_P7.md`.
+
+## New in P7 (ADDENDUM-B)
+- **Rain** and **Flood** on the bar (`N` for rain; the flood level picker beside it). Both have MIDI roles.
+- The **map** floats over everything; drag it by its grip. The bar is 2 rows at 1280 px; the less used panels are under **More**, the pair under **Pair**.
+- **Full menu / Mini menu / Full screen** cycles the menu; **Guide** opens a one-screen quick guide.
+- The scroll ends at the **confluence**: past the mouth the Merrimack runs to the horizon in forced perspective. Please look at the before and after frames on the review sheet (`docs/nashua/index.md`, P7 frames): a manual check.
+- **Landmarks** as glyphs with your words: Dam, Levee (approximate), Church, Factory, CSO #9, CSO #6, the bridge names. Ids only in the tooltips and `docs/nashua/structures.md`.
+- **Runoff** from the CSOs and the lot when it rains, stronger in flood (Reach panel, on by default).
+- Fixed: a **Copy pair links** node ran on past the end of the reach after about 5 min (since `.p6`); it turns at the ends again.
+- Questions (CHECKPOINT_P7): the bus has no bridge left, the factory's smokestack, the lot label's parcel id.
 
 ## New in P6 (ADDENDUM-A)
 - The hills are gone. One thin ridgeline of real ground, the near bank, and the buildings as the skyline in rows (near dark, far pale). Before and after strips: `docs/nashua/index.md`.

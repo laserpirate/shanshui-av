@@ -55,6 +55,9 @@ export const MIDI_TARGETS = [
   { id: 'labels', label: 'Labels (controller)' },
   { id: 'outLabels', label: 'Labels (output)' },
   { id: 'mapInset', label: 'Map inset' },
+  // ADDENDUM-B: Rain and Flood as one-press toggles (the rain and level faders stay as they are)
+  { id: 'rainToggle', label: 'Rain on / off' },
+  { id: 'flood', label: 'Flood on / off' },
 ];
 const BY_ID = new Map(MIDI_TARGETS.map(t => [t.id, t]));
 export const PRESETS = ['korg-nanokontrol', 'korg-nanokontrol2', 'generic'];

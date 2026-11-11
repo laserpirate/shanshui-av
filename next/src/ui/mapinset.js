@@ -9,16 +9,60 @@ export const MAP_W = { s: 240, m: 400, l: 600 };
 
 export class MapInset {
   // parent: the stage element; onGo(s): scroll to s (null on an output window: no clicks there)
-  constructor(parent, onGo) {
+  // float (ADDENDUM-B B1, the controller): {pos: {x, y} | null, onMove(pos)}. The inset sits above everything, the
+  // bar and the header included, and is dragged by its grip or its edge; it stays where it was left (onMove saves it).
+  constructor(parent, onGo, float = null) {
     this.root = document.createElement('div');
-    this.root.className = 'map-inset';
+    this.root.className = 'map-inset' + (float ? ' float' : '');
     this.root.hidden = true;
     this.base = document.createElement('canvas'); this.top = document.createElement('canvas');
     this.root.append(this.base, this.top);
     parent.appendChild(this.root);
-    this.onGo = onGo; this.key = null; this.on = false; this.last = null; this.draws = 0; this.ms = 0;
+    this.onGo = onGo; this.key = null; this.on = false; this.last = null; this.draws = 0; this.ms = 0; this.drags = 0;
     if (onGo) this.top.addEventListener('click', e => this._click(e));
     else this.root.style.pointerEvents = 'none';
+    if (float) this._float(float);
+  }
+  _float(f) {
+    this.grip = document.createElement('button');
+    this.grip.className = 'map-grip'; this.grip.type = 'button';
+    this.grip.title = 'Drag to move the map'; this.grip.setAttribute('aria-label', 'move the map');
+    this.grip.textContent = '✥';
+    this.root.prepend(this.grip);
+    this.onMove = f.onMove; this.pos = f.pos || null;
+    let d = null;
+    const down = e => {
+      // the grip or the edge band (the root's padding), never the map itself: a click there goes to a station
+      if (e.button !== 0 || (e.target !== this.grip && e.target !== this.root)) return;
+      const r = this.root.getBoundingClientRect();
+      d = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId, moved: false };
+      this.root.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+    };
+    const move = e => {
+      if (!d || e.pointerId !== d.id) return;
+      d.moved = true; this.place({ x: e.clientX - d.dx, y: e.clientY - d.dy }, true);
+    };
+    const up = e => {
+      if (!d || e.pointerId !== d.id) return;
+      if (d.moved) { this.drags++; if (this.onMove) this.onMove(this.pos); }
+      d = null;
+    };
+    this.root.addEventListener('pointerdown', down);
+    this.root.addEventListener('pointermove', move);
+    this.root.addEventListener('pointerup', up);
+    this.root.addEventListener('pointercancel', up);
+    addEventListener('resize', () => { if (this.pos) this.place(this.pos); });
+    if (this.pos) this.place(this.pos);
+  }
+  // put the floating inset at {x, y} css px (its top-left), kept fully on screen
+  // A drag sets the saved spot (this.pos). Showing it again or a resize only clamps what is shown and keeps the saved
+  // spot, so a smaller window, or a place() made while the inset is hidden, cannot overwrite it.
+  place(p, drag = false) {
+    const r = this.root.getBoundingClientRect();
+    if (!r.width || !r.height) { Object.assign(this.root.style, { left: p.x + 'px', top: p.y + 'px', bottom: 'auto' }); return; }
+    const x = Math.round(Math.max(0, Math.min(innerWidth - r.width, p.x))), y = Math.round(Math.max(0, Math.min(innerHeight - r.height, p.y)));
+    if (drag) this.pos = { x, y };
+    Object.assign(this.root.style, { left: x + 'px', top: y + 'px', bottom: 'auto' });
   }
 
   // the plan geometry for a pack: route points, banks, a fit to w x h css px with a margin
@@ -98,8 +142,8 @@ export class MapInset {
     const ok = show && P && P.plan;
     if (!ok) { if (this.on) { this.root.hidden = true; this.on = false; } return; }
     const key = P.hash + ':' + (P.hx || '') + ':' + size;
-    if (key !== this.key) { this._build(P, size, theme); this.key = key; }
-    if (!this.on) { this.root.hidden = false; this.on = true; }
+    if (key !== this.key) { this._build(P, size, theme); this.key = key; if (this.on && this.pos) this.place(this.pos); }
+    if (!this.on) { this.root.hidden = false; this.on = true; if (this.pos) this.place(this.pos); }
     const g = this.g, q = this._at(g, view.s), a = this._at(g, view.sL), b = this._at(g, view.sR);
     const sig = [q, a, b].map(p => Math.round(p[0] * 2) + ',' + Math.round(p[1] * 2)).join(';');
     if (sig === this.last) return;
