@@ -3,6 +3,7 @@
 // Renderer, and watches its own output for blank frames.
 import { World } from './world.js';
 import { SlitScan } from '../render/slitscan.js';
+import { wallView } from '../wall.js';
 import { Renderer } from '../render/renderer.js';
 import { WORLD_H } from './constants.js';
 
@@ -61,15 +62,22 @@ export class Scene {
     if (this._last) { this._ft.push(now - this._last); if (this._ft.length > 60) this._ft.shift(); this.fps = 1000 / (this._ft.reduce((a, b) => a + b, 0) / this._ft.length); }
     this._last = now;
     const [W, H] = this.size();
-    const v = viewOf(W, H, fs.u.zoom, fs.u.yAlign);
+    let v = viewOf(W, H, fs.u.zoom, fs.u.yAlign), dx = 0;
+    // a wall node draws its slice of the virtual canvas (wall.js); overlap and bezel are css px, scaled to the buffer
+    if (this.wall) {
+      const q = this.q, wv = wallView({ ...this.wall, overlap: this.wall.overlap * q, bezel: this.wall.bezel * q }, W, H);
+      const V = viewOf(wv.VW, wv.VH, fs.u.zoom, fs.u.yAlign);
+      v = { scale: V.scale, viewW: W / V.scale, viewH: H / V.scale, camY: V.camY + wv.oy / V.scale };
+      dx = wv.ox / V.scale;
+    }
     const rscale = Math.round(v.scale * 64) / 64;   // quantized so small resizes do not redraw every tile
     const list = [];
     for (const it of fs.worlds) {
       const world = this.world(it.key, it.seed, it.world, it.opts);
       this.worlds.get(it.key).lastUsed = now;
       if (it.layers && world.setLayers) world.setLayers(it.layers, it.all);
-      world.update(it.x, v.viewW, fs.dir, rscale);
-      list.push({ world, x: it.x, alpha: it.alpha });
+      world.update(it.x + dx, v.viewW, fs.dir, rscale);
+      list.push({ world, x: it.x + dx, alpha: it.alpha });
     }
     // close worlds no longer shown
     for (const [k, w] of this.worlds) {
@@ -77,7 +85,7 @@ export class Scene {
     }
     const look = this.look(fs);
     const f = { ...look, W, H, scale: v.scale, camY: v.camY, worlds: list };
-    this.lastFrame = { fs, f, v };
+    this.lastFrame = { fs, f, v, dx };
     this.renderer.poll();
     // slit-scan / time-smear: the scene (or a video) into a target, then the effect to the screen; off = untouched path
     const fx = fs.fx && fs.fx.mode && fs.fx.mode !== 'off' && !blackout ? fs.fx : null;

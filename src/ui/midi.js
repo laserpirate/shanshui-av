@@ -31,11 +31,30 @@ export const MIDI_TARGETS = [
   { id: 'sections', label: 'Sections' },
 ];
 
+// KORG nanoKONTROL2 at its factory settings (CC mode, channel 1). Fader 5 stays on CC 4, the weather (water level
+// in nashua). Not tried on the hardware: check the scene with the KORG editor if a control does nothing.
+export const NANOKONTROL2 = {
+  speed: 'cc:0:0', rain: 'cc:0:1', wind: 'cc:0:2', fog: 'cc:0:3', weather: 'cc:0:4', light: 'cc:0:5', ve: 'cc:0:6', fxMix: 'cc:0:7',
+  fxSlit: 'cc:0:16', fxWidth: 'cc:0:17', fxDepth: 'cc:0:18', fxSlope: 'cc:0:19', morph: 'cc:0:20', water: 'cc:0:21', level: 'cc:0:22',
+  mode: 'cc:0:32', sections: 'cc:0:33', bank: 'cc:0:34', fxMode: 'cc:0:35', fxFreeze: 'cc:0:36', fxDir: 'cc:0:37',
+  world: 'cc:0:64', play: 'cc:0:41', black: 'cc:0:45', reseed: 'cc:0:46', palPrev: 'cc:0:58', palNext: 'cc:0:59',
+};
+
 export class Midi {
   constructor({ map = {}, onAction, onChange, onLog }) {
     this.map = { ...map };            // target id -> binding
     this.onAction = onAction; this.onChange = onChange; this.onLog = onLog;
     this.access = null; this.learn = null; this.last = new Map(); this.devices = [];
+    this.out = false;                 // MIDI out (button LEDs) is off until switched on
+  }
+  preset(map) { this.map = { ...map }; this.onChange(); }
+  // LED feedback for toggles: CC 127 / 0 on the bound control, to every output port; only when MIDI out is on.
+  // A nanoKONTROL2 lights its LEDs from the host only with LED mode set to External in the KORG editor.
+  feedback(id, on) {
+    if (!this.out || !this.access) return;
+    const m = /^cc:(\d+):(\d+)$/.exec(this.map[id] || '');
+    if (!m) return;
+    for (const o of this.access.outputs.values()) { try { o.send([0xb0 | +m[1], +m[2], on ? 127 : 0]); } catch {} }
   }
   get supported() { return typeof navigator.requestMIDIAccess === 'function'; }
   async enable() {

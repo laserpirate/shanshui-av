@@ -21,6 +21,9 @@ button, input, select, a.btn { font: inherit; }
 #still, #card { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .6s; }
 #still.on, #card.on { opacity: 1; }
 #card { transition: none; }
+.wall-blend-root { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.wall-card { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; }
+.wall-card[hidden] { display: none; }
 #black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1s linear; }
 #black.on { opacity: 1; }
 #black.fast { transition-duration: .25s; }

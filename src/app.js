@@ -8,13 +8,16 @@ import { INSTANCE, load, save, saveNow } from './core/store.js';
 import { frameGeom, buildSVG, buildPNG, buildPDF, fileName, download } from './export/export.js';
 import { drawTestCard } from './ui/testcard.js';
 import { KEYS } from './ui/keys.js';
-import { Midi, MIDI_TARGETS } from './ui/midi.js';
+import { Midi, MIDI_TARGETS, NANOKONTROL2 } from './ui/midi.js';
 import { WORLDS, WORLD_NAMES, worldOf } from './worlds/registry.js';
 import { Weather, PHASES, PARAMS } from './core/weather.js';
 import { ReachOverlay, factLine } from './ui/reach.js';
 import { SectionInset } from './ui/section.js';
 import { xOf, sOf, reachW } from './worlds/nashua/pack.js';
 import { MODES, MODE_ORDER, MODE_DEFAULT, LAYERS, layersOf } from './worlds/nashua/modes.js';
+import { wsSync } from './wall.js';
+import { offline } from './offline.js';
+import { Ladder } from './core/ladder.js';
 
 const $ = id => document.getElementById(id);
 const body = document.body;
@@ -165,6 +168,10 @@ function setSeed(seed, { history = true, why = '', world = cur.world, keepX } = 
   renderSeed(); renderWorld();
   log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
+offline();
+const wallUrl = new URLSearchParams(location.search).get('sync');
+const wall = wallUrl ? wsSync(wallUrl, 'controller', null, s => log('info', 'wall relay ' + s)) : null;
+let wallSent = 0;
 function reseed(why) { setSeed(newSeed(), isData() ? { why, keepX: pb.x } : { why }); }
 function setWorld(w, why = 'world') {
   if (!WORLDS[w] || w === cur.world) return;
@@ -247,13 +254,10 @@ function showTick(now, dt, vWorld) {
 }
 
 // ---------- quality ----------
-let autoQ = 1, lowSince = 0;
+// the ladder (core/ladder.js) when quality is auto; the output runs its own
+const ladder = new Ladder((l, m) => log(l, m));
 function qualityTick(now) {
-  const want = cfg.q === 'auto' ? autoQ : +cfg.q;
-  if (cfg.q === 'auto') {
-    if (scene.fps < 45 && !flags.blackout && !document.hidden) { if (!lowSince) lowSince = now; if (now - lowSince > 5000 && autoQ > 0.5) { autoQ = autoQ > 0.75 ? 0.75 : 0.5; lowSince = 0; log('warn', 'quality lowered to ' + autoQ + ' (fps under 45)'); } }
-    else lowSince = 0;
-  }
+  const want = cfg.q === 'auto' ? ladder.tick(now, scene.fps, !flags.blackout && !document.hidden).q : +cfg.q;
   scene.q = want * (out.connected && !out.fullPreview ? 0.5 : 1);
 }
 
@@ -276,6 +280,8 @@ if (chan) chan.onmessage = e => {
 function openOutput() {
   const url = new URL('output.html', location.href);
   if (INSTANCE !== 'main') url.searchParams.set('i', INSTANCE);
+  // the output draws baked tiles and works offline when the controller does
+  for (const k of ['baked', 'offline']) { const v = new URLSearchParams(location.search).get(k); if (v) url.searchParams.set(k, v); }
   if (out.connected) return toast('Output window already open');
   // noopener: the output gets its own browsing context group, so Chrome gives it its own process and
   // main thread and a busy controller never stalls the projector. Everything goes over BroadcastChannel.
@@ -339,7 +345,10 @@ function tick(now) {
     const fs = frameState(now);
     lastView = scene.frame(fs, { blackout: flags.blackout, panic: flags.panic });
     lastView.W = canvas.clientWidth; lastView.H = canvas.clientHeight;
-    if (chan) chan.postMessage({ type: 'frame', fs, flags: { ...flags }, custom: cfg.gradient ? { ...cfg.gradient, rev: gradRev } : null });
+    const msgOut = { type: 'frame', fs, flags: { ...flags }, custom: cfg.gradient ? { ...cfg.gradient, rev: gradRev } : null };
+    if (chan) chan.postMessage(msgOut);
+    // the LAN wall (?sync=ws://host:port): the same frame, stamped in the relay's clock, at most 30 per second
+    if (wall && now - wallSent >= 33) { wallSent = now; wall.send({ ...msgOut, fs: { ...fs, t: wall.serverNow() } }); }
     if (out.connected && now - out.last > 3500) { out.connected = false; log('warn', 'output window stopped answering'); }
     hudTick(now);
     frameTick();
@@ -551,7 +560,7 @@ bindNum('s-palevery', 'palEvery', cfg.show, resetAutoPal);
 bindCheck('s-resume', 'resume', cfg.show, () => { pb.autoResume = cfg.show.resume; });
 bindNum('s-resume-s', 'resumeS', cfg.show, () => { pb.resumeSecs = cfg.show.resumeS; });
 bindNum('s-fade', 'fade', cfg.show);
-bindSeg('s-q', () => cfg.q, v => { cfg.q = v; autoQ = 1; });
+bindSeg('s-q', () => cfg.q, v => { cfg.q = v; ladder.reset(); });
 bindCheck('s-big', 'big', cfg, () => { body.classList.toggle('big', cfg.big); layoutPanels(); });
 body.classList.toggle('big', cfg.big);
 $('s-inst').textContent = 'Instance ' + INSTANCE + '   channel ' + chanName;
@@ -593,6 +602,7 @@ const midi = new Midi({
 function renderMidi() {
   $('m-enable').classList.toggle('on', !!midi.access);
   $('m-enable').textContent = midi.access ? 'MIDI on' : 'Enable MIDI';
+  $('m-out').classList.toggle('on', midi.out); $('m-out').textContent = midi.out ? 'MIDI out on' : 'MIDI out off';
   $('m-dev').textContent = !midi.supported ? 'Web MIDI not available' : midi.access ? (midi.devices.length ? midi.devices.join(', ') : 'No MIDI inputs') : '';
   $('m-map').replaceChildren(...MIDI_TARGETS.map(t => {
     const b = document.createElement('button');
@@ -605,6 +615,17 @@ function renderMidi() {
   }));
 }
 $('m-enable').onclick = () => midi.enable();
+$('m-nano').onclick = () => { midi.preset(NANOKONTROL2); log('info', 'MIDI map: nanoKONTROL2 factory layout'); };
+// MIDI out (LEDs of toggles) stays off unless switched on here; the state is sent again on every change
+$('m-out').onclick = () => { midi.out = !midi.out; ledState = ''; renderMidi(); };
+let ledState = '';
+setInterval(() => {
+  if (!midi.out) return;
+  const s = { play: pb.playing, black: flags.blackout, fxFreeze: !!cfg.fx.freeze, sections: !!cfg.nashua.sections }, k = JSON.stringify(s);
+  if (k === ledState) return;
+  ledState = k;
+  for (const id in s) midi.feedback(id, s[id]);
+}, 250);
 renderMidi();
 
 function syncInputs() {
