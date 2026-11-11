@@ -18,7 +18,7 @@ const args = process.argv.slice(2);
 const DRY = args.includes('--dry'), LIVE = args.includes('--check-live');
 const SITE = (args.find(a => a.startsWith('--site=')) || '--site=https://laserpirate.github.io/shanshui-av/').slice(7);
 const BRANCH = 'pages-preview';
-const git = (a, opt = {}) => execFileSync('git', a, { cwd: ROOT, encoding: opt.raw ? 'buffer' : 'utf8', env: { ...process.env, ...(opt.env || {}) }, input: opt.input, maxBuffer: 1 << 28 });
+const git = (a, opt = {}) => execFileSync('git', a, { cwd: ROOT, encoding: opt.raw ? 'buffer' : 'utf8', env: { ...process.env, ...(opt.env || {}) }, input: opt.input, maxBuffer: 1 << 28, stdio: ['pipe', 'pipe', 'pipe'] });
 const out = a => git(a).trim();
 const die = m => { console.error('deploy-next: ' + m); process.exit(1); };
 

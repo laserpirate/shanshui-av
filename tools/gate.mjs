@@ -1,5 +1,5 @@
 // Gate before every push: node --check on all JS, local links resolve, no password strings, zero console
-// errors on load (both worlds).
+// errors on load (all worlds), privacy grep.
 //   node tools/serve.mjs --port 8093 &   then   node tools/gate.mjs [http://localhost:8093/]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,10 +44,14 @@ for (const f of all) {
 }
 console.log('password grep:', all.length, 'files');
 
-// 4. console errors on load (controller and output)
+// 3b. privacy grep (tools/privacy.mjs): names, email, course ids, user paths; tracked and new files
+try { console.log(execFileSync(process.execPath, [path.join(ROOT, 'tools', 'privacy.mjs')], { cwd: ROOT, encoding: 'utf8' }).trim().split(/\r?\n/).pop()); }
+catch (e) { problems.push('privacy grep: ' + String(e.stdout || e.message).slice(0, 600)); }
+
+// 4. console errors on load (controller, all three worlds, and output)
 const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const offline = /^http:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
-for (const url of ['?i=gate&seed=1', '?i=gate-d&seed=1&world=derelict', 'output.html?i=gate']) {
+for (const url of ['?i=gate&seed=1', '?i=gate-d&seed=1&world=derelict', '?i=gate-n&seed=1&world=nashua', 'output.html?i=gate']) {
   const page = await browser.newPage();
   // against localhost, prove the app runs with no internet: block and report anything external
   if (offline) await page.route('**/*', r => { const u = r.request().url(); if (/^(https?:\/\/(localhost|127\.0\.0\.1)|data:|blob:)/.test(u)) return r.continue(); problems.push('external request ' + u); return r.abort(); });
