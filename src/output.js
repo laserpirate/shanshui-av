@@ -69,7 +69,13 @@ function fold(x, key) {
   const span = Math.max(1, reachW(w.pack) - wv.VW / (wv.VH / WORLD_H)), p = ((x % (2 * span)) + 2 * span) % (2 * span);
   return p < span ? p : 2 * span - p;
 }
-chan.onmessage = e => { if (!sync && !clock) onMsg(e.data); else if (e.data.type === 'fxvideo') onMsg(e.data); };
+// ADDENDUM-C C1: &win=<k> marks a window the controller opened (Open windows, Open pair); Close all reaches it here
+const WIN = /^\d{1,2}$/.test(Q.get('win') || '') ? +Q.get('win') : null;
+const WHO = WIN ? { win: WIN, col: wall ? wall.col : 0, row: wall ? wall.row : 0 } : {};
+chan.onmessage = e => {
+  if (e.data && e.data.type === 'close') { if (WIN && (e.data.win === 'all' || +e.data.win === WIN)) { chan.postMessage({ type: 'bye', ...WHO }); window.close(); } return; }
+  if (!sync && !clock) onMsg(e.data); else if (e.data.type === 'fxvideo') onMsg(e.data);
+};
 function onMsg(m) {
   if (m.type === 'fxvideo') {
     if (fxVideo.src) URL.revokeObjectURL(fxVideo.src);
@@ -89,7 +95,7 @@ function onMsg(m) {
   if (m.flags.panic !== flags.panic) { flags.panic = m.flags.panic; $('still').classList.toggle('on', flags.panic); }
   if (m.flags.card !== flags.card) { flags.card = m.flags.card; if (flags.card) drawTestCard($('card')); $('card').classList.toggle('on', flags.card); }
 }
-chan.postMessage({ type: 'hello', w: innerWidth, h: innerHeight, fps: 0 });
+chan.postMessage({ type: 'hello', w: innerWidth, h: innerHeight, fps: 0, ...WHO });
 
 const ladder = new Ladder(say);
 ladder.startFrom(scene.renderer.gl);
@@ -166,7 +172,7 @@ function reach(fs) {
 requestAnimationFrame(tick);
 setInterval(() => {
   const r = $('gl');
-  chan.postMessage({ type: 'beat', w: r.width, h: r.height, fps: scene.fps, blank: scene.watch.blank, chunks: scene.stats().chunks });
+  chan.postMessage({ type: 'beat', w: r.width, h: r.height, fps: scene.fps, blank: scene.watch.blank, chunks: scene.stats().chunks, ...WHO });
 }, 1000);
 
 function full() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().then(() => { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {}); }).catch(() => {}); }
@@ -183,5 +189,5 @@ addEventListener('keyup', e => { if (e.key === 'Escape') { clearTimeout(escT); i
 addEventListener('resize', () => { if (flags.card) drawTestCard($('card')); });
 let idleT = 0;
 addEventListener('mousemove', () => { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(() => document.body.classList.add('idle'), 2000); });
-addEventListener('beforeunload', () => chan.postMessage({ type: 'bye' }));
+addEventListener('beforeunload', () => chan.postMessage({ type: 'bye', ...WHO }));
 window.SSOUT = { scene, cap: CAP, get msg() { return msg; }, flags, wall, get sync() { return sync; }, clock, drift, shown, get fallback() { return fallback; }, ladder, cardStatus };

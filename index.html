@@ -134,6 +134,19 @@
     <div class="row seg" id="mi-scroll"><button data-v="with">With</button><button data-v="against">Against</button><button data-v="free">Free</button></div>
   </section>
 
+  <!-- ADDENDUM-C C1: several output windows as one picture (wall cols x rows), from the Pair menu -->
+  <section id="p-windows" class="panel" hidden>
+    <h3>Windows</h3>
+    <h4>Count</h4>
+    <div class="row seg" id="w-count"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button></div>
+    <h4>Layout</h4>
+    <div class="row seg" id="w-layout"></div>
+    <div class="row"><button id="w-open" title="Open the windows as one picture on this machine">Open windows</button><button id="w-links" title="One clock-mode link per window, one shared start, for several machines">Copy links</button><button id="w-close" title="Close every output window this controller opened">Close all</button></div>
+    <p class="fact" id="w-blocked" hidden></p>
+    <div class="row"><button id="w-next" hidden title="Open one more window (one per press, for a browser that blocks several at once)">Open the next window</button></div>
+    <p class="fact" id="w-status"></p>
+  </section>
+
   <section id="p-show" class="panel" hidden>
     <h3>Show</h3>
     <div class="row"><label class="chk"><input type="checkbox" id="s-auto"> Auto reseed</label></div>
@@ -226,7 +239,7 @@
   <div class="grp mini-part">
     <button id="b-hold" title="Hold (G)">Hold</button>
     <button id="b-out" title="Output window (O)">Output</button>
-    <div class="fold"><button class="fold-b" id="b-pairmenu" aria-haspopup="true" aria-expanded="false" title="Two screens as one long picture">Pair</button><div class="menu" hidden><button id="b-pair" title="Two output windows as one long picture (wall 2 x 1)">Open pair</button><button id="b-pairlinks" title="Two links for two computers, clock mode with a shared start">Copy pair links</button></div></div>
+    <div class="fold"><button class="fold-b" id="b-pairmenu" aria-haspopup="true" aria-expanded="false" title="Two screens as one long picture">Pair</button><div class="menu" hidden><button id="b-pair" title="Two output windows as one long picture (wall 2 x 1)">Open pair</button><button id="b-pairlinks" title="Two links for two computers, clock mode with a shared start">Copy pair links</button><button data-panel="p-windows" id="b-windows" title="1 to 6 output windows as one picture, links, close all">Open windows</button></div></div>
     <button id="b-full" class="mini-keep" title="Menu: full, mini, full screen (F goes straight to full screen)">Full</button>
     <button id="b-black" class="warn" title="Blackout (B)">Black</button>
   </div>
