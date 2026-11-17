@@ -60,4 +60,8 @@ A projector, two real screens, two machines in clock mode with the mirror (one m
 ## Site
 | check | result |
 | --- | --- |
-| deploy /next/ | SITE |
+| deploy /next/ | pages-preview 291f272 (root = main 1f009a1, next/ = eae0755), Pages built 291f272; `src/core/mirror.js` served |
+| the root, live | 134/134 files byte-identical to main 1f009a1 |
+| crawl /next/ | 5 pages, 60 requests, 67 linked files, 0 broken, 0 console errors |
+| e2e on /next/ | 24/24, console clean |
+| the mirror on /next/ | p8 m3 (controls, MIDI, pair links, flag off) and m5 (scroll modes, coverage) pass live, console clean |

@@ -48,6 +48,8 @@ const DEF = {
   // mode: a list of layers (modes.js); sections: the live section toggle (X) on top of any mode
   // hx: world px per m along the river (P6: 8, live 2 to 12); ve 2 and ends ping-pong since P6 (ADDENDUM-A, A1 and A6)
   menu: 'full',
+  // ADDENDUM-C C1: Open windows, count and layout (cols x rows)
+  windows: { n: 3, layout: '3x1' },
   nashua: { bank: 'L', hx: 8, ve: 2, level: 0, flood: 2, runoff: true, ends: 'pingpong', labels: true, outLabels: false, outFacts: false, map: false, outMap: false, mapSize: 'm', mode: MODE_DEFAULT, sections: false, morph: 0, time: { on: false, d: 0, rate: 30, run: false, dayCycle: false, hold: 21 } },
 };
 const saved = load();
@@ -288,6 +290,7 @@ const chan = 'BroadcastChannel' in window ? new BroadcastChannel(chanName) : nul
 const out = { connected: false, last: 0, info: null, fullPreview: false };
 if (chan) chan.onmessage = e => {
   const m = e.data;
+  if (m.win != null && (m.type === 'hello' || m.type === 'beat' || m.type === 'bye')) noteWin(m);
   if (m.type === 'hello' || m.type === 'beat') { out.connected = true; out.last = performance.now(); out.info = m; }
   if (m.type === 'log') log(m.level, 'output: ' + m.msg);
   if (m.type === 'bye') out.connected = false;
@@ -325,18 +328,138 @@ function pairUrl(col, extra = {}) {
 }
 function openPair() {
   const w = Math.floor((screen.availWidth || 2560) / 2), h = Math.round(w * 9 / 16);
-  for (const col of [0, 1]) window.open(pairUrl(col), '_blank', `popup,noopener,left=${col * w},top=0,width=${w},height=${h}`);
+  // &win: opened from here, so Close all (C1) reaches these two as well
+  for (const col of [0, 1]) window.open(pairUrl(col, { win: col + 1 }), '_blank', `popup,noopener,left=${col * w},top=0,width=${w},height=${h}`);
   log('info', 'pair requested: two output windows, wall 2 x 1');
   toast('Pair: two output windows (allow popups); drag each to its display, F for full screen');
+}
+// what a link carries: the current world, seed, speed, palette; for a data world the reach, bank, scale,
+// exaggeration and mode; the mirror state (with ?mirror=1); ADDENDUM-D the loop mode. t0 goes in after the seed.
+function shareParams(t0) {
+  const o = { world: cur.world, seed: cur.seed, ...(t0 != null ? { t0 } : {}), speed: Math.round(cfg.speed), palette: pal.target };
+  if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}), ...(SPREAD_Q ? {} : { spread: 0 }) });
+  if (MIRROR_Q) Object.assign(o, mirrorQuery(cfg.mirror));
+  return o;
 }
 // Copy pair links: for two computers, clock mode with one shared start t0 (10 s from now) and the current world,
 // seed, reach, bank, scale, exaggeration, palette, mode and speed. No server: each machine opens its link.
 function pairLinks(t0 = Date.now() + 10000) {
-  const o = { world: cur.world, seed: cur.seed, t0, speed: Math.round(cfg.speed), palette: pal.target };
-  if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}), ...(SPREAD_Q ? {} : { spread: 0 }) });
-  if (MIRROR_Q) Object.assign(o, mirrorQuery(cfg.mirror));
+  const o = shareParams(t0);
   return [pairUrl(0, o), pairUrl(1, o)];
 }
+
+// ---------- ADDENDUM-C C1: open windows, 1 to 6 output windows as one picture ----------
+// Each window is a wall node (wall=<cols>x<rows>, its col and row) driven by this controller over the BroadcastChannel,
+// as the pair is, and carries the link parameters too. &win=<k> (1 to n, row by row) marks a window opened from here:
+// its hello and beats name it, and Close all reaches it (it closes itself). A browser that blocks several pop-ups at
+// once lets one through per press: windows not heard from within WIN_WAIT are listed, and "Open the next window"
+// opens them one press at a time. Placement: tiled over this screen (screen.avail*), as far as the browser allows.
+const WIN_WAIT = 3000;
+// one row, or a grid with no more rows than columns: 4 -> 4x1, 2x2; 6 -> 6x1, 3x2
+function layoutsFor(n) { const L = []; for (let r = 1; r * r <= n; r++) if (n % r === 0) L.push((n / r) + 'x' + r); return L; }
+function winCfg() {
+  const W = cfg.windows;
+  W.n = Math.max(1, Math.min(6, Math.round(+W.n) || 3));
+  if (!layoutsFor(W.n).includes(W.layout)) W.layout = layoutsFor(W.n)[0];
+  return W;
+}
+function winUrl(cols, rows, col, row, extra = {}) {
+  const url = new URL('output.html', location.href);
+  if (INSTANCE !== 'main') url.searchParams.set('i', INSTANCE);
+  url.searchParams.set('wall', cols + 'x' + rows); url.searchParams.set('col', String(col)); url.searchParams.set('row', String(row));
+  for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, String(v));
+  return url.href;
+}
+function winRect(cols, rows, col, row) {
+  const aw = screen.availWidth || 1920, ah = screen.availHeight || 1080, al = screen.availLeft || 0, at = screen.availTop || 0;
+  const w = Math.floor(aw / cols), h = Math.min(Math.floor(ah / rows), Math.round(w * 9 / 16));
+  return { left: al + col * w, top: at + row * h, width: w, height: h };
+}
+const wins = { cols: 0, rows: 0, list: [], heard: new Map(), t: 0, shown: '' };
+function openWin(w) {
+  const r = w.rect;
+  window.open(w.url, '_blank', `popup,noopener,left=${r.left},top=${r.top},width=${r.width},height=${r.height}`);
+  w.asked = performance.now();
+}
+function openWindows(n, layout) {
+  const W = winCfg();
+  if (n != null) { W.n = n; W.layout = layout || ''; winCfg(); persist(); }
+  const [cols, rows] = W.layout.split('x').map(Number);
+  // a new set replaces the last one (two sets on one channel would draw two walls)
+  if (wins.list.length || wins.heard.size) closeWindows(true);
+  const extra = { ...(['baked', 'offline'].reduce((o, k) => { const v = new URLSearchParams(location.search).get(k); if (v) o[k] = v; return o; }, {})), ...shareParams() };
+  wins.cols = cols; wins.rows = rows; wins.list = []; wins.t = performance.now();
+  for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
+    const k = row * cols + col + 1;
+    wins.list.push({ k, col, row, url: winUrl(cols, rows, col, row, { win: k, ...extra }), rect: winRect(cols, rows, col, row), asked: 0, again: false });
+  }
+  for (const w of wins.list) openWin(w);
+  log('info', `windows requested: ${wins.list.length}, wall ${cols} x ${rows}, tiled over this screen`);
+  toast(`Windows: ${wins.list.length} as ${cols} x ${rows}; F in each for full screen`);
+  setTimeout(renderWins, WIN_WAIT + 50);
+  renderWins();
+  return wins.list.map(w => w.url);
+}
+const winMissing = () => wins.list.filter(w => !wins.heard.has(w.k));
+// one press, one window: the first one not heard from that this button has not just asked for
+function openNextWindow() {
+  const now = performance.now(), m = winMissing().filter(w => now - w.asked > WIN_WAIT || !w.again);
+  const w = m[0];
+  if (!w) { renderWins(); return null; }
+  w.again = true; openWin(w);
+  log('info', `window ${w.k} of ${wins.list.length} requested again (col ${w.col}, row ${w.row})`);
+  setTimeout(renderWins, WIN_WAIT + 50);
+  renderWins();
+  return w.k;
+}
+function closeWindows(quiet) {
+  if (chan) chan.postMessage({ type: 'close', win: 'all' });
+  const n = wins.heard.size;
+  wins.heard.clear(); if (!quiet) wins.list = [];
+  log('info', 'close all: sent to every output window opened from here (' + n + ' heard from)');
+  if (!quiet) toast('Close all: ' + n + ' window' + (n === 1 ? '' : 's'));
+  renderWins();
+}
+function noteWin(m) {
+  const k = +m.win;
+  if (!(k >= 1)) return;
+  if (m.type === 'bye') wins.heard.delete(k); else wins.heard.set(k, performance.now());
+  renderWins();
+}
+// Copy links: one clock-mode link per window of the chosen layout, one shared t0 (10 s from now), for several machines
+function windowLinks(t0 = Date.now() + 10000, layout = winCfg().layout) {
+  const [cols, rows] = layout.split('x').map(Number), o = shareParams(t0), L = [];
+  for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) L.push(winUrl(cols, rows, col, row, o));
+  return L;
+}
+async function copyWindowLinks() {
+  const W = winCfg(), [cols] = W.layout.split('x').map(Number), L = windowLinks();
+  const text = L.map((u, i) => `col ${i % cols} row ${Math.floor(i / cols)}: ${u}`).join('\n');
+  log('info', `window links, ${W.layout} (clock mode, shared t0):\n` + text);
+  try { await navigator.clipboard.writeText(text); toast(`${L.length} links copied: open each on the machine at its column and row`); }
+  catch { toast('Window links in the Log panel (the clipboard was not allowed)'); }
+  return L;
+}
+function renderWins() {
+  if (!$('p-windows')) return;
+  const W = winCfg();
+  for (const b of $('w-count').children) b.classList.toggle('on', +b.dataset.v === W.n);
+  const L = layoutsFor(W.n), have = [...$('w-layout').children].map(b => b.dataset.v).join();
+  if (have !== L.join()) $('w-layout').replaceChildren(...L.map(v => { const b = document.createElement('button'); b.dataset.v = v; b.textContent = v.replace('x', ' x '); b.title = v.endsWith('x1') ? 'one row' : 'a grid'; b.onclick = () => { W.layout = v; persist(); renderWins(); }; return b; }));
+  for (const b of $('w-layout').children) b.classList.toggle('on', b.dataset.v === W.layout);
+  const n = wins.list.length, miss = winMissing(), late = n && performance.now() - wins.t >= WIN_WAIT;
+  const blocked = late && miss.length ? `${miss.length} of ${n} windows did not open: the browser blocked pop-ups. Allow pop-ups for this page, or open them one press at a time.` : '';
+  $('w-blocked').hidden = !blocked; if ($('w-blocked').textContent !== blocked) $('w-blocked').textContent = blocked;
+  $('w-next').hidden = !(late && miss.length);
+  const st = n ? `${wins.cols} x ${wins.rows}: ${n - miss.length} of ${n} open` + (miss.length ? ` (missing ${miss.map(w => w.k).join(', ')})` : '') : `${wins.heard.size} open from here`;
+  if ($('w-status').textContent !== st) $('w-status').textContent = st;
+}
+for (const b of $('w-count').children) b.onclick = () => { winCfg().n = +b.dataset.v; winCfg(); persist(); renderWins(); };
+$('w-open').onclick = () => openWindows();
+$('w-next').onclick = () => openNextWindow();
+$('w-links').onclick = () => copyWindowLinks();
+$('w-close').onclick = () => closeWindows(false);
+renderWins();
 async function copyPairLinks() {
   const L = pairLinks(), text = 'left screen:  ' + L[0] + '\nright screen: ' + L[1];
   log('info', 'pair links (clock mode, shared t0):\n' + text);
@@ -1552,7 +1675,7 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  view: () => viewForExport(), setLabels, setMapInset, pairLinks, openPair, get mapInset() { return { on: mapInset.on, draws: mapInset.draws, ms: mapInset.ms, dot: mapInset.dot, w: mapInset.g && mapInset.g.w, h: mapInset.g && mapInset.g.h, hits: mapInset.hits }; },
+  view: () => viewForExport(), setLabels, setMapInset, pairLinks, openPair, openWindows, openNextWindow, windowLinks, closeWindows, layoutsFor, get wins() { return { cols: wins.cols, rows: wins.rows, n: wins.list.length, heard: [...wins.heard.keys()].sort((a, b) => a - b), missing: winMissing().map(w => w.k), rects: wins.list.map(w => w.rect) }; }, get mapInset() { return { on: mapInset.on, draws: mapInset.draws, ms: mapInset.ms, dot: mapInset.dot, w: mapInset.g && mapInset.g.w, h: mapInset.g && mapInset.g.h, hits: mapInset.hits }; },
   midiRoles: () => MIDI_TARGETS.map(t => t.id), midiAct: (id, v) => { const a = ACT[id]; return a ? (a.fire ? a.fire() : a.set(v)) : 'no role ' + id; },   // tests: a role as a MIDI binding fires it
   setBank, setVE, setHX, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get tags() { return tagStream ? tagStream.ring.slice() : null; }, tagScene: () => (tagStream ? tagStream.scene : null), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

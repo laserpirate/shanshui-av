@@ -493,6 +493,9 @@ export class Renderer {
   // so the frame never waits on the GPU (a sync readPixels cost a dropped frame each time)
   readAsync(t, cb) {
     if (this.lost) return;
+    // one read in flight per target: a second write to the pack buffer before the first is read back discards
+    // Chrome's shadow copy (a console warning; seen in P9 when popups cover a throttled controller)
+    if (this.reads && this.reads.some(r => r.t === t)) return;
     const gl = this.gl;
     if (!t.pbo) { t.pbo = gl.createBuffer(); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, t.pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER, t.w * t.h * 4, gl.STREAM_READ); }
     gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);

@@ -39,6 +39,7 @@ export const PARAMS = [
   ['gamma', 'o w', 'display gamma for the blend'],
   ['ks', 'o w', 'four-corner keystone offsets'],
   ['cal', 'o w', '1, start on the calibration card'],
+  ['win', 'o', 'set by Open windows and Open pair: Close all closes it'],
   ['cap', 'o w', 'brightness ceiling 0.1 to 1'],
   ['t0', 'w', 'clock mode: shared start, epoch ms'],
   ['speed', 'w', 'clock mode: px per s'],
@@ -55,6 +56,7 @@ export const PARAMS = [
 export const PAIR = [
   'Open pair: two output windows as a 2 x 1 wall on this machine. Drag each to its screen, press F in each.',
   'Copy pair links: two clock-mode links with one shared t0, 10 s ahead, for two machines (clocks on NTP).',
+  'Open windows (Pair menu): 1 to 6 output windows as one picture, one row or a grid; Copy links for as many machines; Close all.',
   'The relay for a wall over a network: tools/wall-server.mjs, port 8097; WALL.md.',
 ];
 export const README = 'https://github.com/laserpirate/shanshui-av/blob/feat/nashua/README.md';
