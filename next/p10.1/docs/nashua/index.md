@@ -1,0 +1,230 @@
+# Nashua review sheet
+
+Strips of the whole reach (2458.8 m, 4917.6 world px, plus 24 px of paper at each end), rendered by the app in one viewport as wide as the reach. Made with `node tools/nashua/review.mjs`. Palette nashua-kit, seed 1, Vertical Exaggeration 10x, dry, fog 0.25. Day: light 1. Night: light 0, lights on. Pack hash 2cd2b856a894206a.
+
+Left bank: downstream to the right. Right bank: downstream to the left (the mirror).
+
+| Strip | px | Bank | Light | Water level | Labels | KB |
+| --- | --- | --- | --- | --- | --- | --- |
+| [nashua_720p_bank-L_day_level-0.jpg](nashua_720p_bank-L_day_level-0.jpg) | 5104 x 720 | left bank | day | Median Water 28.30 m (92.8 ft) | off | 338 |
+| [nashua_720p_bank-L_day_level-2.jpg](nashua_720p_bank-L_day_level-2.jpg) | 5104 x 720 | left bank | day | Fluvial · Minor Flood 32.01 m (105.0 ft) | off | 390 |
+| [nashua_720p_bank-L_day_level-4.jpg](nashua_720p_bank-L_day_level-4.jpg) | 5104 x 720 | left bank | day | Fluvial · 1936 Flood of Record 39.09 m (128.26 ft) | off | 298 |
+| [nashua_720p_bank-L_night_level-0.jpg](nashua_720p_bank-L_night_level-0.jpg) | 5104 x 720 | left bank | night | Median Water 28.30 m (92.8 ft) | off | 210 |
+| [nashua_720p_bank-L_night_level-2.jpg](nashua_720p_bank-L_night_level-2.jpg) | 5104 x 720 | left bank | night | Fluvial · Minor Flood 32.01 m (105.0 ft) | off | 244 |
+| [nashua_720p_bank-L_night_level-4.jpg](nashua_720p_bank-L_night_level-4.jpg) | 5104 x 720 | left bank | night | Fluvial · 1936 Flood of Record 39.09 m (128.26 ft) | off | 181 |
+| [nashua_720p_bank-R_day_level-0.jpg](nashua_720p_bank-R_day_level-0.jpg) | 5104 x 720 | right bank | day | Median Water 28.30 m (92.8 ft) | off | 338 |
+| [nashua_720p_bank-R_day_level-2.jpg](nashua_720p_bank-R_day_level-2.jpg) | 5104 x 720 | right bank | day | Fluvial · Minor Flood 32.01 m (105.0 ft) | off | 374 |
+| [nashua_720p_bank-R_day_level-4.jpg](nashua_720p_bank-R_day_level-4.jpg) | 5104 x 720 | right bank | day | Fluvial · 1936 Flood of Record 39.09 m (128.26 ft) | off | 320 |
+| [nashua_720p_bank-R_night_level-0.jpg](nashua_720p_bank-R_night_level-0.jpg) | 5104 x 720 | right bank | night | Median Water 28.30 m (92.8 ft) | off | 211 |
+| [nashua_720p_bank-R_night_level-2.jpg](nashua_720p_bank-R_night_level-2.jpg) | 5104 x 720 | right bank | night | Fluvial · Minor Flood 32.01 m (105.0 ft) | off | 235 |
+| [nashua_720p_bank-R_night_level-4.jpg](nashua_720p_bank-R_night_level-4.jpg) | 5104 x 720 | right bank | night | Fluvial · 1936 Flood of Record 39.09 m (128.26 ft) | off | 199 |
+| [nashua_720p_bank-L_day_level-0_labels.jpg](nashua_720p_bank-L_day_level-0_labels.jpg) | 5104 x 720 | left bank | day | Median Water 28.30 m (92.8 ft) | on | 350 |
+| [nashua_720p_bank-R_day_level-0_labels.jpg](nashua_720p_bank-R_day_level-0_labels.jpg) | 5104 x 720 | right bank | day | Median Water 28.30 m (92.8 ft) | on | 346 |
+| [nashua_1080p_bank-L_day_level-0.jpg](nashua_1080p_bank-L_day_level-0.jpg) | 7656 x 1080 | left bank | day | Median Water 28.30 m (92.8 ft) | off | 752 |
+| [nashua_1080p_bank-L_night_level-3.jpg](nashua_1080p_bank-L_night_level-3.jpg) | 7656 x 1080 | left bank | night | Fluvial · 1% Annual Chance Flood (FEMA) 34.63 m (113.6 ft) | off | 524 |
+| [nashua_1080p_bank-R_day_level-0.jpg](nashua_1080p_bank-R_day_level-0.jpg) | 7656 x 1080 | right bank | day | Median Water 28.30 m (92.8 ft) | off | 752 |
+| [nashua_1080p_bank-R_night_level-3.jpg](nashua_1080p_bank-R_night_level-3.jpg) | 7656 x 1080 | right bank | night | Fluvial · 1% Annual Chance Flood (FEMA) 34.63 m (113.6 ft) | off | 516 |
+
+![720p left bank day Median Water 28.30 m (92.8 ft)](nashua_720p_bank-L_day_level-0.jpg)
+
+![720p left bank day Fluvial · Minor Flood 32.01 m (105.0 ft)](nashua_720p_bank-L_day_level-2.jpg)
+
+![720p left bank day Fluvial · 1936 Flood of Record 39.09 m (128.26 ft)](nashua_720p_bank-L_day_level-4.jpg)
+
+![720p left bank night Median Water 28.30 m (92.8 ft)](nashua_720p_bank-L_night_level-0.jpg)
+
+![720p left bank night Fluvial · Minor Flood 32.01 m (105.0 ft)](nashua_720p_bank-L_night_level-2.jpg)
+
+![720p left bank night Fluvial · 1936 Flood of Record 39.09 m (128.26 ft)](nashua_720p_bank-L_night_level-4.jpg)
+
+![720p right bank day Median Water 28.30 m (92.8 ft)](nashua_720p_bank-R_day_level-0.jpg)
+
+![720p right bank day Fluvial · Minor Flood 32.01 m (105.0 ft)](nashua_720p_bank-R_day_level-2.jpg)
+
+![720p right bank day Fluvial · 1936 Flood of Record 39.09 m (128.26 ft)](nashua_720p_bank-R_day_level-4.jpg)
+
+![720p right bank night Median Water 28.30 m (92.8 ft)](nashua_720p_bank-R_night_level-0.jpg)
+
+![720p right bank night Fluvial · Minor Flood 32.01 m (105.0 ft)](nashua_720p_bank-R_night_level-2.jpg)
+
+![720p right bank night Fluvial · 1936 Flood of Record 39.09 m (128.26 ft)](nashua_720p_bank-R_night_level-4.jpg)
+
+![720p left bank day Median Water 28.30 m (92.8 ft) labels](nashua_720p_bank-L_day_level-0_labels.jpg)
+
+![720p right bank day Median Water 28.30 m (92.8 ft) labels](nashua_720p_bank-R_day_level-0_labels.jpg)
+
+![1080p left bank day Median Water 28.30 m (92.8 ft)](nashua_1080p_bank-L_day_level-0.jpg)
+
+![1080p left bank night Fluvial · 1% Annual Chance Flood (FEMA) 34.63 m (113.6 ft)](nashua_1080p_bank-L_night_level-3.jpg)
+
+![1080p right bank day Median Water 28.30 m (92.8 ft)](nashua_1080p_bank-R_day_level-0.jpg)
+
+![1080p right bank night Fluvial · 1% Annual Chance Flood (FEMA) 34.63 m (113.6 ft)](nashua_1080p_bank-R_night_level-3.jpg)
+
+<!-- p5 strips: made by tools/nashua/review-p5.mjs -->
+## P5 strips
+
+Made with `node tools/nashua/review-p5.mjs`, the same way as the strips above (seed 1, nashua-kit, Vertical Exaggeration 10x, dry, fog 0.25, 720 px high, the whole reach in one viewport). "Lit" is the share of pixels brighter than 110 of 255 (luma), so the day and the night strips can be compared by one number.
+
+| Strip | px | What | Pack | Lit | KB |
+| --- | --- | --- | --- | --- | --- |
+| [nashua_720p_bank-L_daycycle-2200_level-0.jpg](nashua_720p_bank-L_daycycle-2200_level-0.jpg) | 5104 x 720 | Nashua, left bank, day cycle at 22:00 EST on 2024-07-01, Median Water | 2cd2b856a894206a, 2458.8 m | 0.0007 | 213 |
+| [nashua_720p_bank-L_daycycle-1200_level-0.jpg](nashua_720p_bank-L_daycycle-1200_level-0.jpg) | 5104 x 720 | Nashua, left bank, day cycle at 12:00 EST on 2024-07-01, Median Water | 2cd2b856a894206a, 2458.8 m | 0.0323 | 338 |
+| [merrimack_720p_bank-L_day_level-0.jpg](merrimack_720p_bank-L_day_level-0.jpg) | 10344 x 720 | Merrimack, left bank, day, Median Water | cec345b089d01283, 5008 m | 0.0341 | 719 |
+| [merrimack_720p_bank-L_night_level-0.jpg](merrimack_720p_bank-L_night_level-0.jpg) | 10344 x 720 | Merrimack, left bank, night, Median Water | cec345b089d01283, 5008 m | 0.0004 | 431 |
+| [merrimack_720p_bank-R_day_level-2.jpg](merrimack_720p_bank-R_day_level-2.jpg) | 10344 x 720 | Merrimack, right bank, day, level 2 | cec345b089d01283, 5008 m | 0.0372 | 746 |
+| [nashua_720p_bank-L_day_level-0_ticks.jpg](nashua_720p_bank-L_day_level-0_ticks.jpg) | 5104 x 720 | Nashua, left bank, day, `?ticks=1` (a tick every 100 m, a label every 500 m) | 2cd2b856a894206a, 2458.8 m | 0.0357 | 344 |
+| [output_720p_nashua_day.jpg](output_720p_nashua_day.jpg) | 5104 x 720 | Output window, Nashua, day, no cap | output | 0.0316 | 338 |
+| [output_720p_nashua_day_cap-60.jpg](output_720p_nashua_day_cap-60.jpg) | 5104 x 720 | Output window, Nashua, day, `&cap=0.6` | output | 0.0054 | 253 |
+| [hydrograph_1936-03-19.png](hydrograph_1936-03-19.png) | 480 x 133 | `?hydro=1` at 1936-03-19 (the hydrograph only, 480 x 132 css px) | controller | 0.0772 | 16 |
+
+The Merrimack reach: 5008 m below the confluence, from the same DEM, land cover and footprints as the Nashua, by `tools/nashua/build-reach.py`. No measured bed (the proxy only), no dam, lot, stations or outfalls in it, and its water levels are the Nashua's carried unchanged (the fact line says so).
+
+![Nashua, left bank, day cycle at 22:00 EST on 2024-07-01, Median Water](nashua_720p_bank-L_daycycle-2200_level-0.jpg)
+
+![Nashua, left bank, day cycle at 12:00 EST on 2024-07-01, Median Water](nashua_720p_bank-L_daycycle-1200_level-0.jpg)
+
+![Merrimack, left bank, day, Median Water](merrimack_720p_bank-L_day_level-0.jpg)
+
+![Merrimack, left bank, night, Median Water](merrimack_720p_bank-L_night_level-0.jpg)
+
+![Merrimack, right bank, day, level 2](merrimack_720p_bank-R_day_level-2.jpg)
+
+![Nashua, left bank, day, `?ticks=1` (a tick every 100 m, a label every 500 m)](nashua_720p_bank-L_day_level-0_ticks.jpg)
+
+![Output window, Nashua, day, no cap](output_720p_nashua_day.jpg)
+
+![Output window, Nashua, day, `&cap=0.6`](output_720p_nashua_day_cap-60.jpg)
+
+![`?hydro=1` at 1936-03-19 (the hydrograph only, 480 x 132 css px)](hydrograph_1936-03-19.png)
+
+<!-- end p5 strips -->
+
+<!-- p6 strips: made by tools/nashua/review-p6.mjs -->
+## P6 strips: before and after
+
+Made with `node tools/nashua/review-p6.mjs`. Seed 1, nashua-kit, left bank (the north bank, downstream to the right), day, Median Water, dry, fog 0.25, labels off, 360 px high, the whole reach plus 24 world px of paper at each end. Before: the `.p5` tag, with the filled hills, 2 world px per m, Vertical Exaggeration 10x. After: P6 at its defaults, no filled hills (one thin ridgeline of real ground, the near bank, the buildings in rows by distance), 8 world px per m, Vertical Exaggeration 2x. The after strips are four times as long because the horizontal scale is four times larger; the heights are one fifth because the exaggeration is one fifth. Building heights are estimated.
+
+| Strip | px | Reach | When | Scale | Pack | KB |
+| --- | --- | --- | --- | --- | --- | --- |
+| [p6_nashua_360p_bank-L_day_level-0_before.jpg](p6_nashua_360p_bank-L_day_level-0_before.jpg) | 2552 x 360 | Nashua, 2458.8 m | before | 2 px per m, 10x | 2cd2b856a894206a | 91 |
+| [p6_nashua_360p_bank-L_day_level-0_after.jpg](p6_nashua_360p_bank-L_day_level-0_after.jpg) | 10134 x 360 | Nashua, 2458.8 m | after | 8 px per m, 2x | 6f84a65ea6634724 | 232 |
+| [p6_merrimack_360p_bank-L_day_level-0_before.jpg](p6_merrimack_360p_bank-L_day_level-0_before.jpg) | 5172 x 360 | Merrimack, 5008 m | before | 2 px per m, 10x | cec345b089d01283 | 195 |
+| [p6_merrimack_360p_bank-L_day_level-0_after.jpg](p6_merrimack_360p_bank-L_day_level-0_after.jpg) | 20614 x 360 | Merrimack, 5008 m | after | 8 px per m, 2x | d6e8e688ca0912da | 540 |
+
+![Nashua before: 2 world px per m, Vertical Exaggeration 10x](p6_nashua_360p_bank-L_day_level-0_before.jpg)
+
+![Nashua after: 8 world px per m, Vertical Exaggeration 2x](p6_nashua_360p_bank-L_day_level-0_after.jpg)
+
+![Merrimack before: 2 world px per m, Vertical Exaggeration 10x](p6_merrimack_360p_bank-L_day_level-0_before.jpg)
+
+![Merrimack after: 8 world px per m, Vertical Exaggeration 2x](p6_merrimack_360p_bank-L_day_level-0_after.jpg)
+
+The controller at s 1110 m (the church behind the lot), labels on, the map inset on at its default size (400 px): north up, the stations, the dot at the playhead.
+
+![Controller with labels and the map inset](p6_nashua_720p_map-inset_labels.jpg)
+
+<!-- end p6 strips -->
+
+<!-- p7 frames: made by tools/nashua/review-p7.mjs -->
+## P7 frames (ADDENDUM-B)
+
+Made with `node tools/nashua/review-p7.mjs`. 1280 x 720 controller frames, seed 1, nashua-kit, day, labels on, fog 0. Before is the `.p6` state served from its own worktree.
+
+**Manual check for the owner (B7):** do the two after frames at the mouth read as two rivers meeting? The perspective past the mouth is forced and not to scale; the fact line says so while it is in view.
+
+| Frame | State | What | KB |
+| --- | --- | --- | --- |
+| [p7_mouth_bank-L_before.jpg](p7_mouth_bank-L_before.jpg) | before (.p6) | B7 before (.p6): the section runs on past the mouth into S6 | 119 |
+| [p7_mouth_bank-L_after.jpg](p7_mouth_bank-L_after.jpg) | after | B7 after: the section stops at the mouth; the Merrimack in forced perspective, not to scale | 111 |
+| [p7_mouth_bank-R_before.jpg](p7_mouth_bank-R_before.jpg) | before (.p6) | B7 before (.p6), right bank | 111 |
+| [p7_mouth_bank-R_after.jpg](p7_mouth_bank-R_after.jpg) | after | B7 after, right bank | 107 |
+| [p7_glyph_dam.jpg](p7_glyph_dam.jpg) | after | B8 Dam: a wide body, the crest gate, the spillway face with falling water, the headpond above the tailwater | 109 |
+| [p7_glyph_factory.jpg](p7_glyph_factory.jpg) | after | B8 Factory: the long mill, a sawtooth roof, the smokestack (not in the data; Owner's call); a boxcar on the rail bridge | 117 |
+| [p7_glyph_canal-st.jpg](p7_glyph_canal-st.jpg) | after | B8 Canal St: a bolder deck and pier, a car | 115 |
+| [p7_glyph_church.jpg](p7_glyph_church.jpg) | after | B8 Church: a nave, a steeple, a cross | 117 |
+| [p7_glyph_rail-bridge.jpg](p7_glyph_rail-bridge.jpg) | after | B8 rail bridge at s 1706: a boxcar | 122 |
+| [p7_glyph_cso-6.jpg](p7_glyph_cso-6.jpg) | after | B8 CSO #6 on the right bank: a pipe mouth in a headwall | 121 |
+| [p7_glyph_levee.jpg](p7_glyph_levee.jpg) | after | B8 Levee (approximate), the Merrimack reach, right bank | 99 |
+| [p7_runoff_lot_rain.jpg](p7_runoff_lot_rain.jpg) | after | B9 Rain on: sheet runoff from the lot down the bank, a plume in the water | 134 |
+| [p7_runoff_cso-9_rain.jpg](p7_runoff_cso-9_rain.jpg) | after | B9 Rain on: CSO #9 running, a plume drifting downstream | 123 |
+| [p7_runoff_cso-9_flood.jpg](p7_runoff_cso-9_flood.jpg) | after | B9 Rain on at Minor Flood: the mouth under water, a stronger plume | 125 |
+| [p7_ui_mini-menu.jpg](p7_ui_mini-menu.jpg) | after | B5 the mini menu: Play, Speed, World, Guide, Full screen, Labels, Map | 127 |
+| [p7_ui_guide.jpg](p7_ui_guide.jpg) | after | B6 the quick guide: keys, the bar, URL parameters, a pair | 160 |
+| [p7_ui_map-float.jpg](p7_ui_map-float.jpg) | after | B1 the map floated over the header | 136 |
+
+![B7 before (.p6): the section runs on past the mouth into S6](p7_mouth_bank-L_before.jpg)
+
+![B7 after: the section stops at the mouth; the Merrimack in forced perspective, not to scale](p7_mouth_bank-L_after.jpg)
+
+![B7 before (.p6), right bank](p7_mouth_bank-R_before.jpg)
+
+![B7 after, right bank](p7_mouth_bank-R_after.jpg)
+
+![B8 Dam: a wide body, the crest gate, the spillway face with falling water, the headpond above the tailwater](p7_glyph_dam.jpg)
+
+![B8 Factory: the long mill, a sawtooth roof, the smokestack (not in the data; Owner's call); a boxcar on the rail bridge](p7_glyph_factory.jpg)
+
+![B8 Canal St: a bolder deck and pier, a car](p7_glyph_canal-st.jpg)
+
+![B8 Church: a nave, a steeple, a cross](p7_glyph_church.jpg)
+
+![B8 rail bridge at s 1706: a boxcar](p7_glyph_rail-bridge.jpg)
+
+![B8 CSO #6 on the right bank: a pipe mouth in a headwall](p7_glyph_cso-6.jpg)
+
+![B8 Levee (approximate), the Merrimack reach, right bank](p7_glyph_levee.jpg)
+
+![B9 Rain on: sheet runoff from the lot down the bank, a plume in the water](p7_runoff_lot_rain.jpg)
+
+![B9 Rain on: CSO #9 running, a plume drifting downstream](p7_runoff_cso-9_rain.jpg)
+
+![B9 Rain on at Minor Flood: the mouth under water, a stronger plume](p7_runoff_cso-9_flood.jpg)
+
+![B5 the mini menu: Play, Speed, World, Guide, Full screen, Labels, Map](p7_ui_mini-menu.jpg)
+
+![B6 the quick guide: keys, the bar, URL parameters, a pair](p7_ui_guide.jpg)
+
+![B1 the map floated over the header](p7_ui_map-float.jpg)
+
+<!-- end p7 frames -->
+
+<!-- p8 strips: made by tools/nashua/review-p8.mjs -->
+## P8 strips (ADDENDUM-B B11, the mirror)
+
+Made with `node tools/nashua/review-p8.mjs`. 1280 x 720 controller frames with `?mirror=1&mon=1`, seed 1, day, fog 0, the default axis (20 px below the water line) and strength (0.85) unless the row says otherwise.
+
+| Frame | What | KB |
+| --- | --- | --- |
+| [p8_mirror_shanshui.jpg](p8_mirror_shanshui.jpg) | shanshui: the next seed (2) below the water line, scrolling with | 152 |
+| [p8_mirror_derelict.jpg](p8_mirror_derelict.jpg) | derelict: the next seed (2) below the water line | 152 |
+| [p8_mirror_nashua_other-bank.jpg](p8_mirror_nashua_other-bank.jpg) | nashua: the other bank (right) below the north bank, turned so each column is the same station | 49 |
+| [p8_mirror_nashua_axis-80.jpg](p8_mirror_nashua_axis-80.jpg) | nashua: the axis at 80 px below the water line | 53 |
+| [p8_mirror_nashua_alt-shanshui.jpg](p8_mirror_nashua_alt-shanshui.jpg) | nashua over shanshui (seed 1), scrolling against, strength 0.6 | 69 |
+
+![shanshui: the next seed (2) below the water line, scrolling with](p8_mirror_shanshui.jpg)
+
+![derelict: the next seed (2) below the water line](p8_mirror_derelict.jpg)
+
+![nashua: the other bank (right) below the north bank, turned so each column is the same station](p8_mirror_nashua_other-bank.jpg)
+
+![nashua: the axis at 80 px below the water line](p8_mirror_nashua_axis-80.jpg)
+
+![nashua over shanshui (seed 1), scrolling against, strength 0.6](p8_mirror_nashua_alt-shanshui.jpg)
+
+<!-- end p8 strips -->
+
+## P10 strips (ADDENDUM-D D1.3, Build)
+
+Made by `node tests/p10.mjs --only=d4-build-stages` (the test that each stage adds ink). One row per stage, 1 at the top to 8 at the bottom; each row is six 1280 x 720 controller frames evenly along the pass, at a quarter size, palette original, day, fog 0.35. shanshui seed 3 (16 view widths), nashua seed 1 (the reach).
+
+| Strip | What |
+| --- | --- |
+| [p10_build_shanshui.jpg](p10_build_shanshui.jpg) | shanshui: 1 water line, 2 ground line, 3 distant mountains, 4 near mountains and rocks, 5 single trees, 6 clusters, 7 groves, 8 the engine's water and boats |
+| [p10_build_nashua.jpg](p10_build_nashua.jpg) | nashua: 1 water line, 2 bank top line, 3 ridge, bank and bed, 4 bank texture, 5 single trees, 6 clusters, 7 every tree, 8 the water surface and mist |
+
+![shanshui Build stages 1 to 8](p10_build_shanshui.jpg)
+
+![nashua Build stages 1 to 8](p10_build_nashua.jpg)
+
+<!-- end p10 strips -->

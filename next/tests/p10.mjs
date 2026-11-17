@@ -169,6 +169,29 @@ for (const absent of [false, true]) await test(absent ? 'd3-layers-no-design' : 
   assert(design === true ? !said : /design is skipped/.test(said), 'design line: ' + said);
   return { designPack: design, cycle: names, outgoingKeepsLayers: during.length, line: said };
 });
+// d3b (found live on /next/p10/): a page that starts in Layers with no design pack (?loop=layers, or Layers kept from the
+// last visit) must load clean. At .p10 the "design skipped" toast ran before the toast timer was declared and threw.
+// The page knows the pack is absent at once only on a *.github.io host, so a local server is reached under such a name.
+// Planted: before the fix this test fails on the error.
+await test('d3b-layers-at-load-no-design', async () => {
+  const u = new URL(BASE), local = !/\.github\.io$/.test(u.hostname);
+  const b2 = local ? await chromium.launch({ headless: false, args: [...GPU, `--host-resolver-rules=MAP ssav-test.github.io ${u.hostname}:${u.port || 80}`] }) : browser;
+  const base = local ? `http://ssav-test.github.io${u.pathname}` : BASE;
+  const ctx = await b2.newContext({ viewport: { width: 1280, height: 720 } });
+  await ctx.route('**/data/local/nashua/design/pack.json', r => r.fulfill({ status: 404, body: '' }));
+  const p = await ctx.newPage();
+  const n0 = consoleProblems.length; watch(p);
+  await p.goto(base + '?i=p10-d3b&world=nashua&seed=1&loop=layers');
+  await p.waitForFunction(() => window.SSAV && SSAV.world() && SSAV.world().pack && SSAV.scene.stats().tiles >= 1, null, { timeout: 30000 });
+  await p.waitForFunction(() => SSAV.loop.design === false, null, { timeout: 10000 });
+  const s = await p.evaluate(() => ({ cfg: SSAV.loop.cfg, said: document.getElementById('s-loop-design').textContent }));
+  await ctx.close(); if (local) await b2.close();
+  for (let i = consoleProblems.length - 1; i >= n0; i--) if (/404/.test(consoleProblems[i].text)) consoleProblems.splice(i, 1);
+  const errs = consoleProblems.slice(n0).map(c => c.text);
+  assert(!errs.length, 'errors at load: ' + errs.join(' | '));
+  assert(s.cfg === 'layers' && /design is skipped/.test(s.said), 'state ' + JSON.stringify(s));
+  return s;
+});
 
 // ---------- d4: Build. Each stage adds ink over the one before. Rule: at least 0.08 % of the pixels of a strip of
 // 6 views (1280 x 720, about 740 px a view) are 30 or more darker (luminance) than at the same place one stage before.

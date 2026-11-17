@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>AV Shan Shui Infinite Scrolls</title>
+<link rel="icon" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl" aria-label="landscape"></canvas>
+  <canvas id="still" width="960" height="540"></canvas>
+  <canvas id="card"></canvas>
+  <div id="frame" hidden><span id="frame-tag"></span></div>
+  <div id="labels" class="reach-labels" hidden></div>
+  <div id="playhead" class="playhead" hidden></div>
+  <canvas id="section" class="section-inset" hidden></canvas>
+  <div id="black"></div>
+</div>
+
+<div id="hud" class="ui">
+  <div><b id="hud-seed">seed</b> <span id="hud-pal"></span> <span id="hud-world"></span></div>
+  <div id="hud-stats"></div>
+  <div id="hud-flags"></div>
+  <div id="hud-loop"></div>
+  <div id="hud-facts"></div>
+</div>
+
+<div id="panels" class="ui">
+  <section id="p-seed" class="panel" hidden>
+    <h3>Seed</h3>
+    <div class="row"><input id="seed-in" type="text" maxlength="64" spellcheck="false" aria-label="seed"><button id="seed-go">Go</button></div>
+    <div class="row"><button id="seed-copy">Copy link</button><a id="seed-orig" class="btn" target="_blank" rel="noopener">Original site</a></div>
+    <h4>History</h4><ol id="hist" class="list"></ol>
+    <h4>Starred</h4><ol id="stars" class="list"></ol>
+  </section>
+
+  <section id="p-look" class="panel" hidden>
+    <h3>Palette</h3>
+    <div class="row"><label class="chk"><input type="checkbox" id="pal-starred-only"> P cycles starred only</label></div>
+    <div id="grad-edit" hidden>
+      <h4>Gradient stops</h4>
+      <div id="grad-stops"></div>
+      <div class="row"><button id="grad-add">Add stop</button><button id="grad-reset">Reset</button></div>
+      <div class="row seg" id="grad-drift"><button data-v="x">Distance</button><button data-v="time">Time</button></div>
+      <label class="sl">Drift <input type="range" id="grad-rate" min="0" max="1" step="0.001"><output id="grad-rate-o"></output></label>
+    </div>
+    <h4>Adjust</h4>
+    <label class="sl">Contrast <input type="range" id="u-contrast" min="0.3" max="3" step="0.01"><output></output></label>
+    <label class="sl">Ink weight <input type="range" id="u-ink" min="0.2" max="2.5" step="0.01"><output></output></label>
+    <label class="sl">Zoom <input type="range" id="u-zoom" min="0.4" max="2" step="0.01"><output></output></label>
+    <label class="sl">Vertical <input type="range" id="u-yalign" min="0" max="1" step="0.01"><output></output></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="u-paper"> Paper texture</label><label class="chk"><input type="checkbox" id="u-vignette"> Vignette</label></div>
+    <div class="row"><button id="u-reset">Reset adjust</button></div>
+    <h4>Palettes</h4>
+    <div id="pal-list"></div>
+  </section>
+
+  <section id="p-weather" class="panel" hidden>
+    <h3>Weather</h3>
+    <div class="kv" id="weather-off" hidden>No weather in this world</div>
+    <div class="row seg" id="w-cycle"><button data-v="auto">Auto</button><button data-v="dry">dry</button><button data-v="drizzle">drizzle</button><button data-v="downpour">downpour</button><button data-v="flood">flood</button><button data-v="night">night</button></div>
+    <label class="sl">Cycle <input type="number" id="w-period" min="30" max="3600" step="30"><span>s</span></label>
+    <div class="kv" id="w-phase"></div>
+    <label class="sl">Rain <input type="range" id="w-rain" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-rain-f">Cycle</button></div>
+    <label class="sl">Wind <input type="range" id="w-wind" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-wind-f">Cycle</button></div>
+    <label class="sl">Water <input type="range" id="w-water" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-water-f">Cycle</button></div>
+    <label class="sl">Fog <input type="range" id="w-fog" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-fog-f">Cycle</button></div>
+    <label class="sl">Light <input type="range" id="w-light" min="0" max="1" step="0.01"><output></output></label><div class="row"><button id="w-light-f">Cycle</button></div>
+  </section>
+
+  <section id="p-reach" class="panel" hidden>
+    <h3>Reach</h3>
+    <div class="kv" id="r-off" hidden>Only in the nashua world</div>
+    <div class="row seg" id="r-reach"><button data-v="nashua" title="The Nashua from the dam to the confluence">Nashua</button><button data-v="merrimack" title="The Merrimack below the confluence">Merrimack</button></div>
+    <div class="row seg" id="r-bank"><button data-v="L" title="Bank (K)">Left bank</button><button data-v="R" title="Bank (K)">Right bank</button></div>
+    <label class="sl">Horizontal scale <input type="range" id="r-hx" min="2" max="12" step="1" title="World px per metre along the river"><output></output></label>
+    <label class="sl">Vertical Exaggeration <input type="range" id="r-ve" min="1" max="20" step="1" title=", and ."><output></output></label>
+    <h4>Water level (1 to 6)</h4>
+    <div id="r-levels" class="list rlevels"></div>
+    <label class="sl">Level <input type="range" id="r-level" min="0" max="4" step="0.01"><output></output></label>
+    <h4>Time (Nashua River at East Pepperell, upstream proxy)</h4>
+    <div class="row"><button id="r-time-on">Time off</button><button id="r-time-run">Run</button><button id="r-time-1936">March 1936</button><button id="r-time-day">Day cycle</button></div>
+    <div class="row seg" id="r-time-rate"><button data-v="0.0166667">1 day/min</button><button data-v="1">1 day/s</button><button data-v="30">30 days/s</button><button data-v="365">1 year/s</button></div>
+    <label class="sl">Date <input type="range" id="r-time" min="0" max="1" step="1"><output id="r-time-out"></output></label>
+    <h4>Morph</h4>
+    <label class="sl morph"><input type="range" id="r-morph" min="0" max="1" step="0.05"><output></output></label>
+    <div class="row morph-ends"><span>Existing Grade (before landform)</span><span>Landform Sequence (after landform)</span></div>
+    <div class="kv" id="r-morph-note" hidden></div>
+    <h4>Mode (M)</h4>
+    <div class="row seg" id="r-mode"><button data-v="nature">nature</button><button data-v="built">built</button><button data-v="design">design</button><button data-v="sections">sections</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="r-sections"> Sections (X)</label></div>
+    <div class="row"><label class="chk" title="Flow from the CSOs and sheet runoff from the lot: runs while it rains, stronger at the flood levels"><input type="checkbox" id="r-runoff"> Runoff (with rain)</label></div>
+    <h4>Ends of the reach</h4>
+    <div class="row seg" id="r-ends"><button data-v="handover">Hand over</button><button data-v="loop">Loop</button><button data-v="pingpong">Ping-pong</button></div>
+    <h4>Labels (names and ids from the data only)</h4>
+    <div class="row"><button id="r-labels" class="tog" title="Labels on this screen (L)">Labels here</button><button id="r-outlabels" class="tog" title="Labels on the output windows">Labels on output</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="r-outfacts"> Fact line on output</label></div>
+    <h4>Map (the route in plan, north up)</h4>
+    <div class="row"><button id="r-map" class="tog" title="Map inset on this screen (I)">Map here</button><button id="r-outmap" class="tog" title="Map inset on the output windows">Map on output</button></div>
+    <div class="row seg" id="r-mapsize"><button data-v="s">Small</button><button data-v="m">Medium</button><button data-v="l">Large</button></div>
+    <div class="kv" id="r-facts"></div>
+  </section>
+
+  <section id="p-fx" class="panel" hidden>
+    <h3>Slit-scan and time-smear</h3>
+    <div class="row seg" id="f-mode"><button data-v="off">Off</button><button data-v="strip">Strip</button><button data-v="smear">Smear</button><button data-v="displace">Time displace</button></div>
+    <h4>Source</h4>
+    <div class="row seg" id="f-src"><button data-v="scroll">The scroll</button><button data-v="video">Video</button></div>
+    <div class="row"><button id="f-media">Videos in media/</button><button id="f-cam">Camera (this window only)</button></div>
+    <div id="f-medialist" class="list"></div>
+    <div class="kv" id="f-video">Drop a video file on the stage to use it as the source</div>
+    <label class="sl">Slit position <input type="range" id="f-slit" min="0" max="1" step="0.005"><output></output></label>
+    <label class="sl">Slit width <input type="range" id="f-width" min="1" max="16" step="1"><output></output></label>
+    <div class="row seg" id="f-dir"><button data-v="1">Right to left</button><button data-v="-1">Left to right</button></div>
+    <label class="sl">History depth <input type="range" id="f-depth" min="2" max="128" step="1"><output></output></label>
+    <label class="sl">Slope <input type="range" id="f-slope" min="0.1" max="4" step="0.05"><output></output></label>
+    <div class="row seg" id="f-axis"><button data-v="x">Columns</button><button data-v="y">Rows</button></div>
+    <label class="sl">Mix <input type="range" id="f-mix" min="0" max="1" step="0.01"><output></output></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="f-freeze"> Freeze (Z)</label></div>
+  </section>
+
+  <!-- ADDENDUM-B B11: the mirror, only with ?mirror=1 (the bar button is hidden without it) -->
+  <section id="p-mirror" class="panel" hidden>
+    <h3>Mirror</h3>
+    <div class="row"><button id="mi-on" class="tog" title="A second world, flipped, below the water line">Mirror off</button></div>
+    <label class="sl">Axis below the water line <input type="range" id="mi-axis" min="0" max="80" step="1"><output></output></label>
+    <label class="sl">Strength <input type="range" id="mi-str" min="0" max="1" step="0.01"><output></output></label>
+    <h4>Lower half</h4>
+    <div class="row seg" id="mi-alt"><button data-v="other" title="nashua: the other bank; shanshui and derelict: the next seed">Other</button><button data-v="shanshui">shanshui</button><button data-v="derelict">derelict</button><button data-v="nashua">nashua</button></div>
+    <h4>Its scroll</h4>
+    <div class="row seg" id="mi-scroll"><button data-v="with">With</button><button data-v="against">Against</button><button data-v="free">Free</button></div>
+  </section>
+
+  <!-- ADDENDUM-C C1: several output windows as one picture (wall cols x rows), from the Pair menu -->
+  <section id="p-windows" class="panel" hidden>
+    <h3>Windows</h3>
+    <h4>Count</h4>
+    <div class="row seg" id="w-count"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button></div>
+    <h4>Layout</h4>
+    <div class="row seg" id="w-layout"></div>
+    <div class="row"><button id="w-open" title="Open the windows as one picture on this machine">Open windows</button><button id="w-links" title="One clock-mode link per window, one shared start, for several machines">Copy links</button><button id="w-close" title="Close every output window this controller opened">Close all</button></div>
+    <p class="fact" id="w-blocked" hidden></p>
+    <div class="row"><button id="w-next" hidden title="Open one more window (one per press, for a browser that blocks several at once)">Open the next window</button></div>
+    <p class="fact" id="w-status"></p>
+  </section>
+
+  <section id="p-show" class="panel" hidden>
+    <h3>Show</h3>
+    <!-- ADDENDUM-D D1: loop modes (the Loop button on the bar cycles them; Q) -->
+    <h4>Loop</h4>
+    <div class="row seg" id="s-loop"><button data-v="off">Off</button><button data-v="loop">Loop</button><button data-v="layers">Layers</button><button data-v="build">Build</button></div>
+    <p class="fact" id="s-loop-why" hidden></p>
+    <p class="fact" id="s-loop-design" hidden></p>
+    <div class="row"><button id="s-loop-next" title="Next stage now, from the start of the reach (A)">Next stage</button><button id="s-loop-hold" class="tog" title="Hold the stage: passes repeat it (E)">Hold stage</button></div>
+    <p class="fact" id="s-loop-st"></p>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-auto"> Auto reseed</label></div>
+    <div class="row seg" id="s-mode"><button data-v="min">Minutes</button><button data-v="px">Distance</button></div>
+    <label class="sl">Every <input type="number" id="s-every" min="0.5" step="0.5"><span id="s-unit">min</span></label>
+    <div class="row seg" id="s-src"><button data-v="new">New seed</button><button data-v="starred">Starred</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-autopal"> Auto palette</label></div>
+    <label class="sl">Every <input type="number" id="s-palevery" min="0.5" step="0.5"><span>min</span></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-resume"> Auto resume</label></div>
+    <label class="sl">After <input type="number" id="s-resume-s" min="1" max="120" step="1"><span>s</span></label>
+    <label class="sl">Reseed fade <input type="number" id="s-fade" min="0.5" max="10" step="0.5"><span>s</span></label>
+    <h4>Quality</h4>
+    <div class="row seg" id="s-q"><button data-v="auto">Auto</button><button data-v="1">High</button><button data-v="0.75">Med</button><button data-v="0.5">Low</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="s-big"> Big targets</label></div>
+    <div class="row"><button id="s-card">Test card</button><button id="s-out">Output window</button></div>
+    <div class="kv" id="s-inst"></div>
+    <h4>MIDI</h4>
+    <div class="row"><button id="m-enable">Enable MIDI</button><select id="m-preset" aria-label="MIDI preset"><option value="">Preset</option><option value="korg-nanokontrol">Korg nanoKONTROL (original)</option><option value="korg-nanokontrol2">Korg nanoKONTROL2</option><option value="generic">Generic</option></select><button id="m-reset">Reset to preset</button><button id="m-export">Export map</button></div>
+    <div class="kv" id="m-dev"></div>
+    <div class="kv">Chrome or Edge only (Web MIDI). nanoKONTROL: keep the SCENE light on 1. Presets are marked verify with the wizard until seen on the monitor. MIDI cannot enter full screen: LOOP gives a clean full window, F gives full screen.</div>
+    <pre class="kv mmon" id="m-mon" aria-label="MIDI monitor"></pre>
+    <div class="kv" id="m-note"></div>
+    <div class="row"><button id="m-out">MIDI out off</button><label class="sl">Out channel <select id="m-outch"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></label></div>
+    <div class="row mlist" id="m-map"></div>
+    <div class="kv">Press a target, then move a fader or hit a pad. Right-click clears.</div>
+  </section>
+
+  <section id="p-export" class="panel" hidden>
+    <h3>Export</h3>
+    <div class="row seg" id="e-format"><button data-v="view">View</button><button data-v="archd">Arch D</button><button data-v="scale">To scale</button></div>
+    <div class="row seg" id="e-sheet"><button data-v="archd">Arch D</button><button data-v="roll">Roll 36 in</button></div>
+    <div class="row seg" id="e-scale"><button data-v="500">1:500</button><button data-v="1000">1:1000</button><button data-v="2000">1:2000</button></div>
+    <div class="row seg" id="e-orient"><button data-v="landscape">Landscape</button><button data-v="portrait">Portrait</button></div>
+    <label class="sl">Fit <input type="range" id="e-fit" min="0.25" max="3" step="0.01"><output></output></label>
+    <label class="sl">Vertical <input type="range" id="e-yalign" min="0" max="1" step="0.01"><output></output></label>
+    <label class="sl">Margin <input type="number" id="e-margin" min="0" max="4" step="0.125"><span>in</span></label>
+    <div class="row"><label class="chk"><input type="checkbox" id="e-border"> Border</label><label class="chk"><input type="checkbox" id="e-label"> Label</label></div>
+    <div class="row seg" id="e-dpi"><button data-v="150">150 dpi</button><button data-v="300">300 dpi</button></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="e-lights"> Lights in vector</label><label class="chk"><input type="checkbox" id="e-rain"> Rain in export</label></div>
+    <div class="row"><button id="e-here">Frame to view</button></div>
+    <div class="row"><button id="e-svg">SVG</button><button id="e-png">PNG</button><button id="e-pdf">PDF</button></div>
+    <div class="kv" id="e-info"></div>
+    <div class="kv" id="e-status"></div>
+  </section>
+
+  <section id="p-log" class="panel" hidden>
+    <h3>Log</h3>
+    <div class="row"><button id="log-clear">Clear</button></div>
+    <ol id="log" class="list mono"></ol>
+  </section>
+
+  <section id="p-about" class="panel" hidden>
+    <h3>About</h3>
+    <p class="kv"><b>AV Shan Shui Infinite Scrolls</b> <span id="ver"></span></p>
+    <p class="kv">Original {Shan, Shui}* by Lingdong Huang:<br><a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">github.com/LingDong-/shan-shui-inf</a> (MIT)</p>
+    <p class="kv">Changes by laserpirate:<br><a href="https://github.com/laserpirate/shanshui-av" target="_blank" rel="noopener">github.com/laserpirate/shanshui-av</a> (MIT)</p>
+    <p class="kv">Landscape engine unchanged from upstream. Font IBM Plex Sans Condensed (OFL).</p>
+  </section>
+
+  <section id="p-keys" class="panel" hidden>
+    <h3>Keys</h3>
+    <table id="keys" class="keys"></table>
+  </section>
+</div>
+
+<div id="bar" class="ui">
+  <div class="grp mini-part">
+    <button id="b-play" class="mini-keep" title="Play / pause (Space)"><span class="m">&#9654;</span><span class="t">Play</span></button>
+    <button id="b-stop" title="Stop (Home)"><span class="m">&#9632;</span>Stop</button>
+    <button id="b-dir" title="Direction (D)"><span class="m" id="b-dir-m">&#8594;</span>Dir</button>
+  </div>
+  <div class="grp sp mini-keep"><label for="b-speed">Speed</label><input type="range" id="b-speed" min="0" max="1" step="0.001" aria-label="speed"><output id="b-speed-o"></output></div>
+  <div class="grp">
+    <button id="b-back" class="wide" title="Previous seed ([)">&#9664;</button>
+    <button id="b-reseed" title="Reseed (R)">Reseed</button>
+    <button id="b-fwd" class="wide" title="Next seed (])">&#9654;</button>
+    <button id="b-star" title="Star seed (S)"><span class="m">&#9734;</span>Star</button>
+    <button id="b-palprev" class="wide" title="Previous palette (Shift+P)">&#9664;</button>
+    <button id="b-pal" title="Palette panel (P next, Shift+P previous)"><span id="b-pal-n">Original</span></button>
+    <button id="b-palnext" class="wide" title="Next palette (P)">&#9654;</button>
+  </div>
+  <div class="grp seg mini-keep" id="b-world" role="group" aria-label="World"><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button><button data-v="nashua" title="World (W)">nashua</button></div>
+  <div class="grp" id="b-wx"><button id="b-rain" class="tog" title="Rain held on or held at zero (N)">Rain</button></div>
+  <div class="grp mini-keep"><button id="b-loop" class="tog mini-keep" title="Loop mode: off, loop, layers, build (Q)">Loop</button></div>
+  <!-- ADDENDUM-B B2: the less used panels and the pair fold into menus that open above the bar (same ids) -->
+  <div class="grp mini-part">
+    <button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button><button data-panel="p-mirror" id="b-mirror" hidden title="Mirror: a second world below the water line">Mirror</button>
+    <div class="fold"><button class="fold-b" id="b-more" aria-haspopup="true" aria-expanded="false" title="More panels">More<span id="log-n"></span></button><div class="menu" hidden><button data-panel="p-seed">Seed</button><button data-panel="p-look">Look</button><button data-panel="p-export">Export</button><button data-panel="p-log">Log</button><button data-panel="p-about">About</button><button data-panel="p-keys">Keys</button></div></div>
+    <button id="b-guide" class="mini-keep" title="Quick guide: keys, buttons, URL parameters, a pair">Guide</button>
+  </div>
+  <div class="grp mini-part">
+    <button id="b-hold" title="Hold (G)">Hold</button>
+    <button id="b-out" title="Output window (O)">Output</button>
+    <div class="fold"><button class="fold-b" id="b-pairmenu" aria-haspopup="true" aria-expanded="false" title="Two screens as one long picture">Pair</button><div class="menu" hidden><button id="b-pair" title="Two output windows as one long picture (wall 2 x 1)">Open pair</button><button id="b-pairlinks" title="Two links for two computers, clock mode with a shared start">Copy pair links</button><button data-panel="p-windows" id="b-windows" title="1 to 6 output windows as one picture, links, close all">Open windows</button></div></div>
+    <button id="b-full" class="mini-keep" title="Menu: full, mini, full screen (F goes straight to full screen)">Full</button>
+    <button id="b-black" class="warn" title="Blackout (B)">Black</button>
+  </div>
+  <div class="grp mini-part" id="b-data"><button id="b-flood" class="tog" title="Flood: off is Median Water, on is the level picked beside it">Flood</button><select id="b-floodlv" aria-label="flood level" title="Flood level"><option value="1" title="Mean High Water">MHW</option><option value="2" title="Minor Flood">Minor</option><option value="3" title="FEMA 1 % flood">FEMA 1 %</option><option value="4" title="1936 flood">1936</option></select><button id="b-labels" class="tog mini-keep" title="Labels here (L)">Labels</button><button id="b-outlabels" class="tog" title="Labels on the output windows">Out labels</button><button id="b-map" class="tog mini-keep" title="Map inset (I)">Map</button></div>
+  <div class="grp next" id="b-next"></div>
+</div>
+
+<div id="toast" class="ui"></div>
+<script type="module" src="src/app.js?v=1e1ad6b"></script>
+</body>
+</html>

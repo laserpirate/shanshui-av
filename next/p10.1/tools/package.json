@@ -1,0 +1,10 @@
+{
+  "name": "shanshui-av-tools",
+  "private": true,
+  "type": "module",
+  "description": "Dev and test tools for shanshui-av. The app itself has no dependencies.",
+  "devDependencies": {
+    "playwright": "1.48.2",
+    "pngjs": "^7.0.0"
+  }
+}

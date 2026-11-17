@@ -1,0 +1,16 @@
+node_modules/
+.cache/
+test-results/
+*.log
+.DS_Store
+Thumbs.db
+scratch/
+.env
+tools/nashua/sources.local.json
+data/local/
+media/
+__pycache__/
+STATE.md
+baked/
+precache.json
+sw-probe.js

@@ -4,6 +4,8 @@ Live preview: **https://laserpirate.github.io/shanshui-av/next/p10/?world=nashua
 Tag: `shanshui-av-v0.4.0-nashua.p10` on `feat/nashua` (the commit that adds this file; the code is 6b661b6). Root of the site: byte-identical to `main` 1f009a1 (Site, below).
 Strips: `docs/nashua/index.md`, section "P10 strips" (made by the d4 test). Judgment calls: `DECISIONS.md`, section "Nashua P10". Consolidated prompt: `PROMPT_10-AV_shanshui-av-nashua_v02.md` (written first, as D asked).
 
+**Use `.p10.1`, not `.p10`:** https://laserpirate.github.io/shanshui-av/next/p10.1/?world=nashua&loop=layers. The live check of `.p10` found one bug: on the public site, a nashua page that starts in Layers (`?loop=layers`, or Layers kept from the last visit) stopped at load with "Cannot access 'toastT' before initialization". The "design skipped" toast ran before the toast timer was declared; locally the pack probe answers later, so no local test saw it. `.p10.1` declares the timer first and adds test d3b, which serves the local copy under a `*.github.io` name and failed on that error before the fix. Tags do not move, so `.p10` stays as it was, frozen at `/next/p10/`.
+
 **Look at the strips first:** every Build stage, both worlds, six views each.
 
 ## What it does
@@ -38,6 +40,7 @@ Never at any stage: pavilions, towers, people (shanshui); buildings, the lot, br
 | every Build stage adds ink (d4) | at least 0.08 % of the pixels of six views darken by 30 or more against the previous stage; planted: stage 4 measured twice gives 0 and fails | shanshui, darkened per stage (%): 0.83, 2.20, 1.64, 8.47, 1.29, 2.91, 7.27, 0.26. nashua: 0.58, 0.64, 17.36, 0.16, 0.12, 0.17, 0.09, 3.06. After 8 the stage is 1; no labels in Build |
 | clock mode (d5) | a node 2.5 passes in draws stage 3; at a seam two worlds crossfade, stage 3 resting and stage 4 coming in; planted: the same node without `loop=` has one world and no loop | pass 3 stage 3; at the seam stage 3 at alpha 1 and stage 4 at 0.27; without `loop=`: one world |
 | the loop off is the `.p9` frame (d6) | SHA-256 of the whole frame equals the `.p9` server's; planted: Build differs | equal on shanshui, derelict and nashua, dry and heavy (6 of 6); the Build frame differs |
+| Layers at load, no design pack, public host (d3b, `.p10.1`) | a page opened with `?loop=layers` under a `*.github.io` name, pack 404, loads with no error and says design is skipped; planted: `.p10` itself | `.p10`: fails, "Cannot access 'toastT' before initialization"; `.p10.1`: passes, console clean. After the fix the p10 suite runs 8/8 |
 | the bar and the guide (p7 b2, b5, b6) | the bar 2 rows at 1280; the mini menu; every URL parameter in the guide | 2 rows (110 px) at 1280 in all three worlds; mini menu 10 controls with Loop; 48 of 48 parameters |
 | soak 30 min, nashua heavy, FX every 5 min | fps min 45, mean 58 | 60 samples: fps min **59.7** (output 59.6), mean 60.0; heap +0.03 MB (output -0.08); 0 dips, 0 console problems, 0 reloads, no context loss, 0 watchdog events; 16 seeds, 25 palettes. The tool says `pass: false` on the same two fixed limits as P7 to P9: DOM 700 to 769 (+69 against 60, the Log panel capped at 200 entries) and tiles 55 against 40 (the reach's tiles stay resident, as designed in P6). Limits not changed |
 | soak 30 min, derelict heavy, a new world every 5 min | fps min 50 | 60 samples: fps min **59.1** (output 59.7), mean 60.0; 6 world switches (derelict, nashua, shanshui, twice); 0 dips, 0 console problems, 0 reloads. `pass: false` on DOM (+84, the Log panel), tiles (55, while in nashua) and heap growth (+32.8 MB against 8). As in P9, the last third of the run was mostly shanshui, whose engine holds 22 to 130 MB while it runs; the heap was 6.02 MB at the end, back in derelict, against 5.84 MB at the start. No leak. Not changed |
@@ -78,7 +81,8 @@ The nanoKONTROL with the three loop roles (fired in software only), a wall of se
 | `shanshui-av-v0.4.0-nashua.p7` | e6ceeb0 | Nov 11 | ADDENDUM-B | none (before D3) | none (before D3) |
 | `shanshui-av-v0.4.0-nashua.p8` | eae0755 | Nov 11 | the mirror (B11) | none (before D3) | none (before D3) |
 | `shanshui-av-v0.4.0-nashua.p9` | ee7f0dc | Nov 16 | Open windows (ADDENDUM-C C1) | https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p9 | https://laserpirate.github.io/shanshui-av/next/p9/ |
-| `shanshui-av-v0.4.0-nashua.p10` | this commit | Nov 16 | loop modes (ADDENDUM-D D1) | https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p10 | https://laserpirate.github.io/shanshui-av/next/p10/ |
+| `shanshui-av-v0.4.0-nashua.p10` | 4e8898e | Nov 16 | loop modes (ADDENDUM-D D1); stops at load in Layers on the public site | https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p10 | https://laserpirate.github.io/shanshui-av/next/p10/ |
+| `shanshui-av-v0.4.0-nashua.p10.1` | this commit | Nov 16 | the load fix and test d3b | https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p10.1 | https://laserpirate.github.io/shanshui-av/next/p10.1/ |
 
 Releases and frozen copies start at `.p9`, as D3 asks from now on. The earlier tags stay on GitHub as tags; their code can be served from a worktree of the tag.
 
