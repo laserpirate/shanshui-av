@@ -72,6 +72,7 @@ Nashua on the controller (Reach panel, and the bar while a data world is on):
 | Scale | | Horizontal world px per m, 2 to 12 (default 8); the fact line states 100 m in px |
 | Open pair | | Two output windows as a `wall=2x1`, columns 0 and 1 (allow popups) |
 | Copy pair links | | Two clock-mode links with one shared `t0`, 10 s ahead, for two machines (WALL.md) |
+| Open windows | | Pair menu, the Windows panel: 1 to 6 output windows (default 3) as one picture, one row or a grid (2 x 2, 3 x 2), tiled over this screen. If the browser blocks pop-ups, the panel says how many did not open and **Open the next window** opens them one press at a time. **Copy links**: one clock-mode link per window, one shared `t0`. **Close all** closes every window opened from here |
 
 ## MIDI
 

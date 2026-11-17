@@ -1,7 +1,13 @@
-# MORNING · shanshui-av nashua · 2026-11-11
+# MORNING · shanshui-av nashua · 2026-11-16
 
-Preview: **https://laserpirate.github.io/shanshui-av/next/?world=nashua** (the stock app at the root is unchanged, byte for byte).
-Branch `feat/nashua`. Tags `.p1` the nashua world, `.p2` modes, morph, live section and slit-scan, `.p3` the wall, `.p4` platforms and MIDI, `.p5` night river, tag stream, print to scale, a second reach and three small tools, `.p6` ADDENDUM-A, `.p7` ADDENDUM-B, `.p8` the mirror (B11). One file each: `CHECKPOINT_P1.md` to `CHECKPOINT_P8.md`.
+Preview: **https://laserpirate.github.io/shanshui-av/next/?world=nashua** (the stock app at the root is unchanged, byte for byte). This version frozen: **https://laserpirate.github.io/shanshui-av/next/p9/?world=nashua**. Release: https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p9
+Branch `feat/nashua`. Tags `.p1` the nashua world, `.p2` modes, morph, live section and slit-scan, `.p3` the wall, `.p4` platforms and MIDI, `.p5` night river, tag stream, print to scale, a second reach and three small tools, `.p6` ADDENDUM-A, `.p7` ADDENDUM-B, `.p8` the mirror (B11), `.p9` Open windows (ADDENDUM-C C1). One file each: `CHECKPOINT_P1.md` to `CHECKPOINT_P9.md`.
+
+## New in P9 (ADDENDUM-C C1, Open windows)
+- **Pair menu, Open windows**: pick 1 to 6 windows (default 3) and a layout (one row, 2 x 2, 3 x 2), one press opens them all as one picture, tiled over this screen; drag each to its display, F in each. Seams tested against one wide canvas: 0 difference at every seam of 3 x 1 and 2 x 2.
+- If your browser blocks pop-ups, the panel says how many did not open; press **Open the next window** for each, or allow pop-ups for the page. **Copy links** for several machines (clock mode, one shared start); **Close all**.
+- From now on each version has a GitHub Release and stays viewable at `/next/p<n>/`.
+- No questions waiting from P9.
 
 ## New in P8 (ADDENDUM-B B11, the mirror)
 - **https://laserpirate.github.io/shanshui-av/next/?world=nashua&mirror=1&mon=1**: a second world upside down below the water. Nashua: the north bank above, the south bank turned below. shanshui and derelict: the next seed. The **Mirror** button (only with `?mirror=1`) opens its panel: on/off, axis (0 to 80 px below the water), strength, the lower half, its scroll (with, against, free). Five MIDI roles; bind them with Learn.

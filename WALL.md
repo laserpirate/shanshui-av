@@ -14,6 +14,12 @@ The clocks must agree (both on NTP); a small offset is acceptable. A new link pa
 Open `http://ADDRESS:8093/output.html?wall=2x1&col=0&sync=ws://ADDRESS:8097` on the left machine, `col=1` on the right, and the controller with `?sync=ws://ADDRESS:8097`.
 Local network only, pages from that machine (not from https Pages): the relay has no authentication and no `wss://` (decided, ADDENDUM-A A7).
 
+## Three to six windows
+
+**Several windows, one machine.** Pair menu, **Open windows**: pick a count (1 to 6) and a layout (one row, or a grid such as 2 x 2 or 3 x 2), press **Open windows**. They open tiled over this screen as one `wall=<cols>x<rows>`; drag each to its display and press **F** in each.
+If the browser lets only one through, the panel says so and **Open the next window** opens the rest, one press each (or allow pop-ups for the page and press again). **Close all** closes them.
+**Several machines.** **Copy links** in the same panel: one clock-mode link per window, one shared `t0`; open each on the machine at its column and row.
+
 A wall is several output windows, each drawing its slice of one wide virtual canvas. Every chunk is a pure function
 of seed, world and position, so the nodes only have to agree on the state and the time. Nothing is streamed but the
 frame state (a few hundred bytes).

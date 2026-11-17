@@ -5,6 +5,7 @@
 //   node tools/deploy-next.mjs [--dry] [--check-live] [--site=https://laserpirate.github.io/shanshui-av/]
 //   --dry         build the commit and print it, push nothing
 //   --check-live  hash every root file on the live site against origin/main (before and after the push)
+//   --keep=<k>    keep only the last k frozen copies next/p<n>/ (ADDENDUM-D D3; all of them by default)
 // Refuses to run when: the worktree is dirty, user.email is not a noreply address, or the privacy grep has hits.
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -54,18 +55,37 @@ const idx = path.join(os.tmpdir(), 'deploy-next-' + process.pid + '.index');
 const env = { GIT_INDEX_FILE: idx };
 try {
   git(['read-tree', 'origin/main'], { env });
-  git(['read-tree', '--prefix=next/', 'HEAD'], { env });
-  for (const [file, entry] of [['index.html', 'src/app.js'], ['output.html', 'src/output.js']]) {
-    const src = git(['show', 'HEAD:' + file]);
-    const tag = `src="${entry}"`, n = src.split(tag).length - 1;
-    if (n !== 1) die(`${file}: expected one ${tag}, found ${n}`);
-    const stamped = src.replace(tag, `src="${entry}?v=${short}"`);
-    const blob = git(['hash-object', '-w', '--stdin'], { input: stamped }).trim();
-    git(['update-index', '--cacheinfo', `100644,${blob},next/${file}`], { env });
-  }
+  // a copy of commit `rev` at `prefix`, with ?v=<its sha> stamped on the two entry modules
+  const place = (prefix, rev) => {
+    const sha = out(['rev-parse', rev + '^{commit}']).slice(0, 7);
+    git(['read-tree', '--prefix=' + prefix, rev], { env });
+    for (const [file, entry] of [['index.html', 'src/app.js'], ['output.html', 'src/output.js']]) {
+      const src = git(['show', rev + ':' + file]);
+      const tag = `src="${entry}"`, n = src.split(tag).length - 1;
+      if (n !== 1) die(`${rev} ${file}: expected one ${tag}, found ${n}`);
+      const stamped = src.replace(tag, `src="${entry}?v=${sha}"`);
+      const blob = git(['hash-object', '-w', '--stdin'], { input: stamped }).trim();
+      git(['update-index', '--cacheinfo', `100644,${blob},${prefix}${file}`], { env });
+    }
+    return sha;
+  };
+  place('next/', 'HEAD');
+  // ADDENDUM-D D3: every version from .p9 on stays viewable on its own at next/p<n>/, frozen at its tag, beside the
+  // moving next/. --keep=<k> keeps only the last k (used when the site nears the Pages size limit).
+  git(['fetch', 'origin', '--tags', '--quiet']);
+  const KEEP = +((args.find(a => a.startsWith('--keep=')) || '').slice(7) || 0);
+  let frozen = out(['tag', '--list', 'shanshui-av-v0.4.0-nashua.p*']).split('\n').map(t => [t, +((/\.p(\d+)$/.exec(t) || [])[1])]).filter(([, n]) => n >= 9).sort((a, b) => a[1] - b[1]);
+  if (KEEP > 0) frozen = frozen.slice(-KEEP);
+  for (const [t, n] of frozen) console.log(`frozen next/p${n}/ = ${t} ${place(`next/p${n}/`, t)}`);
   const tree = git(['write-tree'], { env }).trim();
+  // the published size (every blob once): GitHub Pages sites are limited to 1 GB
+  const seen = new Set(); let bytes = 0;
+  for (const l of out(['ls-tree', '-r', '-l', tree]).split('\n')) { const m = /^\S+ blob (\S+)\s+(\d+)\t/.exec(l); if (m && !seen.has(m[1])) { seen.add(m[1]); bytes += +m[2]; } }
+  console.log(`site size ${(bytes / 1048576).toFixed(1)} MB (unique blobs; Pages limit 1024 MB)` + (bytes > 800 * 1048576 ? ' NEAR THE LIMIT: deploy again with --keep=3' : ''));
   // the root of the new tree must be origin/main's tree exactly
   const rootNow = out(['ls-tree', tree]).split('\n').filter(l => !/\tnext$/.test(l)).join('\n');
+  // next/ itself must be HEAD's tree plus the frozen copies and the two stamped entries (nothing else)
+  for (const l of out(['ls-tree', tree + ':next']).split('\n')) { const nm = l.split('\t')[1]; if (/^p\d+$/.test(nm) && !frozen.some(([, n]) => 'p' + n === nm)) die('next/' + nm + ' is not a frozen tag'); }
   const rootMain = out(['ls-tree', 'origin/main']);
   if (rootNow !== rootMain) die('root of the preview tree differs from origin/main');
   const parents = hasPrev ? ['-p', 'origin/' + BRANCH] : [];
