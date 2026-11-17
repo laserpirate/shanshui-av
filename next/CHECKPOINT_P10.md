@@ -87,4 +87,12 @@ The nanoKONTROL with the three loop roles (fired in software only), a wall of se
 Releases and frozen copies start at `.p9`, as D3 asks from now on. The earlier tags stay on GitHub as tags; their code can be served from a worktree of the tag.
 
 ## Site
-Filled in after the deploy, in the commit after the tag (as for P9).
+| check | result |
+| --- | --- |
+| deploy `.p10` | pages-preview ccb3ecb (root = main 1f009a1, `next/` = 4e8898e, `next/p9/` and `next/p10/` frozen at their tags), Pages built; site 21.9 MB of 1024 |
+| deploy `.p10.1` | pages-preview 3875f52 (`next/` = 1e1ad6b, `next/p9/`, `next/p10/`, `next/p10.1/` frozen), Pages built; site 22.2 MB of 1024 |
+| the root, live | 134/134 files byte-identical to main 1f009a1, after each deploy |
+| crawl `/next/`, `/next/p10/`, `/next/p10.1/` | each 5 pages, 60 requests, 69 linked files, 0 broken, 0 console errors; `/next/p10.1/` entry modules stamped `?v=1e1ad6b` |
+| loop modes on `/next/p10/` | d2 (seam, nashua 15 frames lowest 1.93 %, shanshui 20 frames lowest 9.19 %) and d3-layers-no-design pass; d1 fails on the load error (the bug above) |
+| loop modes on `/next/p10.1/` | d1, d2 (nashua 17 frames lowest 1.86 %, shanshui 21 frames lowest 8.82 %), d3-layers-no-design (design skipped, the line shown) and d3b pass live, console clean; d3b on `/next/p10/` fails on the error, as planted |
+| Releases | https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p10.1 and https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p10 (these notes, no files) |
