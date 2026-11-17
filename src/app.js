@@ -144,9 +144,59 @@ let reach = new URLSearchParams(location.search).get('reach') === 'merrimack' ? 
 // spread (P6 loop, the default from ADDENDUM-B B10): far footprints placed on the smoothed route, not stacked behind
 // the bends (worlds/nashua); ?spread=0 draws them at the nearest station as in .p6
 const SPREAD_Q = new URLSearchParams(location.search).get('spread') !== '0';
-const optsFor = world => WORLDS[world] && WORLDS[world].data ? { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, ...(SPREAD_Q ? { spread: 1 } : {}), ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 ? { morph: morphQ(cfg.nashua.morph) } : {}) } : undefined;
+// ---------- ADDENDUM-D D1: loop modes, off | loop | layers | build (cfg.loop, per instance; ?loop=) ----------
+// A pass is one run through the reach, end to end (an endless world: LOOP_VIEWS view widths from x 0). Every change
+// between passes happens at the seam, inside the crossfade back to the start (loopSeam). Layers: nature, built,
+// design, sections (design skipped without the local design pack), nashua only. Build: the stages 1 to 8 of
+// worlds/nashua (generateBuild) and workers/gen-worker.js (shanshui), cumulative, nature only; not derelict.
+const LOOP_MODES = ['off', 'loop', 'layers', 'build'];
+const LOOP_VIEWS = 16;
+const LOOP_LAYERS = ['nature', 'built', 'design', 'sections'];
+const BUILD_NAMES = ['the water line', 'the ground line', w => (w === 'nashua' ? 'the ridgeline and the bank' : 'distant mountains'), w => (w === 'nashua' ? 'the bank’s texture strokes' : 'near mountains and hills'), 'single trees, sparse', 'clusters', 'groves', w => (w === 'nashua' ? 'the water surface, ripples, mist' : 'water and boats')];
+{ const v = new URLSearchParams(location.search).get('loop'); if (LOOP_MODES.includes(v)) cfg.loop = v; }
+if (!LOOP_MODES.includes(cfg.loop)) cfg.loop = 'off';
+const loopSt = { pass: 1, stage: 0, hold: false, said: '' };
+// the design pack is local only (never published): on the Pages host it is absent without asking; elsewhere one probe
+const PUBLIC_HOST = /\.github\.io$/.test(location.hostname);
+let designPack = PUBLIC_HOST ? false : null;
+function probeDesign() {
+  if (designPack !== null) return;
+  designPack = 'probing';
+  fetch(new URL('data/local/nashua/design/pack.json', location.href).href, { method: 'HEAD', cache: 'no-store' }).then(r => { designPack = r.ok; }).catch(() => { designPack = false; }).then(() => renderLoop());
+}
+// why a loop mode is not open in this world (null: it is)
+function loopWhy(mode, world) {
+  if (mode === 'layers' && world !== 'nashua') return 'Layers: nashua only (the layer modes are the data world’s)';
+  if (mode === 'build' && world === 'derelict') return 'Build: shanshui and nashua only (the stage table has no derelict column)';
+  return null;
+}
+// the mode running in this world: a mode not open here runs as Loop
+const loopMode = (world = cur.world) => (cfg.loop === 'off' ? 'off' : loopWhy(cfg.loop, world) ? 'loop' : cfg.loop);
+const loopLayerList = () => LOOP_LAYERS.filter(m => m !== 'design' || designPack === true);
+const loopCount = (world = cur.world) => { const m = loopMode(world); return m === 'layers' ? loopLayerList().length : m === 'build' ? 8 : 1; };
+const buildStage = (world = cur.world) => (loopMode(world) === 'build' ? (loopSt.stage % 8) + 1 : 0);
+// the layers for the current world while a loop mode is on (null: the Reach panel's mode, as without a loop)
+function loopLayers(world = cur.world) {
+  const m = loopMode(world);
+  if (m === 'layers') { const L = loopLayerList(); return layersOf(L[loopSt.stage % L.length], L[loopSt.stage % L.length] === 'sections'); }
+  if (m === 'build') return layersOf('nature', false);
+  return null;
+}
+function stageName(world = cur.world) {
+  const m = loopMode(world);
+  if (m === 'layers') return loopLayerList()[loopSt.stage % loopLayerList().length];
+  if (m === 'build') { const n = BUILD_NAMES[loopSt.stage % 8]; return (typeof n === 'function' ? n(world) : n); }
+  return '';
+}
+const optsFor = world => {
+  const B = buildStage(world);
+  if (WORLDS[world] && WORLDS[world].data) return { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, ...(SPREAD_Q ? { spread: 1 } : {}), ...(reach !== 'nashua' ? { reach } : morphQ(cfg.nashua.morph) > 0 && !B ? { morph: morphQ(cfg.nashua.morph) } : {}), ...(B ? { build: B } : {}) };
+  return B && world === 'shanshui' ? { build: B } : undefined;
+};
 const cur = { seed: urlSeed() || saved.seed || newSeed(), key: '', world: urlWorld() || (WORLDS[saved.world] ? saved.world : 'shanshui') };
+if (cfg.loop === 'layers' && !PUBLIC_HOST) probeDesign();
 cur.opts = optsFor(cur.world);
+cur.layers = loopLayers(cur.world);
 let lvShown = cfg.nashua.level, lvScrub = false;   // water level position shown (eases to cfg.nashua.level)
 cur.seed = cleanSeed(cur.seed);
 const keyOf = (world, seed) => (world === 'shanshui' ? '' : world + ':') + seed + '#' + (++epoch);
@@ -179,15 +229,17 @@ function setSeed(seed, { history = true, why = '', world = cur.world, keepX } = 
   if (!seed) return;
   if (!WORLDS[world]) world = 'shanshui';
   if (outgoing) { outgoing = null; fade = null; }
-  outgoing = { key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, opts: cur.opts };
+  outgoing = { key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, opts: cur.opts, ...(cur.layers ? { layers: cur.layers } : {}) };
   cur.seed = seed; cur.world = world; cur.key = keyOf(world, seed); cur.opts = optsFor(world);
+  // D1: each world keeps its own layers through a crossfade (the loop's stage); without a loop mode, none
+  cur.layers = loopLayers(world);
   pb.x = keepX !== undefined ? keepX : 0; pb.pull = 0; pb.tween = null;
   fade = { t0: 0, dur: cfg.show.fade, wait: performance.now() };
   if (history) pushHist(tok(world, seed));
   resetAuto();
   updateUrl();
   persist();
-  renderSeed(); renderWorld();
+  renderSeed(); renderWorld(); renderLoop();
   log('info', (world !== 'shanshui' ? world + ' ' : '') + 'seed ' + seed + (why ? ' (' + why + ')' : ''));
 }
 offline();
@@ -298,7 +350,7 @@ if (chan) chan.onmessage = e => {
     if (m.key === 'b' || m.key === 'B') setBlack();
     else if (m.key === 'panic') setPanic(true);
     else if (m.key === 'Escape' && flags.panic) setPanic(false);
-    else if (['r', 'R', ' ', 'p', 'P', 'g', 'G', 't', 'T', 'Home', '[', ']', 'w', 'W', 'k', 'K', 'l', 'L', ',', '.', '1', '2', '3', '4', '5', '6'].includes(m.key)) onKey({ key: m.key, shiftKey: m.shift, target: document.body, preventDefault() {} });
+    else if (['r', 'R', ' ', 'p', 'P', 'g', 'G', 't', 'T', 'Home', '[', ']', 'w', 'W', 'k', 'K', 'l', 'L', ',', '.', '1', '2', '3', '4', '5', '6', 'q', 'Q', 'a', 'A', 'e', 'E'].includes(m.key)) onKey({ key: m.key, shiftKey: m.shift, target: document.body, preventDefault() {} });
   }
 };
 function openOutput() {
@@ -339,6 +391,7 @@ function shareParams(t0) {
   const o = { world: cur.world, seed: cur.seed, ...(t0 != null ? { t0 } : {}), speed: Math.round(cfg.speed), palette: pal.target };
   if (isData()) Object.assign(o, { bank: cfg.nashua.bank, hx: cfg.nashua.hx, ve: cfg.nashua.ve, mode: cfg.nashua.mode, ...(reach !== 'nashua' ? { reach } : {}), ...(SPREAD_Q ? {} : { spread: 0 }) });
   if (MIRROR_Q) Object.assign(o, mirrorQuery(cfg.mirror));
+  if (cfg.loop !== 'off') o.loop = cfg.loop;
   return o;
 }
 // Copy pair links: for two computers, clock mode with one shared start t0 (10 s from now) and the current world,
@@ -494,19 +547,20 @@ function mirrorState(now, top) {
 let time0 = performance.now();
 function frameState(now) {
   const worlds = [];
-  if (outgoing) worlds.push({ key: outgoing.key, seed: outgoing.seed, world: outgoing.world, x: outgoing.x, alpha: 1, opts: outgoing.opts });
+  if (outgoing) worlds.push({ key: outgoing.key, seed: outgoing.seed, world: outgoing.world, x: outgoing.x, alpha: 1, opts: outgoing.opts, ...(outgoing.layers ? { layers: outgoing.layers } : {}) });
   let a = 1;
   if (fade && fade.t0) { const t = Math.min(1, (now - fade.t0) / (fade.dur * 1000)); a = t * t * (3 - 2 * t); }
   else if (fade) a = 0;
-  worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts });
-  for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = modeLayers(); w.all = LAYERS; }
+  worlds.push({ key: cur.key, seed: cur.seed, world: cur.world, x: pb.x, alpha: outgoing ? a : 1, opts: cur.opts, ...(cur.layers ? { layers: cur.layers } : {}) });
+  for (const w of worlds) if (WORLDS[w.world] && WORLDS[w.world].data) { w.layers = w.layers || modeLayers(); w.all = LAYERS; }
   const wxNow = weatherNow();
   const mirror = mirrorState(now, worlds[worlds.length - 1]);
+  const building = loopMode() === 'build';
   return {
     ...(mirror ? { mirror } : {}),
     level: lvShown,
-    runoff: runoffAmt(wxNow),
-    reach: { labels: cfg.nashua.outLabels, facts: cfg.nashua.outFacts, map: cfg.nashua.outMap, mapSize: cfg.nashua.mapSize, time: timeText() },
+    runoff: building ? 0 : runoffAmt(wxNow),
+    reach: { labels: cfg.nashua.outLabels && !building, facts: cfg.nashua.outFacts, map: cfg.nashua.outMap, mapSize: cfg.nashua.mapSize, time: timeText() },
     worlds, dir: pb.dir,
     pal: { a: pal.a, b: pal.b || pal.a, mix: pal.mix },
     u: { contrast: cfg.contrast, ink: cfg.ink, paper: cfg.paper, vignette: cfg.vignette, zoom: cfg.zoom, yAlign: cfg.yAlign, master: cfg.master },
@@ -529,14 +583,17 @@ function tick(now) {
     timeTick(dt);
     if (!lvScrub) lvShown += (cfg.nashua.level - lvShown) * Math.min(1, dt * 1.5);
     if (Math.abs(cfg.nashua.level - lvShown) < 1e-4) lvShown = cfg.nashua.level;
-    endsTick();
+    if (loopMode() !== 'off') loopTick(); else endsTick();
     tagsTick(now);
     if (outgoing) outgoing.x += v0 * dt;
-    // reseed fade starts when the new world covers the view (or after 4 s)
+    // D1: at a loop seam the outgoing pass rests at its end of the reach while the next one fades in
+    if (outgoing && outgoing.clamp) outgoing.x = Math.max(outgoing.clamp[0], Math.min(outgoing.clamp[1], outgoing.x));
+    // reseed fade starts when the new world covers the view (or after 4 s; at a loop seam only when it covers, up to
+    // 20 s, so no frame of the crossfade is blank)
     if (fade && !fade.t0) {
       const w = scene.peek(cur.key);
       const vw = lastView ? lastView.viewW : 2000;
-      if ((w && w.coverage(pb.x, pb.x + vw) >= 0.99) || now - fade.wait > 4000) fade.t0 = now;
+      if ((w && w.coverage(pb.x, pb.x + vw) >= 0.99) || now - fade.wait > (fade.seam ? 20000 : 4000)) fade.t0 = now;
     }
     if (fade && fade.t0 && now - fade.t0 >= fade.dur * 1000) { fade = null; outgoing = null; }
     // palette fade
@@ -706,6 +763,9 @@ function onKey(e) {
     case 'u': case 'U': setTime({ on: true, run: true, iso: '1936-03-01' }); toast('March 1936'); break;
     case 'l': case 'L': setLabels('labels', !cfg.nashua.labels); break;
     case 'n': case 'N': { const r = setRain(!rainOn()); if (typeof r === 'string') toast(r); break; }
+    case 'q': case 'Q': cycleLoop(); break;
+    case 'a': case 'A': { const r = loopNext(); if (typeof r === 'string') toast(r); break; }
+    case 'e': case 'E': { const r = loopHold(); if (typeof r === 'string') toast(r); break; }
     case 'i': case 'I': if (isData()) setMapInset(!cfg.nashua.map); break;
     case '1': case '2': case '3': case '4': case '5': case '6': setLevel(+k - 1); break;
     case '?': case '/': togglePanel('p-keys'); break;
@@ -867,6 +927,10 @@ const ACT = {
   mapInset: { fire: () => (isData() ? setMapInset(!cfg.nashua.map) : 'map: nashua only') },
   rainToggle: { fire: () => setRain(!rainOn()) },
   flood: { fire: () => setFlood(!(Math.round(cfg.nashua.level) > 0)) },
+  // ADDENDUM-D D1: the loop mode (cycles), next stage, hold stage
+  loopMode: { fire: () => cycleLoop() },
+  loopNext: { fire: () => loopNext() },
+  loopHold: { fire: () => loopHold() },
   bank: { fire: () => (isData() ? setBank(cfg.nashua.bank === 'L' ? 'R' : 'L') : 'bank: nashua only') },
   mode: { fire: () => (isData() ? setMode(MODE_ORDER[(MODE_ORDER.indexOf(cfg.nashua.mode) + 1) % MODE_ORDER.length]) : 'mode: nashua only') },
   morph: { get: () => (isData() ? cfg.nashua.morph : null), set: v => (isData() ? setMorph(v) : 'morph: nashua only') },
@@ -1297,6 +1361,12 @@ function renderBarWx() {
 $('b-rain').onclick = () => { const r = setRain(!rainOn()); if (typeof r === 'string') toast(r); };
 $('b-flood').onclick = () => { const r = setFlood(!(Math.round(cfg.nashua.level) > 0)); if (typeof r === 'string') toast(r); };
 $('b-floodlv').onchange = e => pickFlood(e.target.value);
+// D1: the Loop button (bar and mini menu) cycles the modes open in this world; the Show panel has all four
+$('b-loop').onclick = () => cycleLoop();
+for (const b of $('s-loop').children) b.onclick = () => setLoop(b.dataset.v);
+$('s-loop-next').onclick = () => { const r = loopNext(); if (typeof r === 'string') toast(r); };
+$('s-loop-hold').onclick = () => { const r = loopHold(); if (typeof r === 'string') toast(r); };
+renderLoop();
 // the plan inset (ui/mapinset.js): key I, a button, a MIDI role; size small, medium, large
 function setMapInset(v, size) {
   cfg.nashua.map = !!v; if (size) cfg.nashua.mapSize = size;
@@ -1400,17 +1470,115 @@ function endsTick() {
   if (mode === 'loop') setSeed(cur.seed, { world: cur.world, keepX: right ? -vw / 2 : W - vw / 2, history: false, why: 'loop' });
   else setSeed(cur.seed, { world: 'shanshui', history: false, why: 'end of the reach, hand over' });
 }
+// ---------- D1 loop modes: the pass, the seam, the controls ----------
+// the pass's span in world px and where a pass starts for the travel direction
+function loopSpan() { const P = isData() ? curPack() : null; return P ? reachW(P) : LOOP_VIEWS * viewW(); }
+function loopStart(dir) { if (!isData()) return 0; const P = curPack(); return P && dir < 0 ? Math.max(0, reachW(P) - viewW()) : 0; }
+function loopTick() {
+  if (fade) return;
+  const vw = viewW(), v = pb.velocity;
+  if (isData()) {
+    const P = curPack(); if (!P) return;
+    const W = reachW(P);
+    if ((v > 0 && pb.x + vw >= W) || (v < 0 && pb.x <= 0)) loopSeam('end');
+  } else {
+    const span = LOOP_VIEWS * vw;
+    if ((v > 0 && pb.x >= span) || (v < 0 && pb.x <= -span)) loopSeam('end');
+  }
+}
+// the seam: the next stage (unless held), the next pass, a crossfade back to the start of the reach
+function loopSeam(why) {
+  const n = loopCount();
+  if (why === 'start') { loopSt.pass = 1; loopSt.stage = 0; }
+  else { loopSt.pass++; if (!loopSt.hold || why === 'next') loopSt.stage = (loopSt.stage + 1) % n; }
+  const dir = pb.velocity < 0 || (pb.velocity === 0 && pb.dir < 0) ? -1 : 1;
+  const P = isData() ? curPack() : null, vw = viewW();
+  const clamp = P ? [0, Math.max(0, reachW(P) - vw)] : null;
+  setSeed(cur.seed, { world: cur.world, keepX: loopStart(dir), history: false, why: `loop ${loopMode()}, pass ${loopSt.pass}` + (stageName() ? `, ${loopMode() === 'build' ? 'stage ' + (loopSt.stage + 1) + ' of 8' : 'mode'} ${stageName()}` : '') });
+  if (outgoing && clamp) outgoing.clamp = clamp;
+  if (fade) fade.seam = true;
+  renderLoop();
+}
+function setLoop(m, why = 'control') {
+  if (!LOOP_MODES.includes(m)) return 'loop: off, loop, layers or build';
+  const was = loopMode();
+  cfg.loop = m; persist();
+  if (m === 'layers') probeDesign();
+  const now = loopMode();
+  if (loopWhy(m, cur.world)) toast(loopWhy(m, cur.world) + '; running as Loop');
+  else toast('Loop mode: ' + m);
+  log('info', 'loop mode ' + m + (now !== m ? ' (runs as ' + now + ' in ' + cur.world + ')' : '') + ' (' + why + ')');
+  loopSt.hold = false;
+  // Layers and Build start at their first stage from the start of the reach; Loop runs on from here; off returns the
+  // world to the Reach panel's mode in place (a crossfade at the same x when the drawing changes)
+  if (now === 'layers' || now === 'build') loopSeam('start');
+  else { loopSt.pass = 1; loopSt.stage = 0; if (was === 'layers' || was === 'build') setSeed(cur.seed, { world: cur.world, keepX: pb.x, history: false, why: 'loop off' }); }
+  renderLoop();
+}
+// the bar button and key Q: the next mode open in this world
+function cycleLoop() {
+  let i = LOOP_MODES.indexOf(cfg.loop);
+  for (let k = 0; k < LOOP_MODES.length; k++) { i = (i + 1) % LOOP_MODES.length; if (!loopWhy(LOOP_MODES[i], cur.world)) break; }
+  return setLoop(LOOP_MODES[i], 'cycle');
+}
+function loopNext() {
+  const m = loopMode();
+  if (m !== 'layers' && m !== 'build') return 'next stage: Layers or Build only';
+  loopSeam('next');
+}
+function loopHold() {
+  const m = loopMode();
+  if (m !== 'layers' && m !== 'build') return 'hold stage: Layers or Build only';
+  loopSt.hold = !loopSt.hold; toast(loopSt.hold ? 'Stage held' : 'Stage runs on'); renderLoop();
+}
+function loopLine() {
+  const m = loopMode();
+  if (m === 'off') return 'Loop off';
+  const n = loopCount();
+  let t = `Loop ${m}: pass ${loopSt.pass}`;
+  if (m === 'layers') t += `, mode ${loopSt.stage % n + 1} of ${n}: ${stageName()}`;
+  if (m === 'build') t += `, stage ${loopSt.stage % 8 + 1} of 8: ${stageName()}`;
+  if (loopSt.hold) t += ', held';
+  if (cfg.loop !== m) t += ` (${loopWhy(cfg.loop, cur.world)})`;
+  return t;
+}
+function renderLoop() {
+  const b = $('b-loop');
+  if (!b) return;
+  const m = loopMode();
+  b.classList.toggle('on', m !== 'off'); b.setAttribute('aria-pressed', m !== 'off' ? 'true' : 'false');
+  const lab = { off: 'Loop', loop: 'Loop on', layers: 'Layers', build: 'Build' }[cfg.loop];
+  if (b.textContent !== lab) b.textContent = lab;
+  for (const x of $('s-loop').children) {
+    const why = loopWhy(x.dataset.v, cur.world);
+    x.classList.toggle('on', x.dataset.v === cfg.loop); x.disabled = !!why; x.title = why || '';
+  }
+  const why = ['layers', 'build'].map(k => loopWhy(k, cur.world)).filter(Boolean).join('; ');
+  if ($('s-loop-why').textContent !== why) $('s-loop-why').textContent = why;
+  $('s-loop-why').hidden = !why;
+  // design skipped: said once per page
+  if (m === 'layers' && designPack === false && loopSt.said !== 'design') { loopSt.said = 'design'; log('info', 'Layers: the design pack is not here (local only), so design is skipped: nature, built, sections'); toast('Layers: no design pack here, design skipped'); }
+  const st = m === 'layers' && designPack === false ? 'Design pack not here (local only): design is skipped' : '';
+  if ($('s-loop-design').textContent !== st) $('s-loop-design').textContent = st;
+  $('s-loop-design').hidden = !st;
+  const line = loopLine();
+  if ($('s-loop-st').textContent !== line) $('s-loop-st').textContent = line;
+  const hud = m === 'off' ? '' : line;
+  if ($('hud-loop').textContent !== hud) $('hud-loop').textContent = hud;
+  $('s-loop-hold').classList.toggle('on', loopSt.hold);
+}
+
 let factAt = 0;
 function reachTick() {
   const w = scene.peek(cur.key);
   // sizes from this frame (read once in tick), so the overlay never forces a layout after its own writes
   const vs = lastView ? (mirrorOn() ? mirrorCss(lastView.W, lastView.H).scale : (lastView.H / WORLD_H) * cfg.zoom) : cssScale();
-  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off');
+  if (lastView) overlay.update(w, { cssScale: vs, camX: pb.x, camY: lastView.camY, W: lastView.W }, isData() && cfg.nashua.labels && cfg.fx.mode === 'off' && loopMode() !== 'build');
   if (ticks && lastView) ticks.update(w, { cssScale: vs, camX: pb.x, W: lastView.W }, isData() && cfg.fx.mode === 'off');
   const SP = w && w.pack ? w.pack : null, so = cur.opts || {};
   if (SP) { const vw = viewW(); mapInset.update(w, { s: sOf(SP, pb.x + vw / 2, so.bank), sL: sOf(SP, pb.x, so.bank), sR: sOf(SP, pb.x + vw, so.bank) }, isData() && cfg.nashua.map && cfg.fx.mode === 'off', cfg.nashua.mapSize); }
   else mapInset.update(null, null, false);
-  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || VE_DEF, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && modeLayers().includes('sections'), W: lastView ? lastView.W : 1280 });
+  section.update(SP, { s: SP ? sOf(SP, pb.x + viewW() / 2, so.bank) : 0, lv: lvShown, ve: so.ve || VE_DEF, show: isData() && !flags.blackout && cfg.fx.mode === 'off' && (cur.layers || modeLayers()).includes('sections'), W: lastView ? lastView.W : 1280 });
   const now = performance.now();
   if (now - factAt < 250) return;
   factAt = now;
@@ -1675,7 +1843,7 @@ window.SSAV = {
   get stars() { return stars.slice(); }, get fading() { return !!fade || !!pal.b; }, get outConnected() { return out.connected; },
   pb, scene, cfg, palettes, setSeed, reseed, setPalette, palStep, histStep, stop, setBlack, setPanic, setCard, setHold, toggleStar, togglePalStar,
   openOutput, runExport, geom, midi, resetAuto, resetAutoPal, frameState: () => frameState(performance.now()), world: () => scene.peek(cur.key), version: VERSION,
-  view: () => viewForExport(), setLabels, setMapInset, pairLinks, openPair, openWindows, openNextWindow, windowLinks, closeWindows, layoutsFor, get wins() { return { cols: wins.cols, rows: wins.rows, n: wins.list.length, heard: [...wins.heard.keys()].sort((a, b) => a - b), missing: winMissing().map(w => w.k), rects: wins.list.map(w => w.rect) }; }, get mapInset() { return { on: mapInset.on, draws: mapInset.draws, ms: mapInset.ms, dot: mapInset.dot, w: mapInset.g && mapInset.g.w, h: mapInset.g && mapInset.g.h, hits: mapInset.hits }; },
+  view: () => viewForExport(), setLabels, setMapInset, pairLinks, openPair, openWindows, openNextWindow, windowLinks, closeWindows, layoutsFor, setLoop, cycleLoop, loopNext, loopHold, loopLine, loopSpan, get loop() { return { mode: loopMode(), cfg: cfg.loop, pass: loopSt.pass, stage: loopSt.stage, hold: loopSt.hold, build: buildStage(), name: stageName(), design: designPack, layers: cur.layers, fading: !!fade, outgoing: outgoing ? { x: outgoing.x, key: outgoing.key } : null }; }, get wins() { return { cols: wins.cols, rows: wins.rows, n: wins.list.length, heard: [...wins.heard.keys()].sort((a, b) => a - b), missing: winMissing().map(w => w.k), rects: wins.list.map(w => w.rect) }; }, get mapInset() { return { on: mapInset.on, draws: mapInset.draws, ms: mapInset.ms, dot: mapInset.dot, w: mapInset.g && mapInset.g.w, h: mapInset.g && mapInset.g.h, hits: mapInset.hits }; },
   midiRoles: () => MIDI_TARGETS.map(t => t.id), midiAct: (id, v) => { const a = ACT[id]; return a ? (a.fire ? a.fire() : a.set(v)) : 'no role ' + id; },   // tests: a role as a MIDI binding fires it
   setBank, setVE, setHX, setLevel, scrubLevel, setMode, setMorph, setFxMode, fxUseVideo, setTime, get time() { return { ...cfg.nashua.time }; }, midiOut, midiScene: () => midiScene(), get tags() { return tagStream ? tagStream.ring.slice() : null; }, tagScene: () => (tagStream ? tagStream.scene : null), get lvShown() { return lvShown; }, viewW: () => viewW(), get opts() { return cur.opts; },
 };

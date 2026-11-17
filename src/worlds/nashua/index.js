@@ -35,7 +35,9 @@ export function init(seed, opts = {}, pack) {
   // spread (opts.spread, the app's default; ?spread=0 off): far footprints at their place on the smoothed route
   // (fields 10, 11), not stacked on the station nearest to them; a pack without those fields draws as before
   const k0 = opts.spread && pack && pack.buildings_fields && pack.buildings_fields[10] === 'sv0' ? 10 : 0;
-  return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, hx, VY: hx * ve, pack, W: reachW(pack), k0 };
+  // ADDENDUM-D D1.3: opts.build 1 to 8 draws the Build stage (generateBuild); absent, the world is unchanged
+  const build = opts.build ? Math.max(1, Math.min(8, opts.build | 0)) : 0;
+  return { seed: String(seed), s: seedInt(seed), bank, side: bank === 'L' ? 1 : -1, ve, hx, VY: hx * ve, pack, W: reachW(pack), k0, ...(build ? { build } : {}) };
 }
 // one element per (chunk, depth layer, piece); pieces keep their order inside a layer, so tiles are unchanged
 export const elementId = (c, layer, sub = 0) => c * 64 + layer * 12 + sub + 1;
@@ -91,11 +93,13 @@ function ridge(st, xa, xb) {
 
 // trees on the bank from the canopy share (band 0): a global grid of 3 m slots; fixed ink size, not to scale.
 // Broadleaf only: the canopy class does not say what the trees are, so no pines are drawn.
-function trees(st, xa, xb, tone, size) {
+// keep(slot x): Build stages 5 and 6 thin the slots (generateBuild); without it every slot is tried, as before
+function trees(st, xa, xb, tone, size, keep = null) {
   let o = '';
   const cname = 'canopy0_' + st.bank;
   const sp = 3 * st.hx;
   for (let q = Math.ceil(xa / sp); q <= Math.floor((xb - 1e-6) / sp); q++) {
+    if (keep && !keep(q * sp)) continue;
     const r = mulberry32(hash(st.s, 500, q));
     const x = q * sp + (r() - 0.5) * sp;
     const s = sAt(st, x);
@@ -460,7 +464,78 @@ function mouthView(st, x0, x1, part) {
   return o;
 }
 
+// ---------- ADDENDUM-D D1.3 Build: nature only, one stage more each pass (opts.build 1 to 8) ----------
+//   1 the water line (Median Water, world y YW), one stroke     2 + the near bank's ground line, one stroke, no fill
+//   3 + the ridgeline and the bank as ground (its fill), the bed in section, the mouth's banks
+//   4 + the bank's texture strokes      5 + single trees, sparse      6 + clusters      7 + groves (every tree)
+//   8 + the water surface and its ripples and the mist (the shader's flood plane and fog: scene.js passes `build` on,
+//       and below stage 8 the renderer draws no water plane, no fog and no runoff for this world)
+// No buildings, lot, bridges, dam, dike, pipes, observatories or labels at any stage. Trees are thinned by a hash of
+// their slot (sparse) and a low-frequency noise along x (clusters), so each stage keeps every tree of the one before.
+export const BUILD_STAGES = 8;
+function waterLineStroke(st, xa, xb) {
+  if (xb <= xa) return '';
+  const r = mulberry32(hash(st.s, 811, Math.floor(xa / CW))), pts = [];
+  const n = Math.max(2, Math.ceil((xb - xa) / 8));
+  for (let i = 0; i <= n; i++) { const x = xa + (xb - xa) * i / n; pts.push([x, YW + (noise1(st.s ^ 0x3b, x / 40) - 0.5) * 2.4]); }
+  return brush(pts, 2.4, G(BANK.line, 0.9), r, { noi: 0.3, taper: false });
+}
+function groundLineStroke(st, xa, xb) {
+  if (xb <= xa) return '';
+  const r = mulberry32(hash(st.s, 812, Math.floor(xa / CW)));
+  return brush(skyline(st, 'band0', xa, xb, BANK.amp, 5), BANK.w + 0.6, G(BANK.line, 0.9), r, { noi: 0.3, taper: false });
+}
+// short hatch strokes on the bank face, between its top line and the water: a global grid of 6 m slots
+function bankTexture(st, xa, xb) {
+  let o = '';
+  const sp = 6 * st.hx;
+  for (let q = Math.ceil(xa / sp); q <= Math.floor((xb - 1e-6) / sp); q++) {
+    const r = mulberry32(hash(st.s, 813, q));
+    for (let k = 0; k < 3; k++) {
+      const x = q * sp + (r() - 0.5) * sp, top = yOf(st, 'band0', x), depth = YW - top;
+      if (depth < 4) { r(); r(); continue; }
+      const y = top + 2 + r() * (depth - 3), len = 6 + r() * 10;
+      o += brush([[x - len / 2, y], [x, y + len * 0.12], [x + len / 2, y + len * 0.05]], 0.9, G(BANK.line + 40, 0.55), r, { noi: 0.4 });
+    }
+  }
+  return o;
+}
+function treesBuild(st, xa, xb, tone, size, stage) {
+  if (stage >= 7) return trees(st, xa, xb, tone, size);
+  const sp = 3 * st.hx;
+  const keep = x => { const q = Math.round(x / sp); return hash01(st.s ^ 0x7e, q) < 0.25 || (stage >= 6 && noise1(st.s ^ 0x7f, x / 220) > 0.6); };
+  return trees(st, xa, xb, tone, size, keep);
+}
+function generateBuild(st, c, stage) {
+  const x0 = c * CW, x1 = x0 + CW, W = st.W, M = st.pack.mouth ? MOUTH_W : 0;
+  if (x1 < -200 - M || x0 > W + 200 + M) return [];
+  const ta = Math.max(x0, 0), tb = Math.min(x1, W);
+  const L = [[], [], [], [], []];
+  if (tb > ta) {
+    if (stage >= 3) L[0].push(['terrain', ridge(st, ta, tb)]);
+    if (stage >= 3) L[3].push(['terrain', bank(st, ta, tb)]);
+    else if (stage >= 2) L[3].push(['terrain', groundLineStroke(st, ta, tb)]);
+    if (stage >= 4) L[3].push(['terrain', bankTexture(st, ta, tb)]);
+    if (stage >= 5) L[3].push(['trees', treesBuild(st, ta, tb, 60, 12 * st.VY, stage)]);
+    if (stage >= 3) L[4].push(['terrain', bed(st, ta, tb)]);
+    L[4].push(['water', waterLineStroke(st, ta, tb)]);
+  }
+  if (stage >= 3) { L[3].push(['terrain', mouthView(st, x0, x1, 'far')]); L[4].push(['terrain', mouthView(st, x0, x1, 'near')]); }
+  if (stage >= 7) L[3].push(['trees', mouthView(st, x0, x1, 'trees')]);
+  const out = [];
+  for (let k = 0; k < 5; k++) {
+    let sub = 0;
+    for (const [layer, canv] of L[k]) {
+      if (!canv) continue;
+      out.push({ id: elementId(c, k, sub), layer, depth: k + 1, x: x0 + CW / 2, y: 0, c, sub, canv, tag: meta.layers[k] });
+      sub++;
+    }
+  }
+  return out;
+}
+
 export function generate(st, c) {
+  if (st.build) return generateBuild(st, c, st.build);
   const x0 = c * CW, x1 = x0 + CW, W = st.W, M = st.pack.mouth ? MOUTH_W : 0;
   if (x1 < -200 - M || x0 > W + 200 + M) return [];
   const ta = Math.max(x0, 0), tb = Math.min(x1, W);         // terrain only inside the reach

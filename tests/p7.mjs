@@ -229,7 +229,8 @@ await test('b4-flood', async () => {
 });
 
 // ---------- B5: Full cycles full menu, mini menu, full screen; the label names the next state; F goes straight; persists ----------
-const MINI = ['b-play', 'b-speed', 'shanshui', 'derelict', 'nashua', 'b-guide', 'b-full', 'b-labels', 'b-map'];
+// P10 (ADDENDUM-D D1): the Loop button joins the mini menu ("and in the mini menu if it fits")
+const MINI = ['b-play', 'b-speed', 'shanshui', 'derelict', 'nashua', 'b-guide', 'b-full', 'b-labels', 'b-map', 'b-loop'];
 const visibleBar = p => p.evaluate(() => [...document.querySelectorAll('#bar button, #bar input, #bar select')].filter(e => { const r = e.getBoundingClientRect(); return r.width && r.height && getComputedStyle(e).visibility !== 'hidden'; }).map(e => e.id || e.dataset.v || e.textContent.trim()));
 const isMiniSet = v => v.length === MINI.length && MINI.every(id => v.includes(id));
 await test('b5-menu-cycle', async () => {

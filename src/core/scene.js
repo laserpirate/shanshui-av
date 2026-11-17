@@ -87,7 +87,7 @@ export class Scene {
       this.worlds.get(it.key).lastUsed = now;
       if (it.layers && world.setLayers) world.setLayers(it.layers, it.all);
       world.update(it.x + dx, v.viewW, fs.dir, rscale);
-      list.push({ world, x: it.x + dx, alpha: it.alpha });
+      list.push(it.opts && it.opts.build ? { world, x: it.x + dx, alpha: it.alpha, build: it.opts.build } : { world, x: it.x + dx, alpha: it.alpha });
     }
     // B11 the mirror (core/mirror.js): one more world, drawn flipped below the axis. x is its camera at the screen's
     // left edge; flipped (the other bank, scrolling with), x decreases to the right, so it shows the same stations

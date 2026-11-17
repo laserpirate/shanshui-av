@@ -25,6 +25,7 @@
   <div><b id="hud-seed">seed</b> <span id="hud-pal"></span> <span id="hud-world"></span></div>
   <div id="hud-stats"></div>
   <div id="hud-flags"></div>
+  <div id="hud-loop"></div>
   <div id="hud-facts"></div>
 </div>
 
@@ -149,6 +150,13 @@
 
   <section id="p-show" class="panel" hidden>
     <h3>Show</h3>
+    <!-- ADDENDUM-D D1: loop modes (the Loop button on the bar cycles them; Q) -->
+    <h4>Loop</h4>
+    <div class="row seg" id="s-loop"><button data-v="off">Off</button><button data-v="loop">Loop</button><button data-v="layers">Layers</button><button data-v="build">Build</button></div>
+    <p class="fact" id="s-loop-why" hidden></p>
+    <p class="fact" id="s-loop-design" hidden></p>
+    <div class="row"><button id="s-loop-next" title="Next stage now, from the start of the reach (A)">Next stage</button><button id="s-loop-hold" class="tog" title="Hold the stage: passes repeat it (E)">Hold stage</button></div>
+    <p class="fact" id="s-loop-st"></p>
     <div class="row"><label class="chk"><input type="checkbox" id="s-auto"> Auto reseed</label></div>
     <div class="row seg" id="s-mode"><button data-v="min">Minutes</button><button data-v="px">Distance</button></div>
     <label class="sl">Every <input type="number" id="s-every" min="0.5" step="0.5"><span id="s-unit">min</span></label>
@@ -230,6 +238,7 @@
   </div>
   <div class="grp seg mini-keep" id="b-world" role="group" aria-label="World"><button data-v="shanshui" title="World (W)">shanshui</button><button data-v="derelict" title="World (W)">derelict</button><button data-v="nashua" title="World (W)">nashua</button></div>
   <div class="grp" id="b-wx"><button id="b-rain" class="tog" title="Rain held on or held at zero (N)">Rain</button></div>
+  <div class="grp mini-keep"><button id="b-loop" class="tog mini-keep" title="Loop mode: off, loop, layers, build (Q)">Loop</button></div>
   <!-- ADDENDUM-B B2: the less used panels and the pair fold into menus that open above the bar (same ids) -->
   <div class="grp mini-part">
     <button data-panel="p-weather">Weather</button><button data-panel="p-reach">Reach</button><button data-panel="p-fx">FX</button><button data-panel="p-show">Show</button><button data-panel="p-mirror" id="b-mirror" hidden title="Mirror: a second world below the water line">Mirror</button>

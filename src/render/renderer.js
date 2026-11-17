@@ -391,12 +391,15 @@ export class Renderer {
       gl.uniform1i(u.uKind, kind);
       // data worlds: the water surface along x from the named levels (else the weather's flat water line)
       gl.activeTexture(gl.TEXTURE5);   // before waterTex: an upload binds to the active unit
-      const wl = kind === 1 && w.world.waterLine ? this.waterTex(w.world, f.level || 0) : null;
+      // ADDENDUM-D D1.3: a Build stage below 8 has no water plane, no mist and no runoff (restored after this world)
+      const dryB = kind === 1 && w.build > 0 && w.build < 8;
+      if (dryB) { gl.uniform1f(u.uWaterY, 1e6); gl.uniform1f(u.uFog, 0); }
+      const wl = kind === 1 && w.world.waterLine && !dryB ? this.waterTex(w.world, f.level || 0) : null;
       gl.uniform1f(u.uWaterOn, wl ? 1 : 0);
       gl.bindTexture(gl.TEXTURE_2D, wl ? wl.tex : this.noWater);
       if (wl) gl.uniform2f(u.uWaterX, wl.x0, wl.w);
       // B9: runoff sources of this world (data worlds), only while there is runoff
-      const ro = kind === 1 && (f.runoff || 0) > 0.001 && w.world.runoff ? w.world.runoff() : null;
+      const ro = kind === 1 && !dryB && (f.runoff || 0) > 0.001 && w.world.runoff ? w.world.runoff() : null;
       gl.uniform1i(u.uRunN, ro ? ro.list.length : 0);
       gl.uniform1f(u.uRunAmt, ro ? f.runoff : 0);
       if (ro && ro.list.length) { const a = this._run16 || (this._run16 = new Float32Array(16)); a.fill(0); ro.list.forEach((s, k) => a.set(s, k * 4)); gl.uniform4fv(u['uRun[0]'], a); gl.uniform1f(u.uRunDir, ro.dir); }
@@ -431,6 +434,7 @@ export class Renderer {
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
       if (m) gl.disable(gl.SCISSOR_TEST);
+      if (dryB) { gl.uniform1f(u.uWaterY, waterY(wx.water)); gl.uniform1f(u.uFog, wx.fog); }
     }
     if (first) { gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }
     // rain over the worlds that have weather, at their alpha
