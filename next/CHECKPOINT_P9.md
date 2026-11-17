@@ -51,4 +51,11 @@ Several real screens or projectors, several machines from Copy links (the drift 
 2. The post-mortem (P1 to P10) at the close.
 
 ## Site
-SITE_TABLE
+| check | result |
+| --- | --- |
+| deploy | pages-preview df6dea5 (root = main 1f009a1, `next/` = ee7f0dc, `next/p9/` = the tag `.p9`, ee7f0dc), Pages built df6dea5; site 20.6 MB of 1024 |
+| the root, live | before the push 133/134, one file HTTP 503 (Pages, transient); after: 134/134 files byte-identical to main 1f009a1 |
+| crawl `/next/` | 5 pages, 60 requests, 67 linked files, 0 broken, 0 console errors |
+| crawl `/next/p9/` | 5 pages, 60 requests, 67 linked files, 0 broken, 0 console errors; entry modules stamped `?v=ee7f0dc` |
+| Open windows on `/next/p9/` | p9 w1 (URLs and sizes), w2 (3 x 1 seams 0.00 / 0.00, unrelated 11.8 and 11.2) and w6 (Copy links) pass live, console clean |
+| Release | https://github.com/laserpirate/shanshui-av/releases/tag/shanshui-av-v0.4.0-nashua.p9 (these notes, no files) |
