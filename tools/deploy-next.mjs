@@ -74,7 +74,9 @@ try {
   // moving next/. --keep=<k> keeps only the last k (used when the site nears the Pages size limit).
   git(['fetch', 'origin', '--tags', '--quiet']);
   const KEEP = +((args.find(a => a.startsWith('--keep=')) || '').slice(7) || 0);
-  let frozen = out(['tag', '--list', 'shanshui-av-v0.4.0-nashua.p*']).split('\n').map(t => [t, +((/\.p(\d+)$/.exec(t) || [])[1])]).filter(([, n]) => n >= 9).sort((a, b) => a[1] - b[1]);
+  // a fix to a tagged phase is a patch tag (.p10.1), frozen beside it at next/p10.1/; tags never move
+  let frozen = out(['tag', '--list', 'shanshui-av-v0.4.0-nashua.p*']).split('\n').map(t => { const m = /\.p(\d+)(?:\.(\d+))?$/.exec(t) || []; return [t, m[2] ? `${m[1]}.${m[2]}` : m[1], +m[1], +(m[2] || 0)]; })
+    .filter(([, , n]) => n >= 9).sort((a, b) => a[2] - b[2] || a[3] - b[3]);
   if (KEEP > 0) frozen = frozen.slice(-KEEP);
   for (const [t, n] of frozen) console.log(`frozen next/p${n}/ = ${t} ${place(`next/p${n}/`, t)}`);
   const tree = git(['write-tree'], { env }).trim();
@@ -85,7 +87,7 @@ try {
   // the root of the new tree must be origin/main's tree exactly
   const rootNow = out(['ls-tree', tree]).split('\n').filter(l => !/\tnext$/.test(l)).join('\n');
   // next/ itself must be HEAD's tree plus the frozen copies and the two stamped entries (nothing else)
-  for (const l of out(['ls-tree', tree + ':next']).split('\n')) { const nm = l.split('\t')[1]; if (/^p\d+$/.test(nm) && !frozen.some(([, n]) => 'p' + n === nm)) die('next/' + nm + ' is not a frozen tag'); }
+  for (const l of out(['ls-tree', tree + ':next']).split('\n')) { const nm = l.split('\t')[1]; if (/^p\d+(\.\d+)?$/.test(nm) && !frozen.some(([, n]) => 'p' + n === nm)) die('next/' + nm + ' is not a frozen tag'); }
   const rootMain = out(['ls-tree', 'origin/main']);
   if (rootNow !== rootMain) die('root of the preview tree differs from origin/main');
   const parents = hasPrev ? ['-p', 'origin/' + BRANCH] : [];

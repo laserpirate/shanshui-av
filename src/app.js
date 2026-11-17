@@ -62,6 +62,7 @@ let hist = Array.isArray(saved.hist) ? saved.hist.slice(-20) : [];
 let histIdx = hist.length - 1;
 const logs = [];
 let errCount = 0;
+let toastT = 0;   // here, not by toast(): the loop UI can toast during startup (Layers kept, no design pack)
 
 function deepMerge(a, b) {
   for (const k of Object.keys(b)) {
@@ -1724,7 +1725,6 @@ function hudTick(now) {
   weatherTick();
 }
 const clock = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-let toastT = 0;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1600); }
 function showFatal(e) { document.body.insertAdjacentHTML('beforeend', `<div style="position:fixed;inset:0;display:grid;place-items:center;color:#fff;background:#07090e;font:20px sans-serif">Could not start: ${String(e.message || e)}</div>`); }
 
