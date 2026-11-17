@@ -140,7 +140,8 @@ function clockFs() {
   const vw = wv.VW / (wv.VH / WORLD_H);
   const top = clockKey ? scene.peek(clockKey) : null;
   const fs = clockState(vw, top && top.pack ? reachW(top.pack) : 0);
-  clockKey = fs.worlds[0] ? fs.worlds[0].key : '';
+  // the top world (the last): with one world, as before; in a clock loop the running pass, not the next one made ahead
+  clockKey = fs.worlds.length ? fs.worlds[fs.worlds.length - 1].key : '';
   return fs;
 }
 // data worlds: labels and fact line, only when the controller turns them on for the output (off by default)

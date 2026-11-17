@@ -40,6 +40,7 @@ export const PARAMS = [
   ['ks', 'o w', 'four-corner keystone offsets'],
   ['cal', 'o w', '1, start on the calibration card'],
   ['win', 'o', 'set by Open windows and Open pair: Close all closes it'],
+  ['loop', 'c w', 'off, loop, layers or build: the loop mode'],
   ['cap', 'o w', 'brightness ceiling 0.1 to 1'],
   ['t0', 'w', 'clock mode: shared start, epoch ms'],
   ['speed', 'w', 'clock mode: px per s'],

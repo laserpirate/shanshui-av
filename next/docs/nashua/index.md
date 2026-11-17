@@ -213,3 +213,18 @@ Made with `node tools/nashua/review-p8.mjs`. 1280 x 720 controller frames with `
 ![nashua over shanshui (seed 1), scrolling against, strength 0.6](p8_mirror_nashua_alt-shanshui.jpg)
 
 <!-- end p8 strips -->
+
+## P10 strips (ADDENDUM-D D1.3, Build)
+
+Made by `node tests/p10.mjs --only=d4-build-stages` (the test that each stage adds ink). One row per stage, 1 at the top to 8 at the bottom; each row is six 1280 x 720 controller frames evenly along the pass, at a quarter size, palette original, day, fog 0.35. shanshui seed 3 (16 view widths), nashua seed 1 (the reach).
+
+| Strip | What |
+| --- | --- |
+| [p10_build_shanshui.jpg](p10_build_shanshui.jpg) | shanshui: 1 water line, 2 ground line, 3 distant mountains, 4 near mountains and rocks, 5 single trees, 6 clusters, 7 groves, 8 the engine's water and boats |
+| [p10_build_nashua.jpg](p10_build_nashua.jpg) | nashua: 1 water line, 2 bank top line, 3 ridge, bank and bed, 4 bank texture, 5 single trees, 6 clusters, 7 every tree, 8 the water surface and mist |
+
+![shanshui Build stages 1 to 8](p10_build_shanshui.jpg)
+
+![nashua Build stages 1 to 8](p10_build_nashua.jpg)
+
+<!-- end p10 strips -->

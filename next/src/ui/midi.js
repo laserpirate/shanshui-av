@@ -58,6 +58,10 @@ export const MIDI_TARGETS = [
   // ADDENDUM-B: Rain and Flood as one-press toggles (the rain and level faders stay as they are)
   { id: 'rainToggle', label: 'Rain on / off' },
   { id: 'flood', label: 'Flood on / off' },
+  // ADDENDUM-D D1: loop modes
+  { id: 'loopMode', label: 'Loop mode (off, loop, layers, build)' },
+  { id: 'loopNext', label: 'Loop: next stage' },
+  { id: 'loopHold', label: 'Loop: hold stage' },
   // ADDENDUM-B B11: the mirror's roles, only listed with ?mirror=1 (the flag off keeps the P7 list)
   ...(typeof location !== 'undefined' && new URLSearchParams(location.search).get('mirror') === '1' ? [
     { id: 'mirror', label: 'Mirror on / off' },

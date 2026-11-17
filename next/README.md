@@ -74,6 +74,16 @@ Nashua on the controller (Reach panel, and the bar while a data world is on):
 | Copy pair links | | Two clock-mode links with one shared `t0`, 10 s ahead, for two machines (WALL.md) |
 | Open windows | | Pair menu, the Windows panel: 1 to 6 output windows (default 3) as one picture, one row or a grid (2 x 2, 3 x 2), tiled over this screen. If the browser blocks pop-ups, the panel says how many did not open and **Open the next window** opens them one press at a time. **Copy links**: one clock-mode link per window, one shared `t0`. **Close all** closes every window opened from here |
 
+All worlds (the Loop button on the bar and in the mini menu; the Show panel):
+
+| Control | Key | What |
+| --- | --- | --- |
+| Loop | `Q` | Cycles Off, Loop, Layers, Build (`?loop=`; kept per instance; carried by the pair and window links). A pass is one run through the reach (shanshui and derelict: 16 view widths); between passes the scroll crossfades back to the start, and every change happens there. The `ends` setting is ignored while a loop mode is on |
+| Layers | | nashua only: each pass the next mode, nature, built, design, sections (design skipped without the local design pack) |
+| Build | | shanshui and nashua, nature only: each pass adds one stage, from the water line to the full landscape, then starts again (DECISIONS, "Nashua P10") |
+| Next stage | `A` | The next stage now, from the start of the reach. MIDI role "Loop: next stage" |
+| Hold stage | `E` | Passes repeat the stage. MIDI role "Loop: hold stage"; the role "Loop mode (off, loop, layers, build)" cycles the modes |
+
 ## MIDI
 
 Off until **Enable MIDI** (Show panel); Chrome or Edge only. The preset is picked by port name and can be changed in

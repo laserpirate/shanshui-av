@@ -112,6 +112,37 @@ export function wsSync(url, role, onFrame, onState) {
   return { send: m => { if (open && ws.bufferedAmount < 1 << 20) ws.send(JSON.stringify(m)); }, serverNow, get offset() { return offset; }, get open() { return open; } };
 }
 
+// D1 loop modes in clock mode. A pass runs x from 0 to its span (nashua: the reach less one view; an endless world:
+// 16 views) at the link's speed, rightward. The first FADE s of a pass crossfade from the last pass resting at its end;
+// in the last PRE s the next pass's world is made at alpha 0, so it is drawn before the seam. Stages advance one per
+// pass (no hold or next stage on a clock node: those are the controller's). Layers skips design on the Pages host,
+// where the design pack never is. Without &loop= (or loop=off) this returns null and the frame is the .p8 frame.
+const LOOP_FADE = 2.5, LOOP_PRE = 12;
+function clockLoop({ world, seed, opts, layers, key, d, speed, viewW, reachW, mode }) {
+  let m = q.get('loop');
+  if (!['loop', 'layers', 'build'].includes(m) || !(speed > 0)) return null;
+  if ((m === 'layers' && world !== 'nashua') || (m === 'build' && world === 'derelict')) m = 'loop';
+  const span = world === 'nashua' ? (reachW ? Math.max(1, reachW - viewW) : 0) : 16 * viewW;
+  if (!span) return null;
+  const list = ['nature', 'built', 'design', 'sections'].filter(n => n !== 'design' || !/\.github\.io$/.test(location.hostname));
+  const n = m === 'layers' ? list.length : m === 'build' ? 8 : 1;
+  const one = p => {
+    const k = ((p % n) + n) % n;
+    const o = m === 'build' ? { ...(opts || {}), build: k + 1 } : opts;
+    const lay = m === 'layers' ? { layers: layersOf(list[k], list[k] === 'sections'), all: LAYERS } : m === 'build' && world === 'nashua' ? { layers: layersOf('nature', false), all: LAYERS } : layers;
+    return { key: key + ':loop:' + m + ':' + k + ':' + (p & 1), seed, world, opts: o, ...lay };
+  };
+  const p = Math.floor(d / span), x = d - p * span, fd = LOOP_FADE * speed, pre = LOOP_PRE * speed;
+  const worlds = [];
+  if (p >= 1 && x < fd) { const t = x / fd; worlds.push({ ...one(p - 1), x: span, alpha: 1 }, { ...one(p), x, alpha: t * t * (3 - 2 * t) }); }
+  else {
+    // the next pass first, at alpha 0 (the renderer skips it, the scene generates it); the running pass last, as the top
+    if (span - x < pre) worlds.push({ ...one(p + 1), x: 0, alpha: 0 });
+    worlds.push({ ...one(p), x, alpha: 1 });
+  }
+  return { x, worlds, info: { mode: m, pass: p + 1, stage: (p % n) + 1, of: n } };
+}
+
 // clock mode: the frame state from UTC time alone. world, seed, palette and speed from the URL; nashua ping-pongs
 // over its reach (a triangle wave), the endless worlds scroll on.
 export function clockState(viewW, reachW) {
@@ -134,9 +165,14 @@ export function clockState(viewW, reachW) {
     optsFor: w => (w === 'nashua' ? { bank: 'L', hx: 8, ve: 2, spread: 1 } : undefined),
     span: reachW || 0, viewW, t: (now - t0) / 1000, speed,
   }) : null;
+  const key = 'clock:' + world + ':' + seed + (opts && opts.reach ? ':' + opts.reach : '') + (opts ? ':' + opts.hx + ':' + opts.ve + (opts.spread ? ':spread' : '') : '');
+  // ADDENDUM-D D1 in clock mode (&loop=): passes as a function of time, so every node agrees with no messages
+  const L = clockLoop({ world, seed, opts, layers, key, d, speed, viewW, reachW, mode });
+  if (L) { x = L.x; v = speed; }
   return {
     ...(mirror ? { mirror } : {}),
-    worlds: [{ key: 'clock:' + world + ':' + seed + (opts && opts.reach ? ':' + opts.reach : '') + (opts ? ':' + opts.hx + ':' + opts.ve + (opts.spread ? ':spread' : '') : ''), seed, world, x, alpha: 1, opts, ...layers }],
+    worlds: L ? L.worlds : [{ key, seed, world, x, alpha: 1, opts, ...layers }],
+    ...(L ? { loop: L.info } : {}),
     dir: v >= 0 ? 1 : -1, pal: { a: pal, b: pal, mix: 0 },
     u: { contrast: 1, ink: 1, paper: true, vignette: false, zoom: 1, yAlign: 0.5 },
     time: (now - t0) / 1000, weather: { rain: 0, wind: 0.2, water: num('water', 0), fog: num('fog', 0.25), light: num('light', 1) },
